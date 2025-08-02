@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDczqvwh8gZLDaT9eM76y5kJ0fiWsLH9VU",
@@ -106,13 +106,17 @@ export const updateGrowthRecord = async (userId: string, recordId: string, recor
 };
 
 // Child Profile Functions
-export const saveChildProfile = async (userId: string, profile: Omit<ChildProfile, 'timestamp'>) => {
+export const saveChildProfile = async (userId: string, profile: Omit<ChildProfile, 'timestamp'>, profileId?: string) => {
   try {
-    const docRef = await addDoc(collection(db, 'users', userId, 'profile'), {
-      ...profile,
-      timestamp: Date.now(),
-    });
-    return docRef;
+    const profileWithTimestamp = { ...profile, timestamp: Date.now() };
+    if (profileId) {
+      // Update existing profile
+      await setDoc(doc(db, 'users', userId, 'profile', profileId), profileWithTimestamp);
+    } else {
+      // Create new profile
+      const docRef = await addDoc(collection(db, 'users', userId, 'profile'), profileWithTimestamp);
+      return docRef;
+    }
   } catch (error) {
     console.error('Error saving child profile:', error);
     throw error;
@@ -138,4 +142,4 @@ export const getChildProfile = async (userId: string): Promise<(ChildProfile & {
     console.error('Error getting child profile:', error);
     throw error;
   }
-}; 
+};

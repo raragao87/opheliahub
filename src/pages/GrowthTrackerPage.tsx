@@ -111,7 +111,7 @@ const GrowthTrackerPage: FC = () => {
         return;
       }
 
-      await saveChildProfile(user.uid, profileData);
+      await saveChildProfile(user.uid, profileData, childProfile?.id);
       await loadData();
       setEditingProfile(false);
     } catch (error) {
@@ -842,4 +842,4 @@ const GrowthTrackerPage: FC = () => {
   );
 };
 
-export default GrowthTrackerPage; 
+export default GrowthTrackerPage;
