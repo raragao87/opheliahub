@@ -230,27 +230,14 @@ const GrowthTrackerPage: FC = () => {
     return Math.floor(days / 7);
   };
 
-  const calculateAgeInMonths = (birthDate: string, recordDate: string) => {
-    const days = calculateAgeInDays(birthDate, recordDate);
-    return days / 30.44;
-  };
-
-  // Fixed chart data mapping function - convert to array format for compatibility
+  // Map growth records to chart points using days since birth
   const mapRecordsToChartData = (records: (GrowthRecord & { id: string })[], birthDate: string, dataType: 'weight' | 'height') => {
     if (!records.length || !birthDate) return [];
     
-    // Create array of 25 elements (0-24 months) filled with null
-    const dataArray = new Array(25).fill(null);
-    
-    records.forEach(record => {
-      const ageInMonths = calculateAgeInMonths(birthDate, record.date);
-      if (ageInMonths >= 0 && ageInMonths <= 24) {
-        const monthIndex = Math.round(ageInMonths);
-        dataArray[monthIndex] = dataType === 'weight' ? record.weight : record.height;
-      }
-    });
-
-    return dataArray;
+    return records.map(record => ({
+      x: calculateAgeInDays(birthDate, record.date),
+      y: dataType === 'weight' ? record.weight : record.height
+    })).filter(point => point.x >= 0 && point.x <= 730); // 0-24 months in days
   };
 
   // Debug logging
@@ -261,7 +248,6 @@ const GrowthTrackerPage: FC = () => {
 
   // Prepare chart data with proper age-based mapping
   const weightChartData = {
-    labels: weightPercentiles.labels.map(label => `${label} months`),
     datasets: [
       ...weightPercentiles.datasets,
       {
@@ -281,7 +267,6 @@ const GrowthTrackerPage: FC = () => {
   };
 
   const heightChartData = {
-    labels: heightPercentiles.labels.map(label => `${label} months`),
     datasets: [
       ...heightPercentiles.datasets,
       {
@@ -352,9 +337,12 @@ const GrowthTrackerPage: FC = () => {
         },
         ticks: {
           color: '#6B7280',
+          callback: function(value: any) {
+            return Math.round(value / 30.44) + 'm';
+          }
         },
         min: 0,
-        max: 24
+        max: 730, // 24 months in days
       },
       y: {
         beginAtZero: true,
@@ -383,10 +371,13 @@ const GrowthTrackerPage: FC = () => {
       ...chartOptions.scales,
       y: {
         ...chartOptions.scales.y,
+        beginAtZero: true,
         title: {
           ...chartOptions.scales.y.title,
           text: 'Weight (kg)',
         },
+        min: 0,
+        max: 30,
       },
     },
   };
@@ -397,10 +388,13 @@ const GrowthTrackerPage: FC = () => {
       ...chartOptions.scales,
       y: {
         ...chartOptions.scales.y,
+        beginAtZero: false,
         title: {
           ...chartOptions.scales.y.title,
           text: 'Height (cm)',
         },
+        min: 40,
+        max: 95,
       },
     },
   };
