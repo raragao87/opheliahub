@@ -154,6 +154,7 @@ const GrowthTrackerPage: FC = () => {
   };
 
   const handleEditRecord = (record: GrowthRecord & { id: string }) => {
+    console.log('Editing record:', record); // Debug log
     setEditFormData({
       date: record.date,
       weight: record.weight.toString(),
@@ -235,30 +236,29 @@ const GrowthTrackerPage: FC = () => {
     return days / 30.44;
   };
 
-  // Map records to chart data with proper age calculations
+  // Fixed chart data mapping function - convert to array format for compatibility
   const mapRecordsToChartData = (records: (GrowthRecord & { id: string })[], birthDate: string, dataType: 'weight' | 'height') => {
-    const mappedData = records
-      .map(record => {
-        const ageInMonths = calculateAgeInMonths(birthDate, record.date);
-        return {
-          ageInMonths,
-          value: dataType === 'weight' ? record.weight : record.height
-        };
-      })
-      .filter(point => point.ageInMonths >= 0 && point.ageInMonths <= 24)
-      .sort((a, b) => a.ageInMonths - b.ageInMonths);
-
-    // Convert to array format for Chart.js
+    if (!records.length || !birthDate) return [];
+    
+    // Create array of 25 elements (0-24 months) filled with null
     const dataArray = new Array(25).fill(null);
-    mappedData.forEach(point => {
-      const monthIndex = Math.round(point.ageInMonths);
-      if (monthIndex >= 0 && monthIndex <= 24) {
-        dataArray[monthIndex] = point.value;
+    
+    records.forEach(record => {
+      const ageInMonths = calculateAgeInMonths(birthDate, record.date);
+      if (ageInMonths >= 0 && ageInMonths <= 24) {
+        const monthIndex = Math.round(ageInMonths);
+        dataArray[monthIndex] = dataType === 'weight' ? record.weight : record.height;
       }
     });
-    
+
     return dataArray;
   };
+
+  // Debug logging
+  console.log('Records:', records);
+  console.log('Child profile:', childProfile);
+  console.log('Weight chart data:', mapRecordsToChartData(records, childProfile?.dateOfBirth || '', 'weight'));
+  console.log('Height chart data:', mapRecordsToChartData(records, childProfile?.dateOfBirth || '', 'height'));
 
   // Prepare chart data with proper age-based mapping
   const weightChartData = {
@@ -337,6 +337,8 @@ const GrowthTrackerPage: FC = () => {
     },
     scales: {
       x: {
+        type: 'linear' as const,
+        position: 'bottom' as const,
         title: {
           display: true,
           text: 'Age (months)',
@@ -352,6 +354,8 @@ const GrowthTrackerPage: FC = () => {
         ticks: {
           color: '#6B7280',
         },
+        min: 0,
+        max: 24
       },
       y: {
         beginAtZero: true,
@@ -781,8 +785,8 @@ const GrowthTrackerPage: FC = () => {
 
         {/* Edit Record Modal */}
         {editingRecord && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
               <h3 className="text-xl font-semibold text-gray-800 mb-6">Edit Growth Record</h3>
               <form onSubmit={handleEditSubmit} className="space-y-4">
                 <div>
