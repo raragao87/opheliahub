@@ -1,8 +1,8 @@
-import React from 'react';
+import type { FC } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithGoogle } from '../firebase/config';
 
-const HomePage: React.FC = () => {
+const HomePage: FC = () => {
   const navigate = useNavigate();
 
   const handleGoogleLogin = async () => {
