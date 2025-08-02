@@ -27,6 +27,5 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          channelId: live
-          projectId: opheliahub-f9851 # <-- This is the corrected line
+          firebaseToken: '${{ secrets.FIREBASE_TOKEN }}'
+          projectId: opheliahub-f9851
