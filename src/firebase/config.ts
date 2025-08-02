@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDczqvwh8gZLDaT9eM76y5kJ0fiWsLH9VU",
@@ -89,6 +89,18 @@ export const deleteGrowthRecord = async (userId: string, recordId: string) => {
     await deleteDoc(doc(db, 'users', userId, 'growthRecords', recordId));
   } catch (error) {
     console.error('Error deleting growth record:', error);
+    throw error;
+  }
+};
+
+export const updateGrowthRecord = async (userId: string, recordId: string, record: Omit<GrowthRecord, 'timestamp'>) => {
+  try {
+    await updateDoc(doc(db, 'users', userId, 'growthRecords', recordId), {
+      ...record,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    console.error('Error updating growth record:', error);
     throw error;
   }
 };

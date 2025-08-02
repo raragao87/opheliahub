@@ -12,7 +12,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { auth, saveGrowthRecord, getGrowthRecords, deleteGrowthRecord, saveChildProfile, getChildProfile, type GrowthRecord, type ChildProfile } from '../firebase/config';
+import { auth, saveGrowthRecord, getGrowthRecords, deleteGrowthRecord, updateGrowthRecord, saveChildProfile, getChildProfile, type GrowthRecord, type ChildProfile } from '../firebase/config';
 import { weightPercentiles, heightPercentiles } from '../utils/growthData';
 
 ChartJS.register(
@@ -178,9 +178,8 @@ const GrowthTrackerPage: FC = () => {
         return;
       }
 
-      // Delete the old record and create a new one
-      await deleteGrowthRecord(user.uid, editingRecord);
-      await saveGrowthRecord(user.uid, {
+      // Update the existing record
+      await updateGrowthRecord(user.uid, editingRecord, {
         date: editFormData.date,
         weight: parseFloat(editFormData.weight),
         height: parseFloat(editFormData.height),
