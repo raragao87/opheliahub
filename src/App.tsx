@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import DashboardPage from './pages/DashboardPage';
+import GrowthTrackerPage from './pages/GrowthTrackerPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -13,6 +14,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/growth-tracker" 
+          element={
+            <ProtectedRoute>
+              <GrowthTrackerPage />
             </ProtectedRoute>
           } 
         />

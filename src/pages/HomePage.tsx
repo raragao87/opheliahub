@@ -15,16 +15,26 @@ const HomePage: FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white/30 backdrop-blur-sm rounded-2xl shadow-2xl p-12 max-w-md w-full border border-white/20">
-        <div className="text-center space-y-6">
-          {/* Main Title */}
-          <div className="space-y-3">
-            <h1 className="text-6xl font-bold text-gray-800 tracking-tight">
-              OpheliaHub
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%239C92AC%22%20fill-opacity%3D%220.05%22%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-30"></div>
+      
+      {/* Main Content */}
+      <div className="relative z-10 flex items-center justify-center min-h-screen px-4">
+        <div className="max-w-2xl mx-auto text-center">
+          {/* Logo/Brand Section */}
+          <div className="mb-12">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-2xl mb-8">
+              <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-extrabold text-white mb-4 tracking-tight">
+              Ophelia
+              <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Hub</span>
             </h1>
-            <p className="text-lg text-gray-600 font-medium">
-              is under construction.
+            <p className="text-xl md:text-2xl text-gray-300 font-light mb-8">
+              Your digital workspace, reimagined
             </p>
             <div className="w-24 h-1 bg-gradient-to-r from-blue-400 to-purple-400 mx-auto rounded-full"></div>
           </div>
