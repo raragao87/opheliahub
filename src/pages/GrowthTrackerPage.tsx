@@ -33,8 +33,14 @@ const GrowthTrackerPage: FC = () => {
   const [saving, setSaving] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<string | null>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
+    date: '',
+    weight: '',
+    height: '',
+  });
+  const [editFormData, setEditFormData] = useState({
     date: '',
     weight: '',
     height: '',
@@ -147,6 +153,49 @@ const GrowthTrackerPage: FC = () => {
     }
   };
 
+  const handleEditRecord = (record: GrowthRecord & { id: string }) => {
+    setEditFormData({
+      date: record.date,
+      weight: record.weight.toString(),
+      height: record.height.toString(),
+    });
+    setEditingRecord(record.id);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editFormData.date || !editFormData.weight || !editFormData.height) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user || !editingRecord) {
+        navigate('/');
+        return;
+      }
+
+      // Delete the old record and create a new one
+      await deleteGrowthRecord(user.uid, editingRecord);
+      await saveGrowthRecord(user.uid, {
+        date: editFormData.date,
+        weight: parseFloat(editFormData.weight),
+        height: parseFloat(editFormData.height),
+      });
+
+      setEditFormData({ date: '', weight: '', height: '' });
+      setEditingRecord(null);
+      await loadData();
+    } catch (error) {
+      console.error('Error updating record:', error);
+      alert('Error updating record');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async (recordId: string) => {
     if (!confirm('Are you sure you want to delete this record?')) return;
 
@@ -169,6 +218,14 @@ const GrowthTrackerPage: FC = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const calculateAgeInWeeks = (birthDate: string, recordDate: string) => {
+    const birth = new Date(birthDate);
+    const record = new Date(recordDate);
+    const diffTime = Math.abs(record.getTime() - birth.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.floor(diffDays / 7);
+  };
+
   const calculateAgeInMonths = (birthDate: string, recordDate: string) => {
     const birth = new Date(birthDate);
     const record = new Date(recordDate);
@@ -177,9 +234,9 @@ const GrowthTrackerPage: FC = () => {
     return Math.floor(diffDays / 30.44);
   };
 
-  // Prepare chart data
+  // Prepare chart data with proper age calculations
   const weightChartData = {
-    labels: weightPercentiles.labels,
+    labels: weightPercentiles.labels.map(label => `${label} months`),
     datasets: [
       ...weightPercentiles.datasets,
       {
@@ -201,7 +258,7 @@ const GrowthTrackerPage: FC = () => {
   };
 
   const heightChartData = {
-    labels: heightPercentiles.labels,
+    labels: heightPercentiles.labels.map(label => `${label} months`),
     datasets: [
       ...heightPercentiles.datasets,
       {
@@ -231,11 +288,61 @@ const GrowthTrackerPage: FC = () => {
       title: {
         display: true,
         text: 'Growth Chart',
+        font: {
+          size: 16,
+          weight: 'bold' as const,
+        },
       },
     },
     scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'Age (months)',
+          font: {
+            size: 14,
+            weight: 'bold' as const,
+          },
+        },
+      },
       y: {
         beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Weight (kg) / Height (cm)',
+          font: {
+            size: 14,
+            weight: 'bold' as const,
+          },
+        },
+      },
+    },
+  };
+
+  const weightChartOptions = {
+    ...chartOptions,
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        title: {
+          ...chartOptions.scales.y.title,
+          text: 'Weight (kg)',
+        },
+      },
+    },
+  };
+
+  const heightChartOptions = {
+    ...chartOptions,
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        title: {
+          ...chartOptions.scales.y.title,
+          text: 'Height (cm)',
+        },
       },
     },
   };
@@ -382,7 +489,7 @@ const GrowthTrackerPage: FC = () => {
                 <div className="text-right">
                   <p className="text-sm text-gray-500">Age</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {calculateAgeInMonths(childProfile.dateOfBirth, new Date().toISOString().split('T')[0])} months
+                    {calculateAgeInWeeks(childProfile.dateOfBirth, new Date().toISOString().split('T')[0])} weeks
                   </p>
                 </div>
                 <button
@@ -547,11 +654,11 @@ const GrowthTrackerPage: FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Weight Growth Chart</h3>
-            <Line data={weightChartData} options={chartOptions} />
+            <Line data={weightChartData} options={weightChartOptions} />
           </div>
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Height Growth Chart</h3>
-            <Line data={heightChartData} options={chartOptions} />
+            <Line data={heightChartData} options={heightChartOptions} />
           </div>
         </div>
 
@@ -585,17 +692,25 @@ const GrowthTrackerPage: FC = () => {
                     <tr key={record.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {childProfile ? `${calculateAgeInMonths(childProfile.dateOfBirth, record.date)} months` : '-'}
+                        {childProfile ? `${calculateAgeInWeeks(childProfile.dateOfBirth, record.date)} weeks` : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.weight}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.height}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <button
-                          onClick={() => handleDelete(record.id)}
-                          className="text-red-600 hover:text-red-900 font-medium"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleEditRecord(record)}
+                            className="text-blue-600 hover:text-blue-900 font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(record.id)}
+                            className="text-red-600 hover:text-red-900 font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -604,6 +719,68 @@ const GrowthTrackerPage: FC = () => {
             </div>
           )}
         </div>
+
+        {/* Edit Record Modal */}
+        {editingRecord && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4">
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Edit Growth Record</h3>
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                  <input
+                    type="date"
+                    value={editFormData.date}
+                    onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Weight (kg)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editFormData.weight}
+                    onChange={(e) => setEditFormData({ ...editFormData, weight: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Height (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editFormData.height}
+                    onChange={(e) => setEditFormData({ ...editFormData, height: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div className="flex space-x-4">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200"
+                  >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRecord(null);
+                      setEditFormData({ date: '', weight: '', height: '' });
+                    }}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all duration-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
