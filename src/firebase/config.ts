@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc, setDoc, where, writeBatch } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDczqvwh8gZLDaT9eM76y5kJ0fiWsLH9VU",
@@ -14,6 +15,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const signInWithGoogle = async () => {
@@ -54,6 +56,7 @@ export interface ChildProfile {
   timestamp: number;
   sharedWith?: string[]; // Array of user IDs who have access
   ownerId: string; // Original owner's user ID
+  profileImageUrl?: string; // URL of the profile image in Firebase Storage
 }
 
 // Sharing Interfaces
@@ -505,16 +508,41 @@ export const updateGrowthRecord = async (userId: string, recordId: string, recor
 };
 
 // Child Profile Functions
-export const saveChildProfile = async (userId: string, profile: Omit<ChildProfile, 'timestamp'>, profileId?: string) => {
+export const saveChildProfile = async (
+  userId: string, 
+  profile: Omit<ChildProfile, 'timestamp'>, 
+  profileId?: string,
+  imageFile?: File
+) => {
   try {
+    let profileImageUrl = profile.profileImageUrl;
+    
+    // Upload image if provided
+    if (imageFile && !profileId) {
+      // For new profiles, we need to create the profile first to get the ID
+      const tempDocRef = await addDoc(collection(db, 'users', userId, 'profile'), {
+        ...profile,
+        timestamp: Date.now(),
+        ownerId: userId,
+      });
+      profileId = tempDocRef.id;
+    }
+    
+    if (imageFile && profileId) {
+      profileImageUrl = await uploadProfileImage(userId, profileId, imageFile);
+    }
+    
     const profileWithTimestamp = { 
       ...profile, 
       timestamp: Date.now(),
       ownerId: userId,
+      profileImageUrl,
     };
+    
     if (profileId) {
       // Update existing profile
       await setDoc(doc(db, 'users', userId, 'profile', profileId), profileWithTimestamp);
+      return { id: profileId };
     } else {
       // Create new profile
       const docRef = await addDoc(collection(db, 'users', userId, 'profile'), profileWithTimestamp);
@@ -544,5 +572,43 @@ export const getChildProfile = async (userId: string): Promise<(ChildProfile & {
   } catch (error) {
     console.error('Error getting child profile:', error);
     throw error;
+  }
+};
+
+// Image upload functions
+export const uploadProfileImage = async (userId: string, childProfileId: string, file: File): Promise<string> => {
+  try {
+    // Create a unique filename
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `profile-images/${userId}/${childProfileId}-${Date.now()}.${fileExtension}`;
+    
+    // Create a reference to the file location
+    const storageRef = ref(storage, fileName);
+    
+    // Upload the file
+    const snapshot = await uploadBytes(storageRef, file);
+    
+    // Get the download URL
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    return downloadURL;
+  } catch (error) {
+    console.error('Error uploading profile image:', error);
+    throw new Error('Failed to upload image');
+  }
+};
+
+export const deleteProfileImage = async (imageUrl: string): Promise<void> => {
+  try {
+    // Extract the file path from the URL
+    const urlParts = imageUrl.split('/');
+    const fileName = urlParts[urlParts.length - 1].split('?')[0];
+    const filePath = `profile-images/${fileName}`;
+    
+    const storageRef = ref(storage, filePath);
+    await deleteObject(storageRef);
+  } catch (error) {
+    console.error('Error deleting profile image:', error);
+    // Don't throw error as this is not critical
   }
 };

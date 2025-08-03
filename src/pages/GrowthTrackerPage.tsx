@@ -36,6 +36,7 @@ const GrowthTrackerPage: FC = () => {
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingRecord, setEditingRecord] = useState<string | null>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     date: '',
     weight: '',
@@ -80,7 +81,10 @@ const GrowthTrackerPage: FC = () => {
           gender: profile.gender,
         });
         
-
+        // Load saved profile image
+        if (profile.profileImageUrl) {
+          setProfileImage(profile.profileImageUrl);
+        }
       } else {
         setChildProfile(null);
       }
@@ -94,6 +98,7 @@ const GrowthTrackerPage: FC = () => {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setProfileImageFile(file);
       const reader = new FileReader();
       reader.onload = (e) => {
         setProfileImage(e.target?.result as string);
@@ -117,7 +122,7 @@ const GrowthTrackerPage: FC = () => {
         return;
       }
 
-      await saveChildProfile(user.uid, { ...profileData, ownerId: user.uid }, childProfile?.id);
+      await saveChildProfile(user.uid, { ...profileData, ownerId: user.uid }, childProfile?.id, profileImageFile || undefined);
       await loadData();
       setEditingProfile(false);
     } catch (error) {
@@ -525,12 +530,12 @@ const GrowthTrackerPage: FC = () => {
           <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 mb-8 border border-gray-200 max-w-4xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0">
               <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-blue-400 to-purple-600 rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-blue-400 to-purple-600 rounded-full flex items-center justify-center overflow-hidden">
                   {profileImage ? (
                     <img 
                       src={profileImage} 
                       alt="Profile" 
-                      className="w-10 h-10 md:w-14 md:h-14 rounded-full object-cover"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     <svg className="w-6 h-6 md:w-8 md:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -598,12 +603,12 @@ const GrowthTrackerPage: FC = () => {
                 {/* Profile Picture Upload */}
                 <div className="flex flex-col items-center space-y-4">
                   <div className="relative">
-                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center border-2 border-gray-200">
+                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden">
                       {profileImage ? (
                         <img 
                           src={profileImage} 
                           alt="Profile" 
-                          className="w-16 h-16 rounded-full object-cover"
+                          className="w-full h-full object-cover"
                         />
                       ) : (
                         <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
