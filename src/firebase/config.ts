@@ -53,6 +53,36 @@ For security reasons, the app cannot start without proper environment configurat
 // Run validation
 validateEnvironmentVariables();
 
+// Safe debug logging (without exposing full credentials)
+const debugFirebaseConfig = () => {
+  console.log('🔍 Firebase Configuration Debug:');
+  console.log('✅ API Key present:', !!requiredEnvVars.apiKey);
+  console.log('✅ Auth Domain present:', !!requiredEnvVars.authDomain);
+  console.log('✅ Project ID present:', !!requiredEnvVars.projectId);
+  console.log('✅ Storage Bucket present:', !!requiredEnvVars.storageBucket);
+  console.log('✅ Messaging Sender ID present:', !!requiredEnvVars.messagingSenderId);
+  console.log('✅ App ID present:', !!requiredEnvVars.appId);
+  
+  // Show partial values for verification (safe)
+  if (requiredEnvVars.apiKey) {
+    console.log('🔑 API Key format:', requiredEnvVars.apiKey.substring(0, 8) + '...');
+  }
+  if (requiredEnvVars.authDomain) {
+    console.log('🌐 Auth Domain:', requiredEnvVars.authDomain);
+  }
+  if (requiredEnvVars.projectId) {
+    console.log('📁 Project ID:', requiredEnvVars.projectId);
+  }
+  
+  console.log('🔍 Current domain:', window.location.hostname);
+  console.log('🔍 Current origin:', window.location.origin);
+};
+
+// Run debug logging in development
+if (import.meta.env.DEV) {
+  debugFirebaseConfig();
+}
+
 const firebaseConfig = {
   apiKey: requiredEnvVars.apiKey,
   authDomain: requiredEnvVars.authDomain,
@@ -62,11 +92,32 @@ const firebaseConfig = {
   appId: requiredEnvVars.appId,
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-export const googleProvider = new GoogleAuthProvider();
+// Initialize Firebase with error handling
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+  console.log('✅ Firebase initialized successfully');
+} catch (error: unknown) {
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  console.error('❌ Firebase initialization failed:', error);
+  throw new Error(`Firebase initialization failed: ${errorMessage}`);
+}
+
+// Initialize Firebase services with error handling
+let auth: any, db: any, storage: any, googleProvider: any;
+try {
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+  googleProvider = new GoogleAuthProvider();
+  console.log('✅ Firebase services initialized successfully');
+} catch (error: unknown) {
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  console.error('❌ Firebase services initialization failed:', error);
+  throw new Error(`Firebase services initialization failed: ${errorMessage}`);
+}
+
+export { auth, db, storage, googleProvider };
 
 export const signInWithGoogle = async () => {
   try {

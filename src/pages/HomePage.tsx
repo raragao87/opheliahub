@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithGoogle } from '../firebase/config';
+import FirebaseTest from '../components/FirebaseTest';
 
 // SVG Icon Components
 const GrowthIcon = () => (
@@ -159,6 +160,15 @@ const HomePage: FC = () => {
           </div>
         </section>
       </main>
+
+      {/* Firebase Test Component (Development Only) */}
+      {import.meta.env.DEV && (
+        <section className="py-8 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <FirebaseTest />
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-white">
