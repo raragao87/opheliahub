@@ -517,21 +517,7 @@ export const saveChildProfile = async (
   try {
     let profileImageUrl = profile.profileImageUrl;
     
-    // Upload image if provided
-    if (imageFile && !profileId) {
-      // For new profiles, we need to create the profile first to get the ID
-      const tempDocRef = await addDoc(collection(db, 'users', userId, 'profile'), {
-        ...profile,
-        timestamp: Date.now(),
-        ownerId: userId,
-      });
-      profileId = tempDocRef.id;
-    }
-    
-    if (imageFile && profileId) {
-      profileImageUrl = await uploadProfileImage(userId, profileId, imageFile);
-    }
-    
+    // Create the profile first to get the ID
     const profileWithTimestamp = { 
       ...profile, 
       timestamp: Date.now(),
@@ -539,15 +525,33 @@ export const saveChildProfile = async (
       profileImageUrl,
     };
     
+    let finalProfileId = profileId;
+    
     if (profileId) {
       // Update existing profile
       await setDoc(doc(db, 'users', userId, 'profile', profileId), profileWithTimestamp);
-      return { id: profileId };
     } else {
       // Create new profile
       const docRef = await addDoc(collection(db, 'users', userId, 'profile'), profileWithTimestamp);
-      return docRef;
+      finalProfileId = docRef.id;
     }
+    
+    // Upload image after we have the profile ID
+    if (imageFile && finalProfileId) {
+      try {
+        profileImageUrl = await uploadProfileImage(userId, finalProfileId, imageFile);
+        
+        // Update the profile with the image URL
+        await updateDoc(doc(db, 'users', userId, 'profile', finalProfileId), {
+          profileImageUrl,
+        });
+      } catch (error) {
+        console.error('Error uploading profile image:', error);
+        // Don't fail the entire save operation if image upload fails
+      }
+    }
+    
+    return { id: finalProfileId, profileImageUrl };
   } catch (error) {
     console.error('Error saving child profile:', error);
     throw error;
@@ -578,18 +582,25 @@ export const getChildProfile = async (userId: string): Promise<(ChildProfile & {
 // Image upload functions
 export const uploadProfileImage = async (userId: string, childProfileId: string, file: File): Promise<string> => {
   try {
+    console.log('Starting image upload for user:', userId, 'profile:', childProfileId);
+    console.log('File details:', { name: file.name, size: file.size, type: file.type });
+    
     // Create a unique filename
     const fileExtension = file.name.split('.').pop();
     const fileName = `profile-images/${userId}/${childProfileId}-${Date.now()}.${fileExtension}`;
+    
+    console.log('Uploading to path:', fileName);
     
     // Create a reference to the file location
     const storageRef = ref(storage, fileName);
     
     // Upload the file
     const snapshot = await uploadBytes(storageRef, file);
+    console.log('Upload completed, getting download URL...');
     
     // Get the download URL
     const downloadURL = await getDownloadURL(snapshot.ref);
+    console.log('Download URL obtained:', downloadURL);
     
     return downloadURL;
   } catch (error) {

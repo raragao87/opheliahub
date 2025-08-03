@@ -122,7 +122,13 @@ const GrowthTrackerPage: FC = () => {
         return;
       }
 
-      await saveChildProfile(user.uid, { ...profileData, ownerId: user.uid }, childProfile?.id, profileImageFile || undefined);
+      console.log('Saving profile with image file:', profileImageFile);
+      const result = await saveChildProfile(user.uid, { ...profileData, ownerId: user.uid }, childProfile?.id, profileImageFile || undefined);
+      console.log('Profile saved with result:', result);
+      
+      // Clear the image file after successful save
+      setProfileImageFile(null);
+      
       await loadData();
       setEditingProfile(false);
     } catch (error) {
