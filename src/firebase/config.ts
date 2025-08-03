@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc, setDoc, where, writeBatch } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDczqvwh8gZLDaT9eM76y5kJ0fiWsLH9VU",
@@ -52,7 +52,230 @@ export interface ChildProfile {
   dateOfBirth: string;
   gender: 'Female' | 'Male';
   timestamp: number;
+  sharedWith?: string[]; // Array of user IDs who have access
+  ownerId: string; // Original owner's user ID
 }
+
+// Sharing Interfaces
+export interface SharingInvitation {
+  id: string;
+  fromUserId: string;
+  fromUserEmail: string;
+  toUserEmail: string;
+  childProfileId: string;
+  childName: string;
+  status: 'pending' | 'accepted' | 'declined';
+  timestamp: number;
+}
+
+export interface SharedChildProfile {
+  childProfileId: string;
+  childName: string;
+  ownerId: string;
+  ownerEmail: string;
+  sharedAt: number;
+}
+
+// Get user's accessible child profiles (own + shared)
+export const getAccessibleChildProfiles = async (userId: string): Promise<(ChildProfile & { id: string })[]> => {
+  try {
+    // Get own profiles
+    const ownProfilesQuery = query(
+      collection(db, 'users', userId, 'profile'),
+      orderBy('timestamp', 'desc')
+    );
+    const ownProfilesSnapshot = await getDocs(ownProfilesQuery);
+    
+    // Get shared profiles
+    const sharedProfilesQuery = query(
+      collection(db, 'sharedProfiles'),
+      where('sharedWith', 'array-contains', userId)
+    );
+    const sharedProfilesSnapshot = await getDocs(sharedProfilesQuery);
+    
+    const ownProfiles = ownProfilesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as (ChildProfile & { id: string })[];
+    
+    const sharedProfiles = sharedProfilesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as (ChildProfile & { id: string })[];
+    
+    return [...ownProfiles, ...sharedProfiles];
+  } catch (error) {
+    console.error('Error getting accessible child profiles:', error);
+    throw error;
+  }
+};
+
+// Send sharing invitation
+export const sendSharingInvitation = async (
+  fromUserId: string,
+  fromUserEmail: string,
+  toUserEmail: string,
+  childProfileId: string,
+  childName: string
+): Promise<void> => {
+  try {
+    // Check if invitation already exists
+    const existingInvitationQuery = query(
+      collection(db, 'sharingInvitations'),
+      where('fromUserId', '==', fromUserId),
+      where('toUserEmail', '==', toUserEmail),
+      where('childProfileId', '==', childProfileId),
+      where('status', '==', 'pending')
+    );
+    const existingInvitationSnapshot = await getDocs(existingInvitationQuery);
+    
+    if (!existingInvitationSnapshot.empty) {
+      throw new Error('Invitation already sent to this email');
+    }
+    
+    // Create invitation
+    await addDoc(collection(db, 'sharingInvitations'), {
+      fromUserId,
+      fromUserEmail,
+      toUserEmail,
+      childProfileId,
+      childName,
+      status: 'pending',
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    console.error('Error sending sharing invitation:', error);
+    throw error;
+  }
+};
+
+// Get pending invitations for a user
+export const getPendingInvitations = async (userEmail: string): Promise<SharingInvitation[]> => {
+  try {
+    const q = query(
+      collection(db, 'sharingInvitations'),
+      where('toUserEmail', '==', userEmail),
+      where('status', '==', 'pending'),
+      orderBy('timestamp', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as SharingInvitation[];
+  } catch (error) {
+    console.error('Error getting pending invitations:', error);
+    throw error;
+  }
+};
+
+// Accept sharing invitation
+export const acceptSharingInvitation = async (invitationId: string, userId: string): Promise<void> => {
+  try {
+    const batch = writeBatch(db);
+    
+    // Update invitation status
+    const invitationRef = doc(db, 'sharingInvitations', invitationId);
+    batch.update(invitationRef, { status: 'accepted' });
+    
+    // Add user to shared profiles
+    const invitationDoc = await getDocs(query(
+      collection(db, 'sharingInvitations'),
+      where('__name__', '==', invitationId)
+    ));
+    
+    if (!invitationDoc.empty) {
+      const invitation = invitationDoc.docs[0].data() as SharingInvitation;
+      
+      // Add to shared profiles collection
+      const sharedProfileRef = doc(db, 'sharedProfiles', invitation.childProfileId);
+      batch.set(sharedProfileRef, {
+        childProfileId: invitation.childProfileId,
+        childName: invitation.childName,
+        ownerId: invitation.fromUserId,
+        ownerEmail: invitation.fromUserEmail,
+        sharedWith: [userId],
+        sharedAt: Date.now(),
+      }, { merge: true });
+      
+      // Update child profile to include shared user
+      const childProfileRef = doc(db, 'users', invitation.fromUserId, 'profile', invitation.childProfileId);
+      batch.update(childProfileRef, {
+        sharedWith: [userId],
+      });
+    }
+    
+    await batch.commit();
+  } catch (error) {
+    console.error('Error accepting sharing invitation:', error);
+    throw error;
+  }
+};
+
+// Decline sharing invitation
+export const declineSharingInvitation = async (invitationId: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'sharingInvitations', invitationId), {
+      status: 'declined',
+    });
+  } catch (error) {
+    console.error('Error declining sharing invitation:', error);
+    throw error;
+  }
+};
+
+// Remove sharing access
+export const removeSharingAccess = async (childProfileId: string, userIdToRemove: string): Promise<void> => {
+  try {
+    const batch = writeBatch(db);
+    
+    // Remove from shared profiles
+    const sharedProfileRef = doc(db, 'sharedProfiles', childProfileId);
+    batch.update(sharedProfileRef, {
+      sharedWith: [userIdToRemove],
+    });
+    
+    // Update child profile
+    const childProfileQuery = query(
+      collection(db, 'users'),
+      where('profile', 'array-contains', childProfileId)
+    );
+    const childProfileSnapshot = await getDocs(childProfileQuery);
+    
+    if (!childProfileSnapshot.empty) {
+      const childProfileDoc = childProfileSnapshot.docs[0];
+      const childProfileRef = doc(db, 'users', childProfileDoc.id, 'profile', childProfileId);
+      batch.update(childProfileRef, {
+        sharedWith: [userIdToRemove],
+      });
+    }
+    
+    await batch.commit();
+  } catch (error) {
+    console.error('Error removing sharing access:', error);
+    throw error;
+  }
+};
+
+// Get shared users for a child profile
+export const getSharedUsers = async (childProfileId: string): Promise<string[]> => {
+  try {
+    const sharedProfileDoc = await getDocs(query(
+      collection(db, 'sharedProfiles'),
+      where('childProfileId', '==', childProfileId)
+    ));
+    
+    if (!sharedProfileDoc.empty) {
+      const sharedProfile = sharedProfileDoc.docs[0].data();
+      return sharedProfile.sharedWith || [];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Error getting shared users:', error);
+    throw error;
+  }
+};
 
 export const saveGrowthRecord = async (userId: string, record: Omit<GrowthRecord, 'timestamp'>) => {
   try {
@@ -108,7 +331,11 @@ export const updateGrowthRecord = async (userId: string, recordId: string, recor
 // Child Profile Functions
 export const saveChildProfile = async (userId: string, profile: Omit<ChildProfile, 'timestamp'>, profileId?: string) => {
   try {
-    const profileWithTimestamp = { ...profile, timestamp: Date.now() };
+    const profileWithTimestamp = { 
+      ...profile, 
+      timestamp: Date.now(),
+      ownerId: userId,
+    };
     if (profileId) {
       // Update existing profile
       await setDoc(doc(db, 'users', userId, 'profile', profileId), profileWithTimestamp);

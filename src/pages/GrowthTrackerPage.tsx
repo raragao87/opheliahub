@@ -12,8 +12,9 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { auth, saveGrowthRecord, getGrowthRecords, deleteGrowthRecord, updateGrowthRecord, saveChildProfile, getChildProfile, type GrowthRecord, type ChildProfile } from '../firebase/config';
+import { auth, saveGrowthRecord, getGrowthRecords, deleteGrowthRecord, updateGrowthRecord, saveChildProfile, getAccessibleChildProfiles, type GrowthRecord, type ChildProfile } from '../firebase/config';
 import { weightPercentiles, heightPercentiles } from '../utils/growthData';
+import SharingModal from '../components/SharingModal';
 
 ChartJS.register(
   CategoryScale,
@@ -50,6 +51,7 @@ const GrowthTrackerPage: FC = () => {
     dateOfBirth: '',
     gender: 'Female' as 'Female' | 'Male',
   });
+  const [showSharingModal, setShowSharingModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -65,18 +67,22 @@ const GrowthTrackerPage: FC = () => {
       
       const [userRecords, userProfile] = await Promise.all([
         getGrowthRecords(user.uid),
-        getChildProfile(user.uid)
+        getAccessibleChildProfiles(user.uid)
       ]);
       
       setRecords(userRecords);
-      setChildProfile(userProfile);
-      
-      if (userProfile) {
+      if (userProfile.length > 0) {
+        const profile = userProfile[0];
+        setChildProfile(profile);
         setProfileData({
-          name: userProfile.name,
-          dateOfBirth: userProfile.dateOfBirth,
-          gender: userProfile.gender,
+          name: profile.name,
+          dateOfBirth: profile.dateOfBirth,
+          gender: profile.gender,
         });
+        
+
+      } else {
+        setChildProfile(null);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -111,7 +117,7 @@ const GrowthTrackerPage: FC = () => {
         return;
       }
 
-      await saveChildProfile(user.uid, profileData, childProfile?.id);
+      await saveChildProfile(user.uid, { ...profileData, ownerId: user.uid }, childProfile?.id);
       await loadData();
       setEditingProfile(false);
     } catch (error) {
@@ -544,17 +550,42 @@ const GrowthTrackerPage: FC = () => {
                     {calculateAgeInWeeks(childProfile.dateOfBirth, new Date().toISOString().split('T')[0])} weeks
                   </p>
                 </div>
-                <button
-                  onClick={() => setEditingProfile(true)}
-                  className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-xl transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md border border-gray-200"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  <span>Edit</span>
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setShowSharingModal(true)}
+                    className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                    </svg>
+                    <span>Share</span>
+                  </button>
+                  <button
+                    onClick={() => setEditingProfile(true)}
+                    className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-xl transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md border border-gray-200"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span>Edit</span>
+                  </button>
+                </div>
               </div>
             </div>
+            
+            {/* Sharing Status */}
+            {(childProfile.sharedWith && childProfile.sharedWith.length > 0) && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                  </svg>
+                  <span className="text-sm font-medium text-blue-800">
+                    Shared with {childProfile.sharedWith.length} partner{childProfile.sharedWith.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -836,6 +867,16 @@ const GrowthTrackerPage: FC = () => {
               </form>
             </div>
           </div>
+        )}
+
+        {/* Sharing Modal */}
+        {showSharingModal && childProfile && (
+          <SharingModal
+            isOpen={showSharingModal}
+            onClose={() => setShowSharingModal(false)}
+            childProfileId={childProfile.id}
+            childName={childProfile.name}
+          />
         )}
       </div>
     </div>
