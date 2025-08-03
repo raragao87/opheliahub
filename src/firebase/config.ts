@@ -315,6 +315,32 @@ export const getSentInvitations = async (userId: string): Promise<SharingInvitat
   }
 };
 
+// Get invitations received by a user (for future use)
+export const getReceivedInvitations = async (userEmail: string): Promise<SharingInvitation[]> => {
+  try {
+    console.log('Getting received invitations for email:', userEmail);
+    
+    const normalizedEmail = userEmail.toLowerCase().trim();
+    const q = query(
+      collection(db, 'sharingInvitations'),
+      where('toUserEmail', '==', normalizedEmail),
+      where('status', '==', 'pending'),
+      orderBy('timestamp', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    console.log('Found received invitations:', querySnapshot.docs.length);
+    
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as SharingInvitation[];
+  } catch (error) {
+    console.error('Error getting received invitations:', error);
+    throw error;
+  }
+};
+
 // Accept sharing invitation
 export const acceptSharingInvitation = async (invitationId: string, userId: string): Promise<void> => {
   try {

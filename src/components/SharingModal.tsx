@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { FC } from 'react';
-import { auth, sendSharingInvitation, getPendingInvitations, acceptSharingInvitation, declineSharingInvitation, type SharingInvitation } from '../firebase/config';
+import { auth, sendSharingInvitation, getSentInvitations, declineSharingInvitation, type SharingInvitation } from '../firebase/config';
 
 interface SharingModalProps {
   isOpen: boolean;
@@ -24,15 +24,20 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
   }, [isOpen]);
 
   const loadPendingInvitations = async () => {
-    if (!auth.currentUser?.email) return;
+    if (!auth.currentUser?.uid) return;
     
     setLoadingInvitations(true);
     setError('');
     try {
-      console.log('Loading invitations for:', auth.currentUser.email);
-      const invitations = await getPendingInvitations(auth.currentUser.email);
-      console.log('Loaded invitations:', invitations);
-      setPendingInvitations(invitations);
+      console.log('Loading sent invitations for user:', auth.currentUser.uid);
+      const allSentInvitations = await getSentInvitations(auth.currentUser.uid);
+      console.log('All sent invitations:', allSentInvitations);
+      
+      // Filter for pending invitations only
+      const pendingInvitations = allSentInvitations.filter(invitation => invitation.status === 'pending');
+      console.log('Pending invitations:', pendingInvitations);
+      
+      setPendingInvitations(pendingInvitations);
     } catch (error) {
       console.error('Error loading invitations:', error);
       setError(error instanceof Error ? error.message : 'Failed to load invitations');
@@ -68,27 +73,16 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
     }
   };
 
-  const handleAcceptInvitation = async (invitationId: string) => {
-    if (!auth.currentUser) return;
 
-    try {
-      await acceptSharingInvitation(invitationId, auth.currentUser.uid);
-      setSuccess('Invitation accepted! You now have access to the child profile.');
-      await loadPendingInvitations();
-    } catch (error) {
-      console.error('Error accepting invitation:', error);
-      setError('Failed to accept invitation');
-    }
-  };
 
-  const handleDeclineInvitation = async (invitationId: string) => {
+  const handleCancelInvitation = async (invitationId: string) => {
     try {
       await declineSharingInvitation(invitationId);
-      setSuccess('Invitation declined.');
+      setSuccess('Invitation cancelled.');
       await loadPendingInvitations();
     } catch (error) {
-      console.error('Error declining invitation:', error);
-      setError('Failed to decline invitation');
+      console.error('Error cancelling invitation:', error);
+      setError('Failed to cancel invitation');
     }
   };
 
@@ -152,7 +146,7 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
 
           {/* Pending Invitations */}
           <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-4">Pending Invitations</h3>
+            <h3 className="text-lg font-medium text-gray-800 mb-4">Invitations You Sent (Pending)</h3>
             {loadingInvitations ? (
               <div className="text-center py-4">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
@@ -171,22 +165,19 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
                           {invitation.childName}
                         </p>
                         <p className="text-sm text-gray-600">
-                          Shared by {invitation.fromUserEmail}
+                          Sent to {invitation.toUserEmail}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Sent on {new Date(invitation.timestamp).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => handleAcceptInvitation(invitation.id)}
-                        className="flex-1 bg-green-500 text-white text-sm font-medium py-2 px-3 rounded-lg hover:bg-green-600 transition-colors"
+                        onClick={() => handleCancelInvitation(invitation.id)}
+                        className="flex-1 bg-red-500 text-white text-sm font-medium py-2 px-3 rounded-lg hover:bg-red-600 transition-colors"
                       >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleDeclineInvitation(invitation.id)}
-                        className="flex-1 bg-gray-500 text-white text-sm font-medium py-2 px-3 rounded-lg hover:bg-gray-600 transition-colors"
-                      >
-                        Decline
+                        Cancel Invitation
                       </button>
                     </div>
                   </div>
@@ -194,7 +185,7 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-gray-500 text-sm">No pending invitations</p>
+                <p className="text-gray-500 text-sm">No pending invitations sent</p>
               </div>
             )}
           </div>
