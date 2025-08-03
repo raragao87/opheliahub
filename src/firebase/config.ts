@@ -119,30 +119,50 @@ export const sendSharingInvitation = async (
   childName: string
 ): Promise<void> => {
   try {
+    console.log('=== SENDING SHARING INVITATION ===');
+    console.log('From user ID:', fromUserId);
+    console.log('From email:', fromUserEmail);
+    console.log('To email:', toUserEmail);
+    console.log('Child profile ID:', childProfileId);
+    console.log('Child name:', childName);
+    
+    // Normalize emails for consistent storage and querying
+    const normalizedFromEmail = fromUserEmail.toLowerCase().trim();
+    const normalizedToEmail = toUserEmail.toLowerCase().trim();
+    
+    console.log('Normalized from email:', normalizedFromEmail);
+    console.log('Normalized to email:', normalizedToEmail);
+    
     // Check if invitation already exists
     const existingInvitationQuery = query(
       collection(db, 'sharingInvitations'),
       where('fromUserId', '==', fromUserId),
-      where('toUserEmail', '==', toUserEmail),
+      where('toUserEmail', '==', normalizedToEmail),
       where('childProfileId', '==', childProfileId),
       where('status', '==', 'pending')
     );
     const existingInvitationSnapshot = await getDocs(existingInvitationQuery);
     
     if (!existingInvitationSnapshot.empty) {
+      console.log('Invitation already exists, throwing error');
       throw new Error('Invitation already sent to this email');
     }
     
-    // Create invitation
-    await addDoc(collection(db, 'sharingInvitations'), {
+    // Create invitation with normalized emails
+    const invitationData = {
       fromUserId,
-      fromUserEmail,
-      toUserEmail,
+      fromUserEmail: normalizedFromEmail,
+      toUserEmail: normalizedToEmail,
       childProfileId,
       childName,
       status: 'pending',
       timestamp: Date.now(),
-    });
+    };
+    
+    console.log('Creating invitation with data:', invitationData);
+    await addDoc(collection(db, 'sharingInvitations'), invitationData);
+    console.log('Invitation created successfully');
+    console.log('=== END SENDING INVITATION ===');
   } catch (error) {
     console.error('Error sending sharing invitation:', error);
     throw error;
@@ -152,22 +172,119 @@ export const sendSharingInvitation = async (
 // Get pending invitations for a user
 export const getPendingInvitations = async (userEmail: string): Promise<SharingInvitation[]> => {
   try {
-    console.log('Getting pending invitations for email:', userEmail);
+    console.log('=== DEBUGGING PENDING INVITATIONS ===');
+    console.log('Query email:', userEmail);
+    console.log('Query email type:', typeof userEmail);
+    console.log('Query email length:', userEmail.length);
     
+    // Normalize email to lowercase for consistent comparison
+    const normalizedEmail = userEmail.toLowerCase().trim();
+    console.log('Normalized email:', normalizedEmail);
+    
+    // First, let's get ALL invitations to debug
+    const allInvitationsQuery = query(
+      collection(db, 'sharingInvitations'),
+      orderBy('timestamp', 'desc')
+    );
+    
+    console.log('Fetching all invitations for debugging...');
+    const allInvitationsSnapshot = await getDocs(allInvitationsQuery);
+    console.log('Total invitations in collection:', allInvitationsSnapshot.docs.length);
+    
+    // Log all invitations to see what's in the database
+    allInvitationsSnapshot.docs.forEach((doc, index) => {
+      const data = doc.data();
+      console.log(`Invitation ${index + 1}:`, {
+        id: doc.id,
+        toUserEmail: data.toUserEmail,
+        toUserEmailType: typeof data.toUserEmail,
+        toUserEmailLength: data.toUserEmail?.length,
+        status: data.status,
+        fromUserEmail: data.fromUserEmail,
+        childName: data.childName,
+        timestamp: data.timestamp
+      });
+    });
+    
+    // Now try the actual query with normalized email
+    console.log('Trying query with normalized email:', normalizedEmail);
     const q = query(
       collection(db, 'sharingInvitations'),
-      where('toUserEmail', '==', userEmail),
+      where('toUserEmail', '==', normalizedEmail),
       where('status', '==', 'pending'),
       orderBy('timestamp', 'desc')
     );
     
     const querySnapshot = await getDocs(q);
-    console.log('Found invitations:', querySnapshot.docs.length);
+    console.log('Query result count:', querySnapshot.docs.length);
     
-    return querySnapshot.docs.map(doc => ({
+    // If query returns empty, try without status filter
+    if (querySnapshot.docs.length === 0) {
+      console.log('No results with status filter, trying without status...');
+      const qWithoutStatus = query(
+        collection(db, 'sharingInvitations'),
+        where('toUserEmail', '==', normalizedEmail),
+        orderBy('timestamp', 'desc')
+      );
+      
+      const querySnapshotWithoutStatus = await getDocs(qWithoutStatus);
+      console.log('Results without status filter:', querySnapshotWithoutStatus.docs.length);
+      
+      if (querySnapshotWithoutStatus.docs.length > 0) {
+        console.log('Found invitations without status filter:');
+        querySnapshotWithoutStatus.docs.forEach((doc, index) => {
+          const data = doc.data();
+          console.log(`  ${index + 1}. Status: "${data.status}", Email: "${data.toUserEmail}"`);
+        });
+      }
+    }
+    
+    // Also try with original email (case-sensitive)
+    if (querySnapshot.docs.length === 0) {
+      console.log('Trying with original email (case-sensitive):', userEmail);
+      const qOriginal = query(
+        collection(db, 'sharingInvitations'),
+        where('toUserEmail', '==', userEmail),
+        where('status', '==', 'pending'),
+        orderBy('timestamp', 'desc')
+      );
+      
+      const querySnapshotOriginal = await getDocs(qOriginal);
+      console.log('Results with original email:', querySnapshotOriginal.docs.length);
+    }
+    
+    // Client-side filtering as fallback
+    console.log('Performing client-side filtering...');
+    const clientSideFiltered = allInvitationsSnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((invitation: any) => {
+        const matchesEmail = invitation.toUserEmail?.toLowerCase() === normalizedEmail ||
+                           invitation.toUserEmail === userEmail;
+        const matchesStatus = invitation.status === 'pending';
+        console.log(`Client-side check: Email "${invitation.toUserEmail}" matches "${normalizedEmail}": ${matchesEmail}, Status "${invitation.status}" matches "pending": ${matchesStatus}`);
+        return matchesEmail && matchesStatus;
+      });
+    
+    console.log('Client-side filtered results:', clientSideFiltered.length);
+    
+    // Return client-side filtered results if query failed
+    if (querySnapshot.docs.length === 0 && clientSideFiltered.length > 0) {
+      console.log('Using client-side filtered results');
+      return clientSideFiltered as SharingInvitation[];
+    }
+    
+    const results = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     })) as SharingInvitation[];
+    
+    console.log('Final results:', results.length);
+    console.log('=== END DEBUGGING ===');
+    
+    return results;
   } catch (error) {
     console.error('Error getting pending invitations:', error);
     throw error;
