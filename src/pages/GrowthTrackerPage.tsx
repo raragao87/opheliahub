@@ -123,7 +123,10 @@ const GrowthTrackerPage: FC = () => {
       }
 
       console.log('Saving profile with image file:', profileImageFile);
-      const result = await saveChildProfile(user.uid, { ...profileData, ownerId: user.uid }, childProfile?.id, profileImageFile || undefined);
+      
+      // Only pass imageFile if it exists
+      const imageFileToUpload = profileImageFile || undefined;
+      const result = await saveChildProfile(user.uid, { ...profileData, ownerId: user.uid }, childProfile?.id, imageFileToUpload);
       console.log('Profile saved with result:', result);
       
       // Clear the image file after successful save

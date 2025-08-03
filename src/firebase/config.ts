@@ -522,7 +522,7 @@ export const saveChildProfile = async (
       ...profile, 
       timestamp: Date.now(),
       ownerId: userId,
-      profileImageUrl,
+      ...(profileImageUrl && { profileImageUrl }),
     };
     
     let finalProfileId = profileId;
@@ -541,10 +541,12 @@ export const saveChildProfile = async (
       try {
         profileImageUrl = await uploadProfileImage(userId, finalProfileId, imageFile);
         
-        // Update the profile with the image URL
-        await updateDoc(doc(db, 'users', userId, 'profile', finalProfileId), {
-          profileImageUrl,
-        });
+        // Only update if we got a valid URL
+        if (profileImageUrl) {
+          await updateDoc(doc(db, 'users', userId, 'profile', finalProfileId), {
+            profileImageUrl,
+          });
+        }
       } catch (error) {
         console.error('Error uploading profile image:', error);
         // Don't fail the entire save operation if image upload fails
