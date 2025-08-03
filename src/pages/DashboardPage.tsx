@@ -1,9 +1,86 @@
+import { useState, useEffect } from 'react';
 import type { FC } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOutUser } from '../firebase/config';
+import { auth, getSentInvitations, getReceivedInvitations, signOutUser } from '../firebase/config';
+
+interface FamilyMember {
+  id: string;
+  name: string;
+  email: string;
+  isCurrentUser: boolean;
+  avatar?: string;
+}
 
 const DashboardPage: FC = () => {
   const navigate = useNavigate();
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+
+  useEffect(() => {
+    loadFamilyMembers();
+  }, []);
+
+  const loadFamilyMembers = async () => {
+    if (!auth.currentUser) return;
+
+    setLoadingMembers(true);
+    try {
+      const currentUser: FamilyMember = {
+        id: auth.currentUser.uid,
+        name: auth.currentUser.displayName || 'You',
+        email: auth.currentUser.email || '',
+        isCurrentUser: true,
+        avatar: auth.currentUser.photoURL || undefined,
+      };
+
+      // Get sent invitations to find family members
+      const sentInvitations = await getSentInvitations(auth.currentUser.uid);
+      const acceptedInvitations = sentInvitations.filter(inv => inv.status === 'accepted');
+      
+      // Get received invitations
+      const receivedInvitations = await getReceivedInvitations(auth.currentUser.email || '');
+      const acceptedReceivedInvitations = receivedInvitations.filter(inv => inv.status === 'accepted');
+
+      // Create family members from accepted invitations
+      const invitedMembers: FamilyMember[] = acceptedInvitations.map(inv => ({
+        id: inv.toUserEmail, // Using email as ID for now
+        name: inv.toUserEmail.split('@')[0], // Use email prefix as name
+        email: inv.toUserEmail,
+        isCurrentUser: false,
+      }));
+
+      const receivedMembers: FamilyMember[] = acceptedReceivedInvitations.map(inv => ({
+        id: inv.fromUserEmail,
+        name: inv.fromUserEmail.split('@')[0],
+        email: inv.fromUserEmail,
+        isCurrentUser: false,
+      }));
+
+      // Combine all family members, starting with current user
+      const allMembers = [currentUser, ...invitedMembers, ...receivedMembers];
+      
+      // Remove duplicates based on email
+      const uniqueMembers = allMembers.filter((member, index, self) => 
+        index === self.findIndex(m => m.email === member.email)
+      );
+
+      setFamilyMembers(uniqueMembers);
+    } catch (error) {
+      console.error('Error loading family members:', error);
+      // Fallback to just current user
+      if (auth.currentUser) {
+        setFamilyMembers([{
+          id: auth.currentUser.uid,
+          name: auth.currentUser.displayName || 'You',
+          email: auth.currentUser.email || '',
+          isCurrentUser: true,
+          avatar: auth.currentUser.photoURL || undefined,
+        }]);
+      }
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -12,6 +89,15 @@ const DashboardPage: FC = () => {
     } catch (error) {
       console.error('Logout failed:', error);
     }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (
@@ -66,6 +152,27 @@ const DashboardPage: FC = () => {
               <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
+            </div>
+          </div>
+
+          {/* Personal Finance Card */}
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 opacity-75">
+            <div className="flex items-center justify-between mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <div className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                Coming Soon
+              </div>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-3">Personal Finance</h3>
+            <p className="text-gray-600 leading-relaxed mb-4">
+              Track your individual accounts and calculate personal net worth separately from family finances.
+            </p>
+            <div className="flex items-center text-gray-400 font-medium text-sm">
+              <span>Coming Soon</span>
             </div>
           </div>
 
@@ -146,7 +253,7 @@ const DashboardPage: FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Family Members</p>
-                <p className="text-2xl font-bold text-gray-900">2+</p>
+                <p className="text-2xl font-bold text-gray-900">{familyMembers.length}</p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                 <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,6 +262,81 @@ const DashboardPage: FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Family Members Section */}
+        <div className="mt-8 bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-900">Family Members</h2>
+            <button className="bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Invite</span>
+            </button>
+          </div>
+          
+          {loadingMembers ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
+              <p className="text-gray-500 text-sm mt-2">Loading family members...</p>
+            </div>
+          ) : familyMembers.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {familyMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                    member.isCurrentUser
+                      ? 'border-purple-200 bg-purple-50'
+                      : 'border-gray-200 bg-gray-50 hover:border-purple-200 hover:bg-purple-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                          {getInitials(member.name)}
+                        </div>
+                      )}
+                      {member.isCurrentUser && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                          <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {member.name}
+                        {member.isCurrentUser && (
+                          <span className="ml-2 text-xs text-purple-600 font-medium">(You)</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">{member.email}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 text-sm">No family members yet</p>
+              <p className="text-gray-400 text-xs mt-1">Invite family members to share your data</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
