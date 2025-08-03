@@ -152,13 +152,18 @@ export const sendSharingInvitation = async (
 // Get pending invitations for a user
 export const getPendingInvitations = async (userEmail: string): Promise<SharingInvitation[]> => {
   try {
+    console.log('Getting pending invitations for email:', userEmail);
+    
     const q = query(
       collection(db, 'sharingInvitations'),
       where('toUserEmail', '==', userEmail),
       where('status', '==', 'pending'),
       orderBy('timestamp', 'desc')
     );
+    
     const querySnapshot = await getDocs(q);
+    console.log('Found invitations:', querySnapshot.docs.length);
+    
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -169,16 +174,42 @@ export const getPendingInvitations = async (userEmail: string): Promise<SharingI
   }
 };
 
+// Get invitations sent by a user
+export const getSentInvitations = async (userId: string): Promise<SharingInvitation[]> => {
+  try {
+    console.log('Getting sent invitations for user:', userId);
+    
+    const q = query(
+      collection(db, 'sharingInvitations'),
+      where('fromUserId', '==', userId),
+      orderBy('timestamp', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    console.log('Found sent invitations:', querySnapshot.docs.length);
+    
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as SharingInvitation[];
+  } catch (error) {
+    console.error('Error getting sent invitations:', error);
+    throw error;
+  }
+};
+
 // Accept sharing invitation
 export const acceptSharingInvitation = async (invitationId: string, userId: string): Promise<void> => {
   try {
+    console.log('Accepting invitation:', invitationId, 'for user:', userId);
+    
     const batch = writeBatch(db);
     
     // Update invitation status
     const invitationRef = doc(db, 'sharingInvitations', invitationId);
     batch.update(invitationRef, { status: 'accepted' });
     
-    // Add user to shared profiles
+    // Get invitation details
     const invitationDoc = await getDocs(query(
       collection(db, 'sharingInvitations'),
       where('__name__', '==', invitationId)
@@ -186,6 +217,7 @@ export const acceptSharingInvitation = async (invitationId: string, userId: stri
     
     if (!invitationDoc.empty) {
       const invitation = invitationDoc.docs[0].data() as SharingInvitation;
+      console.log('Invitation details:', invitation);
       
       // Add to shared profiles collection
       const sharedProfileRef = doc(db, 'sharedProfiles', invitation.childProfileId);
@@ -206,6 +238,7 @@ export const acceptSharingInvitation = async (invitationId: string, userId: stri
     }
     
     await batch.commit();
+    console.log('Invitation accepted successfully');
   } catch (error) {
     console.error('Error accepting sharing invitation:', error);
     throw error;

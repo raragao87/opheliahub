@@ -27,12 +27,15 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
     if (!auth.currentUser?.email) return;
     
     setLoadingInvitations(true);
+    setError('');
     try {
+      console.log('Loading invitations for:', auth.currentUser.email);
       const invitations = await getPendingInvitations(auth.currentUser.email);
+      console.log('Loaded invitations:', invitations);
       setPendingInvitations(invitations);
     } catch (error) {
       console.error('Error loading invitations:', error);
-      setError('Failed to load invitations');
+      setError(error instanceof Error ? error.message : 'Failed to load invitations');
     } finally {
       setLoadingInvitations(false);
     }

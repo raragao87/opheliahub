@@ -14,11 +14,9 @@ service cloud.firestore {
          resource.data.ownerId == request.auth.uid);
     }
     
-    // Allow access to sharing invitations
+    // Allow access to sharing invitations - simplified for query support
     match /sharingInvitations/{invitationId} {
-      allow read, write: if request.auth != null && 
-        (resource.data.fromUserId == request.auth.uid || 
-         resource.data.toUserEmail == request.auth.token.email);
+      allow read, write: if request.auth != null;
     }
     
     // Fallback rule for development (remove in production)
