@@ -326,14 +326,14 @@ export const acceptSharingInvitation = async (invitationId: string, userId: stri
     const invitationRef = doc(db, 'sharingInvitations', invitationId);
     batch.update(invitationRef, { status: 'accepted' });
     
-    // Get invitation details
-    const invitationDoc = await getDocs(query(
+    // Get invitation details using document reference
+    const invitationSnapshot = await getDocs(query(
       collection(db, 'sharingInvitations'),
       where('__name__', '==', invitationId)
     ));
     
-    if (!invitationDoc.empty) {
-      const invitation = invitationDoc.docs[0].data() as SharingInvitation;
+    if (!invitationSnapshot.empty) {
+      const invitation = invitationSnapshot.docs[0].data() as SharingInvitation;
       console.log('Invitation details:', invitation);
       
       // Add to shared profiles collection
