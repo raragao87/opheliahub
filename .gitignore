@@ -23,9 +23,56 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables and secrets
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
+
+# Firebase and service account files
+serviceAccountKey.json
+firebase-service-account.json
+*-service-account.json
+firebase-adminsdk-*.json
+google-services.json
+GoogleService-Info.plist
+
+# Private keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.p8
+
+# API keys and secrets
+secrets.json
+config.json
+credentials.json
+*.secret
+*.key.json
+
+# IDE and editor files that might contain secrets
+.vscode/settings.json
+.idea/workspace.xml
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs that might contain sensitive data
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*

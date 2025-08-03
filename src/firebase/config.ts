@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc, setDoc, where, writeBatch } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
-// Environment variable validation
+// Environment variable validation with enhanced security
 const requiredEnvVars = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -13,14 +13,45 @@ const requiredEnvVars = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Check for missing environment variables
-const missingVars = Object.entries(requiredEnvVars)
-  .filter(([, value]) => !value)
-  .map(([key]) => `VITE_FIREBASE_${key.toUpperCase()}`);
+// Enhanced validation with specific error messages
+const validateEnvironmentVariables = () => {
+  const missingVars = Object.entries(requiredEnvVars)
+    .filter(([, value]) => !value)
+    .map(([key]) => `VITE_FIREBASE_${key.toUpperCase()}`);
 
-if (missingVars.length > 0) {
-  throw new Error(`Missing required environment variables: ${missingVars.join(', ')}. Please check your .env file.`);
-}
+  if (missingVars.length > 0) {
+    const errorMessage = `
+🚨 CRITICAL SECURITY ERROR: Missing Firebase environment variables!
+
+Missing variables: ${missingVars.join(', ')}
+
+To fix this:
+1. Copy .env.example to .env: cp .env.example .env
+2. Add your Firebase credentials to .env file
+3. Restart the development server
+
+For security reasons, the app cannot start without proper environment configuration.
+    `;
+    throw new Error(errorMessage);
+  }
+
+  // Validate API key format
+  const apiKey = requiredEnvVars.apiKey;
+  if (apiKey && !apiKey.startsWith('AIzaSy')) {
+    console.warn('⚠️  Warning: Firebase API key format appears incorrect. Expected format: AIzaSy...');
+  }
+
+  // Validate project ID format
+  const projectId = requiredEnvVars.projectId;
+  if (projectId && projectId.includes(' ')) {
+    throw new Error('❌ Invalid project ID: Contains spaces. Project ID should be lowercase with hyphens only.');
+  }
+
+  console.log('✅ Firebase environment variables validated successfully');
+};
+
+// Run validation
+validateEnvironmentVariables();
 
 const firebaseConfig = {
   apiKey: requiredEnvVars.apiKey,
