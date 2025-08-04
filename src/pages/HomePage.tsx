@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { signInWithGoogle } from '../firebase/config';
 import FirebaseTest from '../components/FirebaseTest';
 import StorageTest from '../components/StorageTest';
+import SecurityTest from '../components/SecurityTest';
 
 // SVG Icon Components
 const GrowthIcon = () => (
@@ -168,6 +169,7 @@ const HomePage: FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <FirebaseTest />
             <StorageTest />
+            <SecurityTest />
           </div>
         </section>
       )}

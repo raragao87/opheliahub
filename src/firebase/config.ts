@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc, setDoc, where, writeBatch } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { config, getCurrentDomain, isDomainAllowed, getSecurityInfo } from '../config/environment';
 
 // Environment variable validation with enhanced security
 const requiredEnvVars = {
@@ -53,6 +54,27 @@ For security reasons, the app cannot start without proper environment configurat
 // Run validation
 validateEnvironmentVariables();
 
+// Domain and security validation
+const validateDomainAndSecurity = () => {
+  const currentDomain = getCurrentDomain();
+  const securityInfo = getSecurityInfo();
+  
+  console.log('🔒 Security Validation:', securityInfo);
+  
+  if (!isDomainAllowed(currentDomain)) {
+    console.warn('⚠️  Warning: Current domain not in allowed list:', currentDomain);
+    console.warn('   Allowed domains:', config.allowedDomains);
+  } else {
+    console.log('✅ Domain validation passed:', currentDomain);
+  }
+  
+  if (config.apiKeyRestrictions.enabled) {
+    console.log('🔒 API key restrictions are ENABLED (production mode)');
+  } else {
+    console.log('🔓 API key restrictions are DISABLED (development mode)');
+  }
+};
+
 // Safe debug logging (without exposing full credentials)
 const debugFirebaseConfig = () => {
   console.log('🔍 Firebase Configuration Debug:');
@@ -81,6 +103,7 @@ const debugFirebaseConfig = () => {
 // Run debug logging in development
 if (import.meta.env.DEV) {
   debugFirebaseConfig();
+  validateDomainAndSecurity();
 }
 
 const firebaseConfig = {
