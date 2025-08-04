@@ -47,12 +47,31 @@ const FirebaseTest: React.FC = () => {
     const testStorage = async () => {
       try {
         setStorageStatus('Testing...');
+        
+        // First check if user is authenticated
+        if (!auth.currentUser) {
+          setStorageStatus('❌ Storage error: User not authenticated');
+          setError('Storage error: User not authenticated');
+          return;
+        }
+        
         const testRef = ref(storage, 'test');
         await listAll(testRef);
         setStorageStatus('✅ Storage working - Can list files');
       } catch (error) {
-        setStorageStatus(`❌ Storage error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        setError(`Storage error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Storage test error:', error);
+        
+        if (errorMessage.includes('403')) {
+          setStorageStatus('❌ Storage error: 403 Forbidden - Check authentication and rules');
+          setError('Storage error: 403 Forbidden - User may not be authenticated or rules may be blocking access');
+        } else if (errorMessage.includes('401')) {
+          setStorageStatus('❌ Storage error: 401 Unauthorized - Authentication required');
+          setError('Storage error: 401 Unauthorized - Please sign in to access storage');
+        } else {
+          setStorageStatus(`❌ Storage error: ${errorMessage}`);
+          setError(`Storage error: ${errorMessage}`);
+        }
       }
     };
 
@@ -70,6 +89,13 @@ const FirebaseTest: React.FC = () => {
           <span className="font-medium">Authentication:</span>
           <span className={`text-sm ${authStatus.includes('✅') ? 'text-green-600' : 'text-red-600'}`}>
             {authStatus}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="font-medium">User Status:</span>
+          <span className={`text-sm ${user ? 'text-green-600' : 'text-orange-600'}`}>
+            {user ? `✅ Signed in as ${user.email}` : '❌ Not signed in'}
           </span>
         </div>
         
