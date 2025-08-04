@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { type Account } from '../firebase/config';
+import AddTransactionModal from './AddTransactionModal';
+import AccountDetailsModal from './AccountDetailsModal';
 
 interface AccountCardProps {
   account: Account;
   onUpdate: () => void;
 }
 
-const AccountCard: React.FC<AccountCardProps> = ({ account }) => {
+const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
+  const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
+  const [showAccountDetailsModal, setShowAccountDetailsModal] = useState(false);
   const getAccountTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case 'checking':
@@ -133,19 +137,13 @@ const AccountCard: React.FC<AccountCardProps> = ({ account }) => {
         <div className="mt-6 pt-4 border-t border-gray-200">
           <div className="flex space-x-3">
             <button
-              onClick={() => {
-                // TODO: Navigate to account details/transactions
-                console.log('View account details:', account.id);
-              }}
+              onClick={() => setShowAccountDetailsModal(true)}
               className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               View Details
             </button>
             <button
-              onClick={() => {
-                // TODO: Add transaction functionality
-                console.log('Add transaction to:', account.id);
-              }}
+              onClick={() => setShowAddTransactionModal(true)}
               className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
             >
               Add Transaction
@@ -153,6 +151,27 @@ const AccountCard: React.FC<AccountCardProps> = ({ account }) => {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {showAddTransactionModal && (
+        <AddTransactionModal
+          isOpen={showAddTransactionModal}
+          onClose={() => setShowAddTransactionModal(false)}
+          account={account}
+          onTransactionAdded={() => {
+            setShowAddTransactionModal(false);
+            onUpdate();
+          }}
+        />
+      )}
+
+      {showAccountDetailsModal && (
+        <AccountDetailsModal
+          isOpen={showAccountDetailsModal}
+          onClose={() => setShowAccountDetailsModal(false)}
+          account={account}
+        />
+      )}
     </div>
   );
 };

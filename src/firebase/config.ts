@@ -975,3 +975,77 @@ export const createAccountType = async (userId: string, typeData: Omit<AccountTy
     throw error;
   }
 };
+
+// Transaction Functions
+export const createTransaction = async (userId: string, transactionData: Omit<Transaction, 'id'>): Promise<string> => {
+  try {
+    console.log('💰 Creating transaction:', transactionData.description);
+    
+    const transactionWithTimestamps = {
+      ...transactionData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'transactions'), transactionWithTimestamps);
+    console.log('✅ Transaction created successfully with ID:', docRef.id);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating transaction:', error);
+    throw error;
+  }
+};
+
+export const getTransactionsByAccount = async (userId: string, accountId: string): Promise<Transaction[]> => {
+  try {
+    console.log('💰 Fetching transactions for account:', accountId);
+    
+    const q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('accountId', '==', accountId),
+      orderBy('date', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const transactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Transaction[];
+    
+    console.log(`✅ Found ${transactions.length} transactions for account`);
+    return transactions;
+  } catch (error) {
+    console.error('❌ Error getting transactions:', error);
+    throw error;
+  }
+};
+
+export const updateTransaction = async (transactionId: string, transactionData: Partial<Transaction>, userId: string): Promise<void> => {
+  try {
+    console.log('💰 Updating transaction:', transactionId);
+    
+    const updateData = {
+      ...transactionData,
+      updatedAt: Date.now(),
+    };
+    
+    await updateDoc(doc(db, 'users', userId, 'transactions', transactionId), updateData);
+    console.log('✅ Transaction updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating transaction:', error);
+    throw error;
+  }
+};
+
+export const deleteTransaction = async (transactionId: string, userId: string): Promise<void> => {
+  try {
+    console.log('💰 Deleting transaction:', transactionId);
+    
+    await deleteDoc(doc(db, 'users', userId, 'transactions', transactionId));
+    console.log('✅ Transaction deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting transaction:', error);
+    throw error;
+  }
+};
