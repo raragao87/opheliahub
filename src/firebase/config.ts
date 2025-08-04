@@ -916,19 +916,31 @@ export const getAccountTypes = async (userId: string): Promise<AccountType[]> =>
     
     // Get default account types
     const defaultTypes = getDefaultAccountTypes();
+    console.log('✅ Default account types:', defaultTypes.map(t => t.name));
     
     // Get custom account types
-    const q = query(
-      collection(db, 'users', userId, 'accountTypes'),
-      where('isCustom', '==', true),
-      orderBy('name', 'asc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    const customTypes = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as AccountType[];
+    let customTypes: AccountType[] = [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'accountTypes'),
+        where('isCustom', '==', true),
+        orderBy('name', 'asc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      customTypes = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as AccountType[];
+      
+      console.log('✅ Custom account types found:', customTypes.map(t => t.name));
+    } catch (customError) {
+      console.log('⚠️ No custom account types found (this is normal for new users):', customError);
+      // Return only default types if custom types query fails
+      const allTypes = [...defaultTypes];
+      console.log(`✅ Returning ${allTypes.length} account types (${defaultTypes.length} default, 0 custom)`);
+      return allTypes;
+    }
     
     // Combine default and custom types
     const allTypes = [...defaultTypes, ...customTypes];
@@ -937,7 +949,9 @@ export const getAccountTypes = async (userId: string): Promise<AccountType[]> =>
     return allTypes;
   } catch (error) {
     console.error('❌ Error getting account types:', error);
-    throw error;
+    // Return default types even if there's an error
+    console.log('🔄 Falling back to default account types');
+    return getDefaultAccountTypes();
   }
 };
 
@@ -945,14 +959,14 @@ export const createAccountType = async (userId: string, typeData: Omit<AccountTy
   try {
     console.log('💰 Creating account type:', typeData.name);
     
-    const typeWithId = {
+    const typeDataToSave = {
       ...typeData,
-      id: `custom-${Date.now()}`,
       isCustom: true,
       userId,
+      createdAt: Date.now(),
     };
     
-    const docRef = await addDoc(collection(db, 'users', userId, 'accountTypes'), typeWithId);
+    const docRef = await addDoc(collection(db, 'users', userId, 'accountTypes'), typeDataToSave);
     console.log('✅ Account type created successfully with ID:', docRef.id);
     
     return docRef.id;

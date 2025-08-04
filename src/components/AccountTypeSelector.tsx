@@ -38,10 +38,14 @@ const AccountTypeSelector: React.FC<AccountTypeSelectorProps> = ({
   const loadAccountTypes = async (userId: string) => {
     try {
       setLoading(true);
+      console.log('🔄 Loading account types for user:', userId);
       const types = await getAccountTypes(userId);
+      console.log('✅ Account types loaded:', types.map(t => ({ id: t.id, name: t.name, isCustom: t.isCustom })));
       setAccountTypes(types);
     } catch (error) {
-      console.error('Error loading account types:', error);
+      console.error('❌ Error loading account types:', error);
+      // Set empty array to prevent undefined errors
+      setAccountTypes([]);
     } finally {
       setLoading(false);
     }
@@ -51,7 +55,7 @@ const AccountTypeSelector: React.FC<AccountTypeSelectorProps> = ({
     if (!user || !customTypeName.trim()) return;
 
     try {
-      const newType = await createAccountType(user.uid, {
+      const newTypeId = await createAccountType(user.uid, {
         name: customTypeName.trim(),
         defaultSign: customTypeSign,
         category: customTypeCategory,
@@ -70,8 +74,8 @@ const AccountTypeSelector: React.FC<AccountTypeSelectorProps> = ({
 
       // Notify parent component
       if (onAccountTypeCreated) {
-        const createdType = accountTypes.find(t => t.id === newType) || {
-          id: newType,
+        const createdType = accountTypes.find(t => t.id === newTypeId) || {
+          id: newTypeId,
           name: customTypeName.trim(),
           defaultSign: customTypeSign,
           category: customTypeCategory,
@@ -82,7 +86,7 @@ const AccountTypeSelector: React.FC<AccountTypeSelectorProps> = ({
       }
 
       // Select the new type
-      onChange(newType);
+      onChange(newTypeId);
     } catch (error) {
       console.error('Error creating custom account type:', error);
     }

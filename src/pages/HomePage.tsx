@@ -5,6 +5,7 @@ import FirebaseTest from '../components/FirebaseTest';
 import StorageTest from '../components/StorageTest';
 import SecurityTest from '../components/SecurityTest';
 import FinancialTest from '../components/FinancialTest';
+import AccountTypeTest from '../components/AccountTypeTest';
 
 // SVG Icon Components
 const GrowthIcon = () => (
@@ -172,6 +173,7 @@ const HomePage: FC = () => {
             <StorageTest />
             <SecurityTest />
             <FinancialTest />
+            <AccountTypeTest />
           </div>
         </section>
       )}

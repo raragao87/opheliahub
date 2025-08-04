@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { createAccount, type AccountType } from '../firebase/config';
+import { createAccount, getAccountTypes, type AccountType } from '../firebase/config';
 import AccountTypeSelector from './AccountTypeSelector';
 
 interface CreateAccountModalProps {
@@ -25,14 +25,27 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   const [initialBalance, setInitialBalance] = useState('');
   const [isRealAccount, setIsRealAccount] = useState(true);
   const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
+  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
+      if (user) {
+        loadAccountTypes(user.uid);
+      }
     });
 
     return unsubscribe;
   }, []);
+
+  const loadAccountTypes = async (userId: string) => {
+    try {
+      const types = await getAccountTypes(userId);
+      setAccountTypes(types);
+    } catch (error) {
+      console.error('Error loading account types:', error);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -103,9 +116,15 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   };
 
   const handleAccountTypeChange = (typeId: string) => {
+    console.log('🔄 Account type changed to:', typeId);
     setAccountType(typeId);
+    
     // Find the selected account type for default sign
-    // This will be handled by the AccountTypeSelector component
+    const selectedType = accountTypes.find(t => t.id === typeId);
+    if (selectedType) {
+      setSelectedAccountType(selectedType);
+      console.log('✅ Selected account type:', selectedType);
+    }
   };
 
   const handleAccountTypeCreated = (newType: AccountType) => {
