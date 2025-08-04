@@ -4,6 +4,7 @@ import { signInWithGoogle } from '../firebase/config';
 import FirebaseTest from '../components/FirebaseTest';
 import StorageTest from '../components/StorageTest';
 import SecurityTest from '../components/SecurityTest';
+import FinancialTest from '../components/FinancialTest';
 
 // SVG Icon Components
 const GrowthIcon = () => (
@@ -170,6 +171,7 @@ const HomePage: FC = () => {
             <FirebaseTest />
             <StorageTest />
             <SecurityTest />
+            <FinancialTest />
           </div>
         </section>
       )}

@@ -203,6 +203,42 @@ export interface SharedChildProfile {
   sharedAt: number;
 }
 
+// Financial Hub Interfaces
+export interface Account {
+  id: string;
+  name: string;
+  type: string;
+  defaultSign: 'positive' | 'negative';
+  initialBalance: number;
+  balance: number;
+  sharedWith: string[];
+  ownerId: string;
+  isReal: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Transaction {
+  id: string;
+  accountId: string;
+  amount: number;
+  description: string;
+  date: string;
+  isManual: boolean;
+  source: 'manual' | 'csv' | 'excel';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AccountType {
+  id: string;
+  name: string;
+  defaultSign: 'positive' | 'negative';
+  category: 'asset' | 'liability';
+  isCustom: boolean;
+  userId?: string;
+}
+
 // Get user's accessible child profiles (own + shared)
 export const getAccessibleChildProfiles = async (userId: string): Promise<(ChildProfile & { id: string })[]> => {
   try {
@@ -747,5 +783,181 @@ export const deleteProfileImage = async (imageUrl: string): Promise<void> => {
   } catch (error) {
     console.error('Error deleting profile image:', error);
     // Don't throw error as this is not critical
+  }
+};
+
+// Financial Hub Functions
+
+// Get default account types
+export const getDefaultAccountTypes = (): AccountType[] => {
+  return [
+    {
+      id: 'checking',
+      name: 'Checking',
+      defaultSign: 'positive',
+      category: 'asset',
+      isCustom: false
+    },
+    {
+      id: 'savings',
+      name: 'Savings',
+      defaultSign: 'positive',
+      category: 'asset',
+      isCustom: false
+    },
+    {
+      id: 'investment',
+      name: 'Investment',
+      defaultSign: 'positive',
+      category: 'asset',
+      isCustom: false
+    },
+    {
+      id: 'credit-card',
+      name: 'Credit Card',
+      defaultSign: 'negative',
+      category: 'liability',
+      isCustom: false
+    },
+    {
+      id: 'mortgage',
+      name: 'Mortgage',
+      defaultSign: 'negative',
+      category: 'liability',
+      isCustom: false
+    },
+    {
+      id: 'auto-loan',
+      name: 'Auto Loan',
+      defaultSign: 'negative',
+      category: 'liability',
+      isCustom: false
+    }
+  ];
+};
+
+// Account Functions
+export const createAccount = async (userId: string, accountData: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    console.log('💰 Creating account:', accountData.name);
+    
+    const accountWithTimestamps = {
+      ...accountData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'accounts'), accountWithTimestamps);
+    console.log('✅ Account created successfully with ID:', docRef.id);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating account:', error);
+    throw error;
+  }
+};
+
+export const getAccountsByUser = async (userId: string): Promise<Account[]> => {
+  try {
+    console.log('💰 Fetching accounts for user:', userId);
+    
+    const q = query(
+      collection(db, 'users', userId, 'accounts'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const accounts = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Account[];
+    
+    console.log(`✅ Found ${accounts.length} accounts for user`);
+    return accounts;
+  } catch (error) {
+    console.error('❌ Error getting accounts:', error);
+    throw error;
+  }
+};
+
+export const updateAccount = async (accountId: string, accountData: Partial<Account>): Promise<void> => {
+  try {
+    console.log('💰 Updating account:', accountId);
+    
+    const updateData = {
+      ...accountData,
+      updatedAt: Date.now(),
+    };
+    
+    await updateDoc(doc(db, 'users', accountData.ownerId!, 'accounts', accountId), updateData);
+    console.log('✅ Account updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating account:', error);
+    throw error;
+  }
+};
+
+export const deleteAccount = async (accountId: string, userId: string): Promise<void> => {
+  try {
+    console.log('💰 Deleting account:', accountId);
+    
+    await deleteDoc(doc(db, 'users', userId, 'accounts', accountId));
+    console.log('✅ Account deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting account:', error);
+    throw error;
+  }
+};
+
+// Account Type Functions
+export const getAccountTypes = async (userId: string): Promise<AccountType[]> => {
+  try {
+    console.log('💰 Fetching account types for user:', userId);
+    
+    // Get default account types
+    const defaultTypes = getDefaultAccountTypes();
+    
+    // Get custom account types
+    const q = query(
+      collection(db, 'users', userId, 'accountTypes'),
+      where('isCustom', '==', true),
+      orderBy('name', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const customTypes = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as AccountType[];
+    
+    // Combine default and custom types
+    const allTypes = [...defaultTypes, ...customTypes];
+    console.log(`✅ Found ${allTypes.length} account types (${defaultTypes.length} default, ${customTypes.length} custom)`);
+    
+    return allTypes;
+  } catch (error) {
+    console.error('❌ Error getting account types:', error);
+    throw error;
+  }
+};
+
+export const createAccountType = async (userId: string, typeData: Omit<AccountType, 'id'>): Promise<string> => {
+  try {
+    console.log('💰 Creating account type:', typeData.name);
+    
+    const typeWithId = {
+      ...typeData,
+      id: `custom-${Date.now()}`,
+      isCustom: true,
+      userId,
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'accountTypes'), typeWithId);
+    console.log('✅ Account type created successfully with ID:', docRef.id);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating account type:', error);
+    throw error;
   }
 };
