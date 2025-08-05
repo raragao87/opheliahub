@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { updateAccount, getAccountTypes, type Account, type AccountType } from '../firebase/config';
-import AccountTypeSelector from './AccountTypeSelector';
 
 interface EditAccountModalProps {
   isOpen: boolean;
@@ -24,7 +23,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   // Form fields
   const [accountName, setAccountName] = useState('');
   const [initialBalance, setInitialBalance] = useState('');
-  const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
+  const [selectedAccountTypeId, setSelectedAccountTypeId] = useState('');
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
   const [isRealAccount, setIsRealAccount] = useState(false);
 
@@ -42,6 +41,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       setAccountName(account.name);
       setInitialBalance(account.initialBalance.toString());
       setIsRealAccount(account.isReal);
+      setSelectedAccountTypeId(account.type);
       setError(null);
       
       // Load account types
@@ -87,13 +87,16 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       const balanceDifference = newInitialBalance - account.initialBalance;
       const newBalance = account.balance + balanceDifference;
 
-      console.log('🔄 Submitting account update with selectedAccountType:', selectedAccountType);
+      console.log('🔄 Submitting account update with selectedAccountTypeId:', selectedAccountTypeId);
+      
+      // Find the selected account type to get its properties
+      const selectedType = accountTypes.find(t => t.name === selectedAccountTypeId);
       
       // Update account
       await updateAccount(account.id, {
         name: accountName.trim(),
-        type: selectedAccountType?.name || account.type, // Use selected type or keep current
-        defaultSign: selectedAccountType?.defaultSign || account.defaultSign,
+        type: selectedAccountTypeId || account.type,
+        defaultSign: selectedType?.defaultSign || account.defaultSign,
         initialBalance: newInitialBalance,
         balance: newBalance,
         isReal: isRealAccount,
@@ -192,19 +195,31 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Account Type *
             </label>
-            <AccountTypeSelector
-              value={account.type}
-              onChange={(typeId) => {
-                console.log('🔄 AccountTypeSelector onChange called with typeId:', typeId);
-                const selectedType = accountTypes.find(t => t.id === typeId);
-                console.log('✅ Found selected type:', selectedType);
-                setSelectedAccountType(selectedType || null);
-              }}
-              onAccountTypeCreated={(newType) => {
-                console.log('🆕 Custom account type created:', newType);
-                setSelectedAccountType(newType);
-              }}
-            />
+            <select
+              value={selectedAccountTypeId}
+              onChange={(e) => setSelectedAccountTypeId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="">Select an account type</option>
+              <optgroup label="Assets">
+                {accountTypes.filter(type => type.category === 'asset').map((type) => (
+                  <option key={type.id} value={type.name}>
+                    {type.name} {type.isCustom && '(Custom)'}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Liabilities">
+                {accountTypes.filter(type => type.category === 'liability').map((type) => (
+                  <option key={type.id} value={type.name}>
+                    {type.name} {type.isCustom && '(Custom)'}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Manage custom account types in the Account Types settings
+            </p>
           </div>
 
           {/* Account Category */}

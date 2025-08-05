@@ -1034,6 +1034,35 @@ export const createAccountType = async (userId: string, typeData: Omit<AccountTy
   }
 };
 
+export const updateAccountType = async (typeId: string, typeData: Partial<AccountType>): Promise<void> => {
+  try {
+    console.log('🔄 Updating account type:', typeId, typeData);
+    
+    await updateDoc(doc(db, 'accountTypes', typeId), {
+      ...typeData,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Account type updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating account type:', error);
+    throw error;
+  }
+};
+
+export const deleteAccountType = async (typeId: string): Promise<void> => {
+  try {
+    console.log('🗑️ Deleting account type:', typeId);
+    
+    await deleteDoc(doc(db, 'accountTypes', typeId));
+    
+    console.log('✅ Account type deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting account type:', error);
+    throw error;
+  }
+};
+
 // Transaction Functions
 export const createTransaction = async (userId: string, transactionData: Omit<Transaction, 'id'>): Promise<string> => {
   try {
