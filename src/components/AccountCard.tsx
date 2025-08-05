@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { type Account } from '../firebase/config';
 import AddTransactionModal from './AddTransactionModal';
 import AccountDetailsModal from './AccountDetailsModal';
+import EditAccountModal from './EditAccountModal';
 import SharingModal from './SharingModal';
 
 interface AccountCardProps {
@@ -12,6 +13,7 @@ interface AccountCardProps {
 const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
   const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
   const [showAccountDetailsModal, setShowAccountDetailsModal] = useState(false);
+  const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [showSharingModal, setShowSharingModal] = useState(false);
   const getAccountTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
@@ -93,10 +95,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
               </svg>
             </button>
             <button
-              onClick={() => {
-                // TODO: Implement edit functionality
-                console.log('Edit account:', account.id);
-              }}
+              onClick={() => setShowEditAccountModal(true)}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               title="Edit account"
             >
@@ -176,6 +175,19 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
           isOpen={showAccountDetailsModal}
           onClose={() => setShowAccountDetailsModal(false)}
           account={account}
+        />
+      )}
+
+      {/* Edit Account Modal */}
+      {showEditAccountModal && (
+        <EditAccountModal
+          isOpen={showEditAccountModal}
+          onClose={() => setShowEditAccountModal(false)}
+          account={account}
+          onAccountUpdated={() => {
+            setShowEditAccountModal(false);
+            onUpdate(); // Refresh accounts after editing
+          }}
         />
       )}
 
