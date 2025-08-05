@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { type Account } from '../firebase/config';
-import AddTransactionModal from './AddTransactionModal';
 import AccountDetailsModal from './AccountDetailsModal';
 import EditAccountModal from './EditAccountModal';
 import SharingModal from './SharingModal';
@@ -11,7 +10,6 @@ interface AccountCardProps {
 }
 
 const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
-  const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
   const [showAccountDetailsModal, setShowAccountDetailsModal] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [showSharingModal, setShowSharingModal] = useState(false);
@@ -145,31 +143,13 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
               onClick={() => setShowAccountDetailsModal(true)}
               className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
-              View Details
-            </button>
-            <button
-              onClick={() => setShowAddTransactionModal(true)}
-              className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
-            >
-              Add Transaction
+              View Account
             </button>
           </div>
         </div>
       </div>
 
       {/* Modals */}
-      {showAddTransactionModal && (
-        <AddTransactionModal
-          isOpen={showAddTransactionModal}
-          onClose={() => setShowAddTransactionModal(false)}
-          account={account}
-          onTransactionAdded={() => {
-            setShowAddTransactionModal(false);
-            onUpdate();
-          }}
-        />
-      )}
-
       {showAccountDetailsModal && (
         <AccountDetailsModal
           isOpen={showAccountDetailsModal}

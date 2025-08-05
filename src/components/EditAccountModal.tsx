@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { updateAccount, type Account } from '../firebase/config';
+import { updateAccount, getAccountTypes, type Account, type AccountType } from '../firebase/config';
+import AccountTypeSelector from './AccountTypeSelector';
 
 interface EditAccountModalProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   // Form fields
   const [accountName, setAccountName] = useState('');
   const [initialBalance, setInitialBalance] = useState('');
+  const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
+  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -33,13 +36,27 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isOpen && account) {
+    if (isOpen && account && user) {
       // Initialize form with current account data
       setAccountName(account.name);
       setInitialBalance(account.initialBalance.toString());
       setError(null);
+      
+      // Load account types
+      loadAccountTypes();
     }
-  }, [isOpen, account]);
+  }, [isOpen, account, user]);
+
+  const loadAccountTypes = async () => {
+    if (!user) return;
+    
+    try {
+      const types = await getAccountTypes(user.uid);
+      setAccountTypes(types);
+    } catch (error) {
+      console.error('Error loading account types:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +88,8 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       // Update account
       await updateAccount(account.id, {
         name: accountName.trim(),
+        type: selectedAccountType?.name || account.type, // Use selected type or keep current
+        defaultSign: selectedAccountType?.defaultSign || account.defaultSign,
         initialBalance: newInitialBalance,
         balance: newBalance,
         updatedAt: Date.now(),
@@ -160,6 +179,21 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
               placeholder="e.g., Chase Checking, Emergency Fund"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
+            />
+          </div>
+
+          {/* Account Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Type *
+            </label>
+            <AccountTypeSelector
+              value={account.type}
+              onChange={(typeId) => {
+                const selectedType = accountTypes.find(t => t.id === typeId);
+                setSelectedAccountType(selectedType || null);
+              }}
+              onAccountTypeCreated={(newType) => setSelectedAccountType(newType)}
             />
           </div>
 

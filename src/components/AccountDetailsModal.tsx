@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, type Account, type Transaction } from '../firebase/config';
+import { getTransactionsByAccount, updateTransaction, deleteTransaction, type Account, type Transaction } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 
 interface AccountDetailsModalProps {
@@ -20,6 +20,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [deletingTransaction, setDeletingTransaction] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -76,6 +78,52 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
 
   const calculateBalanceChange = () => {
     return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+  };
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    if (!user) return;
+    
+    try {
+      setDeletingTransaction(transactionId);
+      
+      // Get the transaction to calculate balance adjustment
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) return;
+      
+      // Delete the transaction
+      await deleteTransaction(transactionId, user.uid);
+      
+      // Reload transactions
+      await loadTransactions();
+      
+      // Update account balance (this should be handled by the parent component)
+      // For now, we'll just reload the transactions
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      setError('Failed to delete transaction');
+    } finally {
+      setDeletingTransaction(null);
+    }
+  };
+
+  const handleUpdateTransaction = async (transactionId: string, updatedData: Partial<Transaction>) => {
+    if (!user) return;
+    
+    try {
+      await updateTransaction(transactionId, updatedData, user.uid);
+      
+      // Reload transactions
+      await loadTransactions();
+      
+      setEditingTransaction(null);
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      setError('Failed to update transaction');
+    }
   };
 
   if (!isOpen) return null;
@@ -173,13 +221,40 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`font-bold ${getTransactionColor(transaction.amount)}`}>
-                        {formatCurrency(transaction.amount)}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {transaction.source}
-                      </p>
+                    <div className="flex items-center space-x-2">
+                      <div className="text-right">
+                        <p className={`font-bold ${getTransactionColor(transaction.amount)}`}>
+                          {formatCurrency(transaction.amount)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {transaction.source}
+                        </p>
+                      </div>
+                      <div className="flex space-x-1 ml-4">
+                        <button
+                          onClick={() => handleEditTransaction(transaction)}
+                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Edit transaction"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTransaction(transaction.id)}
+                          disabled={deletingTransaction === transaction.id}
+                          className="p-1 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                          title="Delete transaction"
+                        >
+                          {deletingTransaction === transaction.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -218,6 +293,54 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
             onClose(); // Close the details modal as well
           }}
         />
+      )}
+
+      {/* Edit Transaction Modal */}
+      {editingTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Edit Transaction</h3>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                // Simple inline edit - just update description for now
+                handleUpdateTransaction(editingTransaction.id, {
+                  description: (e.target as any).description.value
+                });
+              }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      name="description"
+                      defaultValue={editingTransaction.description}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                  </div>
+                  <div className="flex space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingTransaction(null)}
+                      className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Update
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
