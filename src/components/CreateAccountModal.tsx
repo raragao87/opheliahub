@@ -214,7 +214,7 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
             </p>
           </div>
 
-          {/* Real Account Toggle */}
+          {/* Account Category Toggle */}
           <div>
             <label className="flex items-center">
               <input
@@ -224,11 +224,11 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                 className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-700">
-                This is a real financial account
+                This is a bank account
               </span>
             </label>
             <p className="text-xs text-gray-500 mt-1">
-              Uncheck if this is a test or hypothetical account
+              Uncheck if this is a pseudo account for budgeting/organization
             </p>
           </div>
 

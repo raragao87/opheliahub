@@ -26,6 +26,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   const [initialBalance, setInitialBalance] = useState('');
   const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
+  const [isRealAccount, setIsRealAccount] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -40,6 +41,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       // Initialize form with current account data
       setAccountName(account.name);
       setInitialBalance(account.initialBalance.toString());
+      setIsRealAccount(account.isReal);
       setError(null);
       
       // Load account types
@@ -85,6 +87,8 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       const balanceDifference = newInitialBalance - account.initialBalance;
       const newBalance = account.balance + balanceDifference;
 
+      console.log('🔄 Submitting account update with selectedAccountType:', selectedAccountType);
+      
       // Update account
       await updateAccount(account.id, {
         name: accountName.trim(),
@@ -92,6 +96,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
         defaultSign: selectedAccountType?.defaultSign || account.defaultSign,
         initialBalance: newInitialBalance,
         balance: newBalance,
+        isReal: isRealAccount,
         updatedAt: Date.now(),
         ownerId: account.ownerId
       });
@@ -190,11 +195,50 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <AccountTypeSelector
               value={account.type}
               onChange={(typeId) => {
+                console.log('🔄 AccountTypeSelector onChange called with typeId:', typeId);
                 const selectedType = accountTypes.find(t => t.id === typeId);
+                console.log('✅ Found selected type:', selectedType);
                 setSelectedAccountType(selectedType || null);
               }}
-              onAccountTypeCreated={(newType) => setSelectedAccountType(newType)}
+              onAccountTypeCreated={(newType) => {
+                console.log('🆕 Custom account type created:', newType);
+                setSelectedAccountType(newType);
+              }}
             />
+          </div>
+
+          {/* Account Category */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Category
+            </label>
+            <div className="flex items-center space-x-4">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="accountCategory"
+                  value="bank"
+                  checked={isRealAccount}
+                  onChange={() => setIsRealAccount(true)}
+                  className="mr-2 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Bank Account</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="accountCategory"
+                  value="pseudo"
+                  checked={!isRealAccount}
+                  onChange={() => setIsRealAccount(false)}
+                  className="mr-2 text-orange-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Pseudo Account</span>
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Bank accounts are tied to real financial institutions, pseudo accounts are for budgeting
+            </p>
           </div>
 
           {/* Initial Balance */}

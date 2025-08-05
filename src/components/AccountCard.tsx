@@ -123,9 +123,9 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
             <span className="capitalize">{account.type.replace('-', ' ')}</span>
           </div>
           <div className="flex justify-between">
-            <span>Status:</span>
+            <span>Account Category:</span>
             <span className={account.isReal ? 'text-green-600' : 'text-orange-600'}>
-              {account.isReal ? 'Real Account' : 'Test Account'}
+              {account.isReal ? 'Bank Account' : 'Pseudo Account'}
             </span>
           </div>
           {account.sharedWith.length > 0 && (

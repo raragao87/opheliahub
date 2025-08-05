@@ -3,6 +3,7 @@ import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getTransactionsByAccount, updateTransaction, deleteTransaction, type Account, type Transaction } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
+import AddTransactionModal from './AddTransactionModal';
 
 interface AccountDetailsModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState<string | null>(null);
 
@@ -273,6 +275,12 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
               Close
             </button>
             <button
+              onClick={() => setShowAddTransactionModal(true)}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              Add Transaction
+            </button>
+            <button
               onClick={() => setShowEditModal(true)}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
@@ -281,6 +289,19 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Add Transaction Modal */}
+      {showAddTransactionModal && (
+        <AddTransactionModal
+          isOpen={showAddTransactionModal}
+          onClose={() => setShowAddTransactionModal(false)}
+          account={account}
+          onTransactionAdded={() => {
+            setShowAddTransactionModal(false);
+            loadTransactions(); // Refresh transaction list
+          }}
+        />
+      )}
 
       {/* Edit Account Modal */}
       {showEditModal && (
@@ -303,9 +324,18 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Edit Transaction</h3>
               <form onSubmit={(e) => {
                 e.preventDefault();
-                // Simple inline edit - just update description for now
+                const formData = new FormData(e.target as HTMLFormElement);
+                const description = formData.get('description') as string;
+                const amount = parseFloat(formData.get('amount') as string);
+                
+                if (isNaN(amount)) {
+                  setError('Please enter a valid amount');
+                  return;
+                }
+                
                 handleUpdateTransaction(editingTransaction.id, {
-                  description: (e.target as any).description.value
+                  description: description,
+                  amount: amount
                 });
               }}>
                 <div className="space-y-4">
@@ -320,6 +350,27 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Amount
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        name="amount"
+                        step="0.01"
+                        defaultValue={editingTransaction.amount}
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Use positive for income, negative for expenses
+                    </p>
                   </div>
                   <div className="flex space-x-3">
                     <button
