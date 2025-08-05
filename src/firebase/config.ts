@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, updateDoc, setDoc, where, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { config, getCurrentDomain, isDomainAllowed, getSecurityInfo } from '../config/environment';
 
@@ -876,6 +876,64 @@ export const getAccountsByUser = async (userId: string): Promise<Account[]> => {
     return accounts;
   } catch (error) {
     console.error('❌ Error getting accounts:', error);
+    throw error;
+  }
+};
+
+// Get all accessible accounts (owned + shared) for a user
+export const getAccessibleAccounts = async (userId: string): Promise<Account[]> => {
+  try {
+    console.log('💰 Fetching accessible accounts for user:', userId);
+    
+    // Get owned accounts
+    const ownedAccounts = await getAccountsByUser(userId);
+    console.log(`✅ Found ${ownedAccounts.length} owned accounts`);
+    
+    // Get shared accounts from sharedProfiles collection
+    let sharedAccounts: Account[] = [];
+    try {
+      const sharedProfilesQuery = query(
+        collection(db, 'sharedProfiles'),
+        where('sharedWith', 'array-contains', userId)
+      );
+      
+      const sharedProfilesSnapshot = await getDocs(sharedProfilesQuery);
+      console.log(`✅ Found ${sharedProfilesSnapshot.docs.length} shared profiles`);
+      
+      // For each shared profile, get the actual account data
+      for (const sharedProfileDoc of sharedProfilesSnapshot.docs) {
+        const sharedProfile = sharedProfileDoc.data();
+        const accountId = sharedProfile.childProfileId; // Reusing childProfileId field for account ID
+        const ownerId = sharedProfile.ownerId;
+        
+        try {
+          // Get the account from the owner's collection
+          const accountDoc = await getDoc(doc(db, 'users', ownerId, 'accounts', accountId));
+          if (accountDoc.exists()) {
+            const accountData = accountDoc.data() as Account;
+            const sharedAccount: Account = {
+              ...accountData,
+              id: accountId,
+              // Mark as shared
+              sharedWith: [userId],
+            };
+            sharedAccounts.push(sharedAccount);
+          }
+        } catch (accountError) {
+          console.log(`⚠️ Could not fetch shared account ${accountId}:`, accountError);
+        }
+      }
+    } catch (sharedError) {
+      console.log('⚠️ Error fetching shared accounts:', sharedError);
+    }
+    
+    // Combine owned and shared accounts
+    const allAccounts = [...ownedAccounts, ...sharedAccounts];
+    console.log(`✅ Total accessible accounts: ${allAccounts.length} (${ownedAccounts.length} owned, ${sharedAccounts.length} shared)`);
+    
+    return allAccounts;
+  } catch (error) {
+    console.error('❌ Error getting accessible accounts:', error);
     throw error;
   }
 };

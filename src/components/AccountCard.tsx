@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { type Account } from '../firebase/config';
 import AddTransactionModal from './AddTransactionModal';
 import AccountDetailsModal from './AccountDetailsModal';
+import SharingModal from './SharingModal';
 
 interface AccountCardProps {
   account: Account;
@@ -11,6 +12,7 @@ interface AccountCardProps {
 const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
   const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
   const [showAccountDetailsModal, setShowAccountDetailsModal] = useState(false);
+  const [showSharingModal, setShowSharingModal] = useState(false);
   const getAccountTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case 'checking':
@@ -67,7 +69,14 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
           <div className="flex items-center">
             <div className="text-2xl mr-3">{getAccountTypeIcon(account.type)}</div>
             <div>
-              <h3 className="font-semibold text-gray-800">{account.name}</h3>
+              <div className="flex items-center">
+                <h3 className="font-semibold text-gray-800">{account.name}</h3>
+                {account.sharedWith.length > 0 && (
+                  <span className="ml-2 px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                    Shared
+                  </span>
+                )}
+              </div>
               <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${getAccountTypeColor(account.type)}`}>
                 {account.type.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
               </span>
@@ -75,10 +84,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
           </div>
           <div className="flex space-x-2">
             <button
-              onClick={() => {
-                // TODO: Implement share functionality
-                console.log('Share account:', account.id);
-              }}
+              onClick={() => setShowSharingModal(true)}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               title="Share account"
             >
@@ -170,6 +176,19 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
           isOpen={showAccountDetailsModal}
           onClose={() => setShowAccountDetailsModal(false)}
           account={account}
+        />
+      )}
+
+      {/* Sharing Modal */}
+      {showSharingModal && (
+        <SharingModal
+          isOpen={showSharingModal}
+          onClose={() => {
+            setShowSharingModal(false);
+            onUpdate(); // Refresh accounts after sharing modal closes
+          }}
+          childProfileId={account.id}
+          childName={account.name}
         />
       )}
     </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getAccountsByUser, type Account } from '../firebase/config';
+import { getAccessibleAccounts, type Account } from '../firebase/config';
 import AccountCard from '../components/AccountCard';
 import CreateAccountModal from '../components/CreateAccountModal';
 
@@ -31,8 +31,8 @@ const FinancialHubPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const userAccounts = await getAccountsByUser(userId);
-      setAccounts(userAccounts);
+      const accessibleAccounts = await getAccessibleAccounts(userId);
+      setAccounts(accessibleAccounts);
     } catch (error) {
       console.error('Error loading accounts:', error);
       setError('Failed to load accounts. Please try again.');
