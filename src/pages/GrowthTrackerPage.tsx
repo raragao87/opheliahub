@@ -888,8 +888,9 @@ const GrowthTrackerPage: FC = () => {
           <SharingModal
             isOpen={showSharingModal}
             onClose={() => setShowSharingModal(false)}
-            childProfileId={childProfile.id}
-            childName={childProfile.name}
+            itemId={childProfile.id}
+            itemName={childProfile.name}
+            itemType="child"
           />
         )}
       </div>

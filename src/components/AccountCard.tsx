@@ -187,8 +187,9 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
             setShowSharingModal(false);
             onUpdate(); // Refresh accounts after sharing modal closes
           }}
-          childProfileId={account.id}
-          childName={account.name}
+          itemId={account.id}
+          itemName={account.name}
+          itemType="account"
         />
       )}
     </div>

@@ -5,11 +5,12 @@ import { auth, sendSharingInvitation, getSentInvitations, declineSharingInvitati
 interface SharingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  childProfileId: string;
-  childName: string;
+  itemId: string;        // Can be childProfileId OR accountId
+  itemName: string;      // Can be childName OR accountName  
+  itemType: 'child' | 'account';  // Determines the context
 }
 
-const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, childName }) => {
+const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, itemId, itemName, itemType }) => {
   const [partnerEmail, setPartnerEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState<SharingInvitation[]>([]);
@@ -29,13 +30,16 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
     setLoadingInvitations(true);
     setError('');
     try {
-      console.log('Loading sent invitations for user:', auth.currentUser.uid);
+      console.log(`Loading sent invitations for ${itemType}:`, itemId);
       const allSentInvitations = await getSentInvitations(auth.currentUser.uid);
       console.log('All sent invitations:', allSentInvitations);
       
-      // Filter for pending invitations only
-      const pendingInvitations = allSentInvitations.filter(invitation => invitation.status === 'pending');
-      console.log('Pending invitations:', pendingInvitations);
+      // Filter for pending invitations for this specific item only
+      const pendingInvitations = allSentInvitations.filter(invitation => 
+        invitation.status === 'pending' && 
+        invitation.childProfileId === itemId
+      );
+      console.log(`Pending invitations for ${itemType} ${itemId}:`, pendingInvitations);
       
       setPendingInvitations(pendingInvitations);
     } catch (error) {
@@ -59,8 +63,8 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
         auth.currentUser.uid,
         auth.currentUser.email!,
         partnerEmail.trim(),
-        childProfileId,
-        childName
+        itemId,
+        itemName
       );
       setSuccess('Invitation sent successfully!');
       setPartnerEmail('');
@@ -94,7 +98,9 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-800">Share with Partner</h2>
+            <h2 className="text-xl font-semibold text-gray-800">
+              {itemType === 'account' ? 'Share Your Account' : 'Share Your Child Information'}
+            </h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -123,7 +129,7 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
             <form onSubmit={handleSendInvitation} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Partner's Email Address
+                  {itemType === 'account' ? 'Partner\'s Email Address' : 'Partner\'s Email Address'}
                 </label>
                 <input
                   type="email"
@@ -168,7 +174,7 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, childProfileId, 
                           Sent to {invitation.toUserEmail}
                         </p>
                         <p className="text-xs text-gray-500">
-                          Sent on {new Date(invitation.timestamp).toLocaleDateString()}
+                          {itemType === 'account' ? 'Account' : 'Child'} • Sent on {new Date(invitation.timestamp).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
