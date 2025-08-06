@@ -47,17 +47,40 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
     }
   };
 
-  const formatBalance = (balance: number, defaultSign: 'positive' | 'negative') => {
+  const getCurrencySymbol = (currency: string) => {
+    switch (currency) {
+      case 'EUR': return '€';
+      case 'USD': return '$';
+      case 'BRL': return 'R$';
+      case 'AUD': return 'A$';
+      case 'GBP': return '£';
+      case 'CAD': return 'C$';
+      case 'JPY': return '¥';
+      case 'CHF': return 'Fr';
+      default: return '$';
+    }
+  };
+
+  const formatBalance = (balance: number, defaultSign: 'positive' | 'negative', currency: string = 'USD') => {
     const sign = defaultSign === 'positive' ? '+' : '-';
     const absBalance = Math.abs(balance);
-    return `${sign}$${absBalance.toLocaleString()}`;
+    const currencySymbol = getCurrencySymbol(currency);
+    return `${sign}${currencySymbol}${absBalance.toLocaleString()}`;
   };
 
   const getBalanceColor = (balance: number, defaultSign: 'positive' | 'negative') => {
+    console.log(`🔍 Balance color check: balance=${balance}, defaultSign=${defaultSign}`);
+    
     if (defaultSign === 'positive') {
-      return balance >= 0 ? 'text-green-600' : 'text-red-600';
+      // For assets: positive balance is good (green), negative is bad (red)
+      const color = balance >= 0 ? 'text-green-600' : 'text-red-600';
+      console.log(`📈 Asset account: balance ${balance} → ${color}`);
+      return color;
     } else {
-      return balance <= 0 ? 'text-green-600' : 'text-red-600';
+      // For liabilities: negative balance is good (green), positive is bad (red)
+      const color = balance <= 0 ? 'text-green-600' : 'text-red-600';
+      console.log(`📉 Liability account: balance ${balance} → ${color}`);
+      return color;
     }
   };
 
@@ -72,7 +95,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
               <div className="flex items-center">
                 <h3 className="font-semibold text-gray-800">{account.name}</h3>
                 {account.sharedWith.length > 0 && (
-                  <span className="ml-2 px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                  <span className="ml-2 px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full" title={`Shared with ${account.sharedWith.length} person(s)`}>
                     Shared
                   </span>
                 )}
@@ -108,16 +131,16 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
         <div className="mb-4">
           <p className="text-sm text-gray-600 mb-1">Current Balance</p>
           <p className={`text-2xl font-bold ${getBalanceColor(account.balance, account.defaultSign)}`}>
-            {formatBalance(account.balance, account.defaultSign)}
+            {formatBalance(account.balance, account.defaultSign, account.currency)}
           </p>
         </div>
 
         {/* Account Details */}
-        <div className="space-y-2 text-sm text-gray-600">
-          <div className="flex justify-between">
-            <span>Initial Balance:</span>
-            <span>{formatBalance(account.initialBalance, account.defaultSign)}</span>
-          </div>
+                  <div className="space-y-2 text-sm text-gray-600">
+            <div className="flex justify-between">
+              <span>Initial Balance:</span>
+              <span>{formatBalance(account.initialBalance, account.defaultSign, account.currency)}</span>
+            </div>
           <div className="flex justify-between">
             <span>Account Type:</span>
             <span className="capitalize">{account.type.replace('-', ' ')}</span>

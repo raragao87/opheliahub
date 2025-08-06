@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { updateAccount, getAccountTypes, type Account, type AccountType } from '../firebase/config';
+import { updateAccount, deleteAccount, getAccountTypes, type Account, type AccountType } from '../firebase/config';
 
 interface EditAccountModalProps {
   isOpen: boolean;
@@ -26,6 +26,8 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   const [selectedAccountTypeId, setSelectedAccountTypeId] = useState('');
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
   const [isRealAccount, setIsRealAccount] = useState(false);
+  const [currency, setCurrency] = useState('EUR');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -42,6 +44,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       setInitialBalance(account.initialBalance.toString());
       setIsRealAccount(account.isReal);
       setSelectedAccountTypeId(account.type);
+      setCurrency(account.currency || 'EUR');
       setError(null);
       
       // Load account types
@@ -57,6 +60,26 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       setAccountTypes(types);
     } catch (error) {
       console.error('Error loading account types:', error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      await deleteAccount(account.id, user.uid);
+      console.log('✅ Account deleted successfully');
+      
+      // Close modal and notify parent
+      onAccountUpdated();
+    } catch (error) {
+      console.error('❌ Error deleting account:', error);
+      setError('Failed to delete account. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,6 +122,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
         defaultSign: selectedType?.defaultSign || account.defaultSign,
         initialBalance: newInitialBalance,
         balance: newBalance,
+        currency: currency,
         isReal: isRealAccount,
         updatedAt: Date.now(),
         ownerId: account.ownerId
@@ -256,6 +280,27 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             </p>
           </div>
 
+          {/* Currency */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Currency
+            </label>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="EUR">EUR (€)</option>
+              <option value="USD">USD ($)</option>
+              <option value="BRL">BRL (R$)</option>
+              <option value="AUD">AUD (A$)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="CAD">CAD (C$)</option>
+              <option value="JPY">JPY (¥)</option>
+              <option value="CHF">CHF (Fr)</option>
+            </select>
+          </div>
+
           {/* Initial Balance */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -263,7 +308,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                $
+                {currency === 'EUR' ? '€' : currency === 'USD' ? '$' : currency === 'BRL' ? 'R$' : currency === 'AUD' ? 'A$' : currency === 'GBP' ? '£' : currency === 'CAD' ? 'C$' : currency === 'JPY' ? '¥' : currency === 'CHF' ? 'Fr' : '$'}
               </span>
               <input
                 type="text"
@@ -316,8 +361,49 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
               )}
             </button>
           </div>
+
+          {/* Delete Account Button */}
+          <div className="pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={loading}
+              className="w-full px-4 py-2 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Delete Account
+            </button>
+          </div>
         </form>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Delete Account</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete "{account.name}"? This will permanently delete the account and all its transactions.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? 'Deleting...' : 'Delete Account'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

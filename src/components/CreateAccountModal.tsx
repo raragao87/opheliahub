@@ -98,6 +98,7 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
         defaultSign: selectedAccountType?.defaultSign || 'positive',
         initialBalance: balance,
         balance: balance,
+        currency: 'EUR',
         sharedWith: [],
         ownerId: user.uid,
         isReal: isRealAccount

@@ -74,6 +74,7 @@ const FinancialTest: React.FC = () => {
         defaultSign: 'positive',
         initialBalance: 1000,
         balance: 1000,
+        currency: 'EUR',
         sharedWith: [],
         ownerId: user.uid,
         isReal: false

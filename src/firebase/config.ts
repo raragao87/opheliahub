@@ -211,6 +211,7 @@ export interface Account {
   defaultSign: 'positive' | 'negative';
   initialBalance: number;
   balance: number;
+  currency: string;
   sharedWith: string[];
   ownerId: string;
   isReal: boolean;
@@ -818,20 +819,6 @@ export const getDefaultAccountTypes = (): AccountType[] => {
       defaultSign: 'negative',
       category: 'liability',
       isCustom: false
-    },
-    {
-      id: 'mortgage',
-      name: 'Mortgage',
-      defaultSign: 'negative',
-      category: 'liability',
-      isCustom: false
-    },
-    {
-      id: 'auto-loan',
-      name: 'Auto Loan',
-      defaultSign: 'negative',
-      category: 'liability',
-      isCustom: false
     }
   ];
 };
@@ -957,10 +944,25 @@ export const updateAccount = async (accountId: string, accountData: Partial<Acco
 
 export const deleteAccount = async (accountId: string, userId: string): Promise<void> => {
   try {
-    console.log('💰 Deleting account:', accountId);
+    console.log('🗑️ Deleting account:', accountId);
     
-    await deleteDoc(doc(db, 'users', userId, 'accounts', accountId));
-    console.log('✅ Account deleted successfully');
+    // First, delete all transactions for this account
+    const transactions = await getTransactionsByAccount(userId, accountId);
+    console.log(`🗑️ Found ${transactions.length} transactions to delete`);
+    
+    const batch = writeBatch(db);
+    
+    // Delete all transactions
+    for (const transaction of transactions) {
+      batch.delete(doc(db, 'users', userId, 'transactions', transaction.id));
+    }
+    
+    // Delete the account
+    batch.delete(doc(db, 'users', userId, 'accounts', accountId));
+    
+    // Commit the batch
+    await batch.commit();
+    console.log('✅ Account and all transactions deleted successfully');
   } catch (error) {
     console.error('❌ Error deleting account:', error);
     throw error;
@@ -1034,11 +1036,11 @@ export const createAccountType = async (userId: string, typeData: Omit<AccountTy
   }
 };
 
-export const updateAccountType = async (typeId: string, typeData: Partial<AccountType>): Promise<void> => {
+export const updateAccountType = async (typeId: string, typeData: Partial<AccountType>, userId: string): Promise<void> => {
   try {
     console.log('🔄 Updating account type:', typeId, typeData);
     
-    await updateDoc(doc(db, 'accountTypes', typeId), {
+    await updateDoc(doc(db, 'users', userId, 'accountTypes', typeId), {
       ...typeData,
       updatedAt: Date.now()
     });
@@ -1050,11 +1052,11 @@ export const updateAccountType = async (typeId: string, typeData: Partial<Accoun
   }
 };
 
-export const deleteAccountType = async (typeId: string): Promise<void> => {
+export const deleteAccountType = async (typeId: string, userId: string): Promise<void> => {
   try {
     console.log('🗑️ Deleting account type:', typeId);
     
-    await deleteDoc(doc(db, 'accountTypes', typeId));
+    await deleteDoc(doc(db, 'users', userId, 'accountTypes', typeId));
     
     console.log('✅ Account type deleted successfully');
   } catch (error) {
@@ -1080,6 +1082,37 @@ export const createTransaction = async (userId: string, transactionData: Omit<Tr
     return docRef.id;
   } catch (error) {
     console.error('❌ Error creating transaction:', error);
+    throw error;
+  }
+};
+
+// Recalculate account balance based on all transactions
+export const recalculateAccountBalance = async (userId: string, accountId: string): Promise<number> => {
+  try {
+    console.log('🔄 Recalculating balance for account:', accountId);
+    
+    // Get the account to get initial balance
+    const accountDoc = await getDoc(doc(db, 'users', userId, 'accounts', accountId));
+    if (!accountDoc.exists()) {
+      throw new Error('Account not found');
+    }
+    
+    const account = accountDoc.data() as Account;
+    const initialBalance = account.initialBalance;
+    
+    // Get all transactions for this account
+    const transactions = await getTransactionsByAccount(userId, accountId);
+    
+    // Calculate new balance: initial balance + sum of all transactions
+    const newBalance = transactions.reduce((balance, transaction) => {
+      return balance + transaction.amount;
+    }, initialBalance);
+    
+    console.log(`✅ Balance recalculated: Initial ${initialBalance} + Transactions ${transactions.reduce((sum, t) => sum + t.amount, 0)} = ${newBalance}`);
+    
+    return newBalance;
+  } catch (error) {
+    console.error('❌ Error recalculating account balance:', error);
     throw error;
   }
 };

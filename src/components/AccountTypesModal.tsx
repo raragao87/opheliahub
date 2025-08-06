@@ -99,7 +99,7 @@ const AccountTypesModal: React.FC<AccountTypesModalProps> = ({
         category: typeCategory,
         isCustom: true,
         userId: user.uid
-      });
+      }, user.uid);
 
       // Reload account types
       await loadAccountTypes(user.uid);
@@ -124,7 +124,7 @@ const AccountTypesModal: React.FC<AccountTypesModalProps> = ({
 
     try {
       setDeletingType(typeId);
-      await deleteAccountType(typeId);
+      await deleteAccountType(typeId, user.uid);
       await loadAccountTypes(user.uid);
       console.log('✅ Account type deleted successfully');
     } catch (error) {
