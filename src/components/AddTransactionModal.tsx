@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { createTransaction, recalculateAccountBalance, updateAccount, type Account } from '../firebase/config';
+import TagSelector from './TagSelector';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -77,6 +79,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         amount: transactionAmount,
         description: description.trim(),
         date: date,
+        tagIds: selectedTagIds,
         isManual: true,
         source: 'manual' as const,
         createdAt: Date.now(),
@@ -214,6 +217,19 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               onChange={(e) => setDate(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
+            />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tags
+            </label>
+            <TagSelector
+              selectedTagIds={selectedTagIds}
+              onTagChange={setSelectedTagIds}
+              disabled={loading}
+              placeholder="Select tags for this transaction..."
             />
           </div>
 

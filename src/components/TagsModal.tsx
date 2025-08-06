@@ -7,24 +7,19 @@ import {
   updateTag, 
   deleteTag, 
   getDefaultTags, 
+  getTransactionsByTag,
   type Tag 
 } from '../firebase/config';
+import TagGroup from './TagGroup';
 
 interface TagsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-interface TagNode {
-  tag: Tag;
-  children: TagNode[];
-  isExpanded?: boolean;
-}
-
 const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [tagTree, setTagTree] = useState<TagNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -32,6 +27,8 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
   const [deletingTag, setDeletingTag] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [tagUsageCount, setTagUsageCount] = useState<number>(0);
   
   // Add/Edit form fields
   const [tagName, setTagName] = useState('');
@@ -73,7 +70,6 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       
       console.log('✅ Combined tags:', allTags.length);
       setTags(allTags);
-      buildTagTree(allTags);
     } catch (error) {
       console.error('❌ Error loading tags:', error);
       setError('Failed to load tags');
@@ -82,34 +78,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const buildTagTree = (tagList: Tag[]) => {
-    const tagMap = new Map<string, TagNode>();
-    const rootNodes: TagNode[] = [];
 
-    // Create nodes for all tags
-    tagList.forEach(tag => {
-      tagMap.set(tag.id, {
-        tag,
-        children: [],
-        isExpanded: true
-      });
-    });
-
-    // Build tree structure
-    tagList.forEach(tag => {
-      const node = tagMap.get(tag.id)!;
-      if (tag.parentTagId) {
-        const parentNode = tagMap.get(tag.parentTagId);
-        if (parentNode) {
-          parentNode.children.push(node);
-        }
-      } else {
-        rootNodes.push(node);
-      }
-    });
-
-    setTagTree(rootNodes);
-  };
 
   const handleAddTag = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,6 +146,16 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     if (!user) return;
     
     try {
+      // Check if tag is in use
+      const transactions = await getTransactionsByTag(tagId, user.uid);
+      const usageCount = transactions.length;
+      
+      if (usageCount > 0) {
+        setTagUsageCount(usageCount);
+        setShowDeleteConfirm(tagId);
+        return;
+      }
+      
       setDeletingTag(tagId);
       await deleteTag(tagId, user.uid);
       await loadTags(user.uid);
@@ -186,6 +165,24 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       setError('Failed to delete tag');
     } finally {
       setDeletingTag(null);
+    }
+  };
+
+  const confirmDeleteTag = async () => {
+    if (!user || !showDeleteConfirm) return;
+    
+    try {
+      setDeletingTag(showDeleteConfirm);
+      await deleteTag(showDeleteConfirm, user.uid);
+      await loadTags(user.uid);
+      console.log('✅ Tag deleted successfully');
+    } catch (error) {
+      console.error('Error deleting tag:', error);
+      setError('Failed to delete tag');
+    } finally {
+      setDeletingTag(null);
+      setShowDeleteConfirm(null);
+      setTagUsageCount(0);
     }
   };
 
@@ -205,112 +202,61 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     setTagLevel(0);
   };
 
-  const toggleNodeExpansion = (nodeId: string) => {
-    const updateNode = (nodes: TagNode[]): TagNode[] => {
-      return nodes.map(node => {
-        if (node.tag.id === nodeId) {
-          return { ...node, isExpanded: !node.isExpanded };
-        }
-        return {
-          ...node,
-          children: updateNode(node.children)
-        };
-      });
-    };
-    
-    setTagTree(updateNode(tagTree));
-  };
 
-  const renderTagNode = (node: TagNode, depth: number = 0) => {
-    const hasChildren = node.children.length > 0;
-    const isExpanded = node.isExpanded !== false;
-    
-    return (
-      <div key={node.tag.id} className="space-y-1">
-        <div 
-          className={`flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 ${
-            node.tag.isDefault ? 'bg-blue-50' : 'bg-white'
-          }`}
-          style={{ paddingLeft: `${depth * 20 + 12}px` }}
-        >
-          <div className="flex items-center space-x-3">
-            {hasChildren && (
-              <button
-                onClick={() => toggleNodeExpansion(node.tag.id)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg 
-                  className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            )}
-            {!hasChildren && <div className="w-4" />}
-            
-            <div 
-              className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
-              style={{ backgroundColor: node.tag.color }}
-            />
-            
-            <div>
-              <p className="font-medium text-gray-800">{node.tag.name}</p>
-              <p className="text-xs text-gray-500">
-                Level {node.tag.level} {node.tag.isDefault && '• Default'}
-              </p>
-            </div>
-          </div>
-          
-          {!node.tag.isDefault && (
-            <div className="flex space-x-2">
-              <button
-                onClick={() => startEditTag(node.tag)}
-                className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                title="Edit tag"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </button>
-              <button
-                onClick={() => handleDeleteTag(node.tag.id)}
-                disabled={deletingTag === node.tag.id}
-                className="p-1 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                title="Delete tag"
-              >
-                {deletingTag === node.tag.id ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-        
-        {isExpanded && hasChildren && (
-          <div className="space-y-1">
-            {node.children.map(child => renderTagNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const getAvailableParents = () => {
     return tags.filter(tag => tag.level === 0); // Only root tags can be parents
+  };
+
+  const getTagGroups = () => {
+    const incomeTags = tags.filter(tag => 
+      ['salary', 'freelance', 'investment-returns', 'other-income'].includes(tag.id)
+    );
+    const housingTags = tags.filter(tag => 
+      tag.parentTagId === 'housing' || tag.id === 'housing'
+    );
+    const transportationTags = tags.filter(tag => 
+      tag.parentTagId === 'transportation' || tag.id === 'transportation'
+    );
+    const foodTags = tags.filter(tag => 
+      tag.parentTagId === 'food-dining' || tag.id === 'food-dining'
+    );
+    const entertainmentTags = tags.filter(tag => 
+      tag.parentTagId === 'entertainment' || tag.id === 'entertainment'
+    );
+    const healthcareTags = tags.filter(tag => 
+      tag.parentTagId === 'healthcare' || tag.id === 'healthcare'
+    );
+    const shoppingTags = tags.filter(tag => 
+      tag.parentTagId === 'shopping' || tag.id === 'shopping'
+    );
+    const billsTags = tags.filter(tag => 
+      tag.parentTagId === 'bills-services' || tag.id === 'bills-services'
+    );
+    const personalCareTags = tags.filter(tag => 
+      tag.parentTagId === 'personal-care' || tag.id === 'personal-care'
+    );
+    const customTags = tags.filter(tag => !tag.isDefault);
+
+    return {
+      incomeTags,
+      housingTags,
+      transportationTags,
+      foodTags,
+      entertainmentTags,
+      healthcareTags,
+      shoppingTags,
+      billsTags,
+      personalCareTags,
+      customTags
+    };
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">Manage Tags</h2>
@@ -421,20 +367,136 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          {/* Tags Tree */}
+          {/* Tag Groups */}
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <span className="ml-3 text-gray-600">Loading tags...</span>
             </div>
           ) : (
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Tag Hierarchy</h3>
-              {tagTree.map(node => renderTagNode(node))}
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Tag Categories</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <TagGroup
+                  title="Income"
+                  tags={getTagGroups().incomeTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Housing"
+                  tags={getTagGroups().housingTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Transportation"
+                  tags={getTagGroups().transportationTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Food & Dining"
+                  tags={getTagGroups().foodTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Entertainment"
+                  tags={getTagGroups().entertainmentTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Healthcare"
+                  tags={getTagGroups().healthcareTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Shopping"
+                  tags={getTagGroups().shoppingTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Bills & Services"
+                  tags={getTagGroups().billsTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                <TagGroup
+                  title="Personal Care"
+                  tags={getTagGroups().personalCareTags}
+                  onEditTag={startEditTag}
+                  onDeleteTag={handleDeleteTag}
+                  deletingTagId={deletingTag}
+                />
+                
+                {getTagGroups().customTags.length > 0 && (
+                  <TagGroup
+                    title="Custom Tags"
+                    tags={getTagGroups().customTags}
+                    onEditTag={startEditTag}
+                    onDeleteTag={handleDeleteTag}
+                    deletingTagId={deletingTag}
+                  />
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Delete Tag</h3>
+              <p className="text-gray-600 mb-6">
+                This tag is used in {tagUsageCount} transaction(s). Are you sure you want to delete it? 
+                This action cannot be undone.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(null);
+                    setTagUsageCount(0);
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteTag}
+                  disabled={deletingTag === showDeleteConfirm}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletingTag === showDeleteConfirm ? 'Deleting...' : 'Delete Tag'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

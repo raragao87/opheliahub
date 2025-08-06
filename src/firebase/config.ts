@@ -227,6 +227,7 @@ export interface Transaction {
   date: string;
   isManual: boolean;
   source: 'manual' | 'csv' | 'excel';
+  tagIds?: string[]; // Array of tag IDs assigned to this transaction
   createdAt: number;
   updatedAt: number;
 }
@@ -1196,6 +1197,104 @@ export const deleteTransaction = async (transactionId: string, userId: string): 
     console.log('✅ Transaction deleted successfully');
   } catch (error) {
     console.error('❌ Error deleting transaction:', error);
+    throw error;
+  }
+};
+
+// Transaction-Tag Management Functions
+export const assignTagsToTransaction = async (transactionId: string, tagIds: string[], userId: string): Promise<void> => {
+  try {
+    console.log('🏷️ Assigning tags to transaction:', transactionId, tagIds);
+    
+    await updateDoc(doc(db, 'users', userId, 'transactions', transactionId), {
+      tagIds: tagIds,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Tags assigned to transaction successfully');
+  } catch (error) {
+    console.error('❌ Error assigning tags to transaction:', error);
+    throw error;
+  }
+};
+
+export const removeTagsFromTransaction = async (transactionId: string, tagIds: string[], userId: string): Promise<void> => {
+  try {
+    console.log('🏷️ Removing tags from transaction:', transactionId, tagIds);
+    
+    // Get current transaction
+    const transactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
+    if (!transactionDoc.exists()) {
+      throw new Error('Transaction not found');
+    }
+    
+    const transaction = transactionDoc.data() as Transaction;
+    const currentTagIds = transaction.tagIds || [];
+    const updatedTagIds = currentTagIds.filter(id => !tagIds.includes(id));
+    
+    await updateDoc(doc(db, 'users', userId, 'transactions', transactionId), {
+      tagIds: updatedTagIds,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Tags removed from transaction successfully');
+  } catch (error) {
+    console.error('❌ Error removing tags from transaction:', error);
+    throw error;
+  }
+};
+
+export const getTransactionTags = async (transactionId: string, userId: string): Promise<Tag[]> => {
+  try {
+    console.log('🏷️ Getting tags for transaction:', transactionId);
+    
+    const transactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
+    if (!transactionDoc.exists()) {
+      return [];
+    }
+    
+    const transaction = transactionDoc.data() as Transaction;
+    const tagIds = transaction.tagIds || [];
+    
+    if (tagIds.length === 0) {
+      return [];
+    }
+    
+    // Get all tags (default + user tags)
+    const userTags = await getTags(userId);
+    const defaultTags = getDefaultTags();
+    const allTags = [...defaultTags, ...userTags];
+    
+    // Filter tags that are assigned to this transaction
+    const transactionTags = allTags.filter(tag => tagIds.includes(tag.id));
+    
+    console.log(`✅ Found ${transactionTags.length} tags for transaction`);
+    return transactionTags;
+  } catch (error) {
+    console.error('❌ Error getting transaction tags:', error);
+    throw error;
+  }
+};
+
+export const getTransactionsByTag = async (tagId: string, userId: string): Promise<Transaction[]> => {
+  try {
+    console.log('🏷️ Getting transactions for tag:', tagId);
+    
+    const q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('tagIds', 'array-contains', tagId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const transactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Transaction[];
+    
+    console.log(`✅ Found ${transactions.length} transactions for tag`);
+    return transactions;
+  } catch (error) {
+    console.error('❌ Error getting transactions by tag:', error);
     throw error;
   }
 };
