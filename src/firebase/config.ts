@@ -240,6 +240,36 @@ export interface AccountType {
   userId?: string;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  parentTagId?: string; // For hierarchical structure
+  level: number; // 0 = root, 1 = child, etc.
+  userId: string;
+  isDefault: boolean; // System vs user-created
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TagGroup {
+  id: string;
+  name: string;
+  description?: string;
+  tagIds: string[]; // Tags included in this group
+  color: string;
+  isBudgetable: boolean; // Can be used in budgeting
+  userId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TransactionTag {
+  transactionId: string;
+  tagId: string;
+  userId: string;
+}
+
 // Get user's accessible child profiles (own + shared)
 export const getAccessibleChildProfiles = async (userId: string): Promise<(ChildProfile & { id: string })[]> => {
   try {
@@ -1168,4 +1198,551 @@ export const deleteTransaction = async (transactionId: string, userId: string): 
     console.error('❌ Error deleting transaction:', error);
     throw error;
   }
+};
+
+// Tag Functions
+export const createTag = async (userId: string, tagData: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    console.log('🏷️ Creating tag:', tagData.name);
+    
+    const tagWithTimestamps = {
+      ...tagData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'tags'), tagWithTimestamps);
+    console.log('✅ Tag created successfully with ID:', docRef.id);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating tag:', error);
+    throw error;
+  }
+};
+
+export const getTags = async (userId: string): Promise<Tag[]> => {
+  try {
+    console.log('🏷️ Fetching tags for user:', userId);
+    
+    const q = query(
+      collection(db, 'users', userId, 'tags'),
+      orderBy('level', 'asc'),
+      orderBy('name', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const tags = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Tag[];
+    
+    console.log(`✅ Found ${tags.length} tags for user`);
+    return tags;
+  } catch (error) {
+    console.error('❌ Error getting tags:', error);
+    throw error;
+  }
+};
+
+export const updateTag = async (tagId: string, updates: Partial<Tag>, userId: string): Promise<void> => {
+  try {
+    console.log('🔄 Updating tag:', tagId, updates);
+    
+    await updateDoc(doc(db, 'users', userId, 'tags', tagId), {
+      ...updates,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Tag updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating tag:', error);
+    throw error;
+  }
+};
+
+export const deleteTag = async (tagId: string, userId: string): Promise<void> => {
+  try {
+    console.log('🗑️ Deleting tag:', tagId);
+    
+    // Check if tag is in use
+    const transactionsQuery = query(
+      collection(db, 'users', userId, 'transactionTags'),
+      where('tagId', '==', tagId)
+    );
+    const transactionsSnapshot = await getDocs(transactionsQuery);
+    
+    if (!transactionsSnapshot.empty) {
+      throw new Error('Cannot delete tag that is in use by transactions');
+    }
+    
+    // Check for child tags
+    const childTagsQuery = query(
+      collection(db, 'users', userId, 'tags'),
+      where('parentTagId', '==', tagId)
+    );
+    const childTagsSnapshot = await getDocs(childTagsQuery);
+    
+    if (!childTagsSnapshot.empty) {
+      throw new Error('Cannot delete tag that has child tags');
+    }
+    
+    await deleteDoc(doc(db, 'users', userId, 'tags', tagId));
+    console.log('✅ Tag deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting tag:', error);
+    throw error;
+  }
+};
+
+export const getDefaultTags = (): Tag[] => {
+  return [
+    // Income Tags (Level 0)
+    {
+      id: 'salary',
+      name: 'Salary',
+      color: '#10B981', // Green
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'freelance',
+      name: 'Freelance',
+      color: '#3B82F6', // Blue
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'investment-returns',
+      name: 'Investment Returns',
+      color: '#8B5CF6', // Purple
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'other-income',
+      name: 'Other Income',
+      color: '#06B6D4', // Cyan
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Expense Tags - Root Categories (Level 0)
+    {
+      id: 'housing',
+      name: 'Housing',
+      color: '#EF4444', // Red
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'transportation',
+      name: 'Transportation',
+      color: '#F59E0B', // Amber
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'food-dining',
+      name: 'Food & Dining',
+      color: '#84CC16', // Lime
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'entertainment',
+      name: 'Entertainment',
+      color: '#EC4899', // Pink
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'healthcare',
+      name: 'Healthcare',
+      color: '#14B8A6', // Teal
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'shopping',
+      name: 'Shopping',
+      color: '#F97316', // Orange
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'bills-services',
+      name: 'Bills & Services',
+      color: '#6B7280', // Gray
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'personal-care',
+      name: 'Personal Care',
+      color: '#8B5CF6', // Purple
+      level: 0,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Housing Subcategories (Level 1)
+    {
+      id: 'rent-mortgage',
+      name: 'Rent/Mortgage',
+      color: '#DC2626', // Red-600
+      parentTagId: 'housing',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'utilities',
+      name: 'Utilities',
+      color: '#EA580C', // Orange-600
+      parentTagId: 'housing',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'maintenance',
+      name: 'Maintenance',
+      color: '#D97706', // Amber-600
+      parentTagId: 'housing',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'insurance',
+      name: 'Insurance',
+      color: '#B91C1C', // Red-700
+      parentTagId: 'housing',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Transportation Subcategories (Level 1)
+    {
+      id: 'gas',
+      name: 'Gas',
+      color: '#D97706', // Amber-600
+      parentTagId: 'transportation',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'public-transport',
+      name: 'Public Transport',
+      color: '#CA8A04', // Yellow-600
+      parentTagId: 'transportation',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'car-payment',
+      name: 'Car Payment',
+      color: '#A16207', // Amber-700
+      parentTagId: 'transportation',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'car-maintenance',
+      name: 'Car Maintenance',
+      color: '#92400E', // Amber-800
+      parentTagId: 'transportation',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Food & Dining Subcategories (Level 1)
+    {
+      id: 'groceries',
+      name: 'Groceries',
+      color: '#65A30D', // Lime-600
+      parentTagId: 'food-dining',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'restaurants',
+      name: 'Restaurants',
+      color: '#84CC16', // Lime-500
+      parentTagId: 'food-dining',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'takeout',
+      name: 'Takeout',
+      color: '#A3E635', // Lime-400
+      parentTagId: 'food-dining',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Entertainment Subcategories (Level 1)
+    {
+      id: 'movies',
+      name: 'Movies',
+      color: '#DB2777', // Pink-600
+      parentTagId: 'entertainment',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'streaming',
+      name: 'Streaming',
+      color: '#EC4899', // Pink-500
+      parentTagId: 'entertainment',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'hobbies',
+      name: 'Hobbies',
+      color: '#F472B6', // Pink-400
+      parentTagId: 'entertainment',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'travel',
+      name: 'Travel',
+      color: '#BE185D', // Pink-700
+      parentTagId: 'entertainment',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Healthcare Subcategories (Level 1)
+    {
+      id: 'medical',
+      name: 'Medical',
+      color: '#0D9488', // Teal-600
+      parentTagId: 'healthcare',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'dental',
+      name: 'Dental',
+      color: '#14B8A6', // Teal-500
+      parentTagId: 'healthcare',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'pharmacy',
+      name: 'Pharmacy',
+      color: '#2DD4BF', // Teal-400
+      parentTagId: 'healthcare',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'health-insurance',
+      name: 'Health Insurance',
+      color: '#0F766E', // Teal-700
+      parentTagId: 'healthcare',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Shopping Subcategories (Level 1)
+    {
+      id: 'clothing',
+      name: 'Clothing',
+      color: '#EA580C', // Orange-600
+      parentTagId: 'shopping',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'electronics',
+      name: 'Electronics',
+      color: '#F97316', // Orange-500
+      parentTagId: 'shopping',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'home-goods',
+      name: 'Home Goods',
+      color: '#FB923C', // Orange-400
+      parentTagId: 'shopping',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Bills & Services Subcategories (Level 1)
+    {
+      id: 'phone',
+      name: 'Phone',
+      color: '#4B5563', // Gray-600
+      parentTagId: 'bills-services',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'internet',
+      name: 'Internet',
+      color: '#6B7280', // Gray-500
+      parentTagId: 'bills-services',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'subscriptions',
+      name: 'Subscriptions',
+      color: '#9CA3AF', // Gray-400
+      parentTagId: 'bills-services',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    
+    // Personal Care Subcategories (Level 1)
+    {
+      id: 'haircuts',
+      name: 'Haircuts',
+      color: '#7C3AED', // Purple-600
+      parentTagId: 'personal-care',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'gym',
+      name: 'Gym',
+      color: '#8B5CF6', // Purple-500
+      parentTagId: 'personal-care',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
+    {
+      id: 'beauty',
+      name: 'Beauty',
+      color: '#A78BFA', // Purple-400
+      parentTagId: 'personal-care',
+      level: 1,
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+  ];
 };
