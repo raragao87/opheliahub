@@ -163,20 +163,23 @@ const FinancialHubPage: React.FC = () => {
                 <h2 className="text-lg font-semibold text-gray-800">Your Accounts</h2>
                 <p className="text-sm text-gray-600">Manage your financial accounts and track your balances</p>
               </div>
-                          <div className="flex space-x-2">
-              <button
-                onClick={() => setShowAccountTypesModal(true)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Account Types
-              </button>
-              <button
-                onClick={() => setShowTagsModal(true)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Tags
-              </button>
-            </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setShowAccountTypesModal(true)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Account Types
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('🏷️ Tags button clicked');
+                    setShowTagsModal(true);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Tags
+                </button>
+              </div>
             </div>
           </div>
           
@@ -234,19 +237,20 @@ const FinancialHubPage: React.FC = () => {
       )}
 
       {/* Account Types Management Modal */}
-              {showAccountTypesModal && (
-          <AccountTypesModal
-            isOpen={showAccountTypesModal}
-            onClose={() => setShowAccountTypesModal(false)}
-          />
-        )}
-        
-        {showTagsModal && (
-          <TagsModal
-            isOpen={showTagsModal}
-            onClose={() => setShowTagsModal(false)}
-          />
-        )}
+      {showAccountTypesModal && (
+        <AccountTypesModal
+          isOpen={showAccountTypesModal}
+          onClose={() => setShowAccountTypesModal(false)}
+        />
+      )}
+      
+      {/* Tags Management Modal */}
+      {showTagsModal && (
+        <TagsModal
+          isOpen={showTagsModal}
+          onClose={() => setShowTagsModal(false)}
+        />
+      )}
     </div>
   );
 };

@@ -52,8 +52,13 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
   const loadTags = async (userId: string) => {
     try {
       setLoading(true);
+      console.log('🏷️ Loading tags for user:', userId);
+      
       const userTags = await getTags(userId);
+      console.log('✅ User tags loaded:', userTags.length);
+      
       const defaultTags = getDefaultTags();
+      console.log('✅ Default tags loaded:', defaultTags.length);
       
       // Combine user tags with default tags, avoiding duplicates
       const allTags = [...defaultTags];
@@ -66,10 +71,11 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
         }
       });
       
+      console.log('✅ Combined tags:', allTags.length);
       setTags(allTags);
       buildTagTree(allTags);
     } catch (error) {
-      console.error('Error loading tags:', error);
+      console.error('❌ Error loading tags:', error);
       setError('Failed to load tags');
     } finally {
       setLoading(false);
