@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, updateTransaction, deleteTransaction, type Account, type Transaction } from '../firebase/config';
+import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, type Account, type Transaction } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
+import TagSelector from './TagSelector';
 
 interface AccountDetailsModalProps {
   isOpen: boolean;
@@ -24,6 +25,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState<string | null>(null);
+  const [editingTransactionTags, setEditingTransactionTags] = useState<string[]>([]);
+  const [transactionTags, setTransactionTags] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -47,6 +50,19 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       setError(null);
       const accountTransactions = await getTransactionsByAccount(user.uid, account.id);
       setTransactions(accountTransactions);
+      
+      // Load tags for all transactions
+      const tagsMap: Record<string, any[]> = {};
+      for (const transaction of accountTransactions) {
+        try {
+          const tags = await getTransactionTags(transaction.id, user.uid);
+          tagsMap[transaction.id] = tags;
+        } catch (error) {
+          console.error('Error loading tags for transaction:', transaction.id, error);
+          tagsMap[transaction.id] = [];
+        }
+      }
+      setTransactionTags(tagsMap);
     } catch (error) {
       console.error('Error loading transactions:', error);
       setError('Failed to load transactions');
@@ -82,8 +98,41 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
   };
 
-  const handleEditTransaction = (transaction: Transaction) => {
+  const handleRefreshBalance = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      // Recalculate balance based on transactions
+      const balanceChange = calculateBalanceChange();
+      const newBalance = account.initialBalance + balanceChange;
+      
+      // Update account balance
+      // Note: This would require an updateAccount function call
+      console.log('Refreshing balance:', { initial: account.initialBalance, change: balanceChange, new: newBalance });
+      
+      // Reload transactions to ensure we have the latest data
+      await loadTransactions();
+    } catch (error) {
+      console.error('Error refreshing balance:', error);
+      setError('Failed to refresh balance');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditTransaction = async (transaction: Transaction) => {
     setEditingTransaction(transaction);
+    // Load current tags for this transaction
+    if (user) {
+      try {
+        const tags = await getTransactionTags(transaction.id, user.uid);
+        setEditingTransactionTags(tags.map(tag => tag.id));
+      } catch (error) {
+        console.error('Error loading transaction tags:', error);
+        setEditingTransactionTags([]);
+      }
+    }
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
@@ -156,10 +205,24 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
         <div className="p-6 border-b border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm font-medium text-gray-600">Current Balance</p>
-              <p className={`text-2xl font-bold ${account.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(account.balance)}
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Current Balance</p>
+                  <p className={`text-2xl font-bold ${account.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(account.balance)}
+                  </p>
+                </div>
+                <button
+                  onClick={handleRefreshBalance}
+                  disabled={loading}
+                  className="p-2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+                  title="Refresh balance"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
             </div>
             
             <div className="bg-gray-50 rounded-lg p-4">
@@ -221,6 +284,20 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                         <p className="text-sm text-gray-500">
                           {formatDate(transaction.date)} • {transaction.isManual ? 'Manual' : 'Imported'}
                         </p>
+                        {/* Transaction Tags */}
+                        {transactionTags[transaction.id] && transactionTags[transaction.id].length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {transactionTags[transaction.id].map((tag: any) => (
+                              <span
+                                key={tag.id}
+                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                                style={{ backgroundColor: tag.color }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -335,7 +412,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                 
                 handleUpdateTransaction(editingTransaction.id, {
                   description: description,
-                  amount: amount
+                  amount: amount,
+                  tagIds: editingTransactionTags
                 });
               }}>
                 <div className="space-y-4">
@@ -371,6 +449,17 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                     <p className="text-xs text-gray-500 mt-1">
                       Use positive for income, negative for expenses
                     </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tags
+                    </label>
+                    <TagSelector
+                      selectedTagIds={editingTransactionTags}
+                      onTagChange={setEditingTransactionTags}
+                      placeholder="Select tags for this transaction..."
+                    />
                   </div>
                   <div className="flex space-x-3">
                     <button

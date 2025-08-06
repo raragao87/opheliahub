@@ -245,8 +245,7 @@ export interface Tag {
   id: string;
   name: string;
   color: string;
-  parentTagId?: string; // For hierarchical structure
-  level: number; // 0 = root, 1 = child, etc.
+  category?: string; // Optional grouping for display only
   userId: string;
   isDefault: boolean; // System vs user-created
   createdAt: number;
@@ -1375,16 +1374,7 @@ export const deleteTag = async (tagId: string, userId: string): Promise<void> =>
       throw new Error('Cannot delete tag that is in use by transactions');
     }
     
-    // Check for child tags
-    const childTagsQuery = query(
-      collection(db, 'users', userId, 'tags'),
-      where('parentTagId', '==', tagId)
-    );
-    const childTagsSnapshot = await getDocs(childTagsQuery);
-    
-    if (!childTagsSnapshot.empty) {
-      throw new Error('Cannot delete tag that has child tags');
-    }
+
     
     await deleteDoc(doc(db, 'users', userId, 'tags', tagId));
     console.log('✅ Tag deleted successfully');
@@ -1396,12 +1386,12 @@ export const deleteTag = async (tagId: string, userId: string): Promise<void> =>
 
 export const getDefaultTags = (): Tag[] => {
   return [
-    // Income Tags (Level 0)
+    // Income Tags
     {
       id: 'salary',
       name: 'Salary',
       color: '#10B981', // Green
-      level: 0,
+      category: 'income',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1411,7 +1401,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'freelance',
       name: 'Freelance',
       color: '#3B82F6', // Blue
-      level: 0,
+      category: 'income',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1421,7 +1411,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'investment-returns',
       name: 'Investment Returns',
       color: '#8B5CF6', // Purple
-      level: 0,
+      category: 'income',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1431,102 +1421,29 @@ export const getDefaultTags = (): Tag[] => {
       id: 'other-income',
       name: 'Other Income',
       color: '#06B6D4', // Cyan
-      level: 0,
+      category: 'income',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Expense Tags - Root Categories (Level 0)
+    // Housing Tags
     {
       id: 'housing',
       name: 'Housing',
       color: '#EF4444', // Red
-      level: 0,
+      category: 'housing',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
-    {
-      id: 'transportation',
-      name: 'Transportation',
-      color: '#F59E0B', // Amber
-      level: 0,
-      userId: 'system',
-      isDefault: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    },
-    {
-      id: 'food-dining',
-      name: 'Food & Dining',
-      color: '#84CC16', // Lime
-      level: 0,
-      userId: 'system',
-      isDefault: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    },
-    {
-      id: 'entertainment',
-      name: 'Entertainment',
-      color: '#EC4899', // Pink
-      level: 0,
-      userId: 'system',
-      isDefault: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    },
-    {
-      id: 'healthcare',
-      name: 'Healthcare',
-      color: '#14B8A6', // Teal
-      level: 0,
-      userId: 'system',
-      isDefault: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    },
-    {
-      id: 'shopping',
-      name: 'Shopping',
-      color: '#F97316', // Orange
-      level: 0,
-      userId: 'system',
-      isDefault: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    },
-    {
-      id: 'bills-services',
-      name: 'Bills & Services',
-      color: '#6B7280', // Gray
-      level: 0,
-      userId: 'system',
-      isDefault: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    },
-    {
-      id: 'personal-care',
-      name: 'Personal Care',
-      color: '#8B5CF6', // Purple
-      level: 0,
-      userId: 'system',
-      isDefault: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    },
-    
-    // Housing Subcategories (Level 1)
     {
       id: 'rent-mortgage',
       name: 'Rent/Mortgage',
       color: '#DC2626', // Red-600
-      parentTagId: 'housing',
-      level: 1,
+      category: 'housing',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1536,8 +1453,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'utilities',
       name: 'Utilities',
       color: '#EA580C', // Orange-600
-      parentTagId: 'housing',
-      level: 1,
+      category: 'housing',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1547,8 +1463,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'maintenance',
       name: 'Maintenance',
       color: '#D97706', // Amber-600
-      parentTagId: 'housing',
-      level: 1,
+      category: 'housing',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1558,21 +1473,29 @@ export const getDefaultTags = (): Tag[] => {
       id: 'insurance',
       name: 'Insurance',
       color: '#B91C1C', // Red-700
-      parentTagId: 'housing',
-      level: 1,
+      category: 'housing',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Transportation Subcategories (Level 1)
+    // Transportation Tags
+    {
+      id: 'transportation',
+      name: 'Transportation',
+      color: '#F59E0B', // Amber
+      category: 'transportation',
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
     {
       id: 'gas',
       name: 'Gas',
       color: '#D97706', // Amber-600
-      parentTagId: 'transportation',
-      level: 1,
+      category: 'transportation',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1582,8 +1505,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'public-transport',
       name: 'Public Transport',
       color: '#CA8A04', // Yellow-600
-      parentTagId: 'transportation',
-      level: 1,
+      category: 'transportation',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1593,8 +1515,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'car-payment',
       name: 'Car Payment',
       color: '#A16207', // Amber-700
-      parentTagId: 'transportation',
-      level: 1,
+      category: 'transportation',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1604,21 +1525,29 @@ export const getDefaultTags = (): Tag[] => {
       id: 'car-maintenance',
       name: 'Car Maintenance',
       color: '#92400E', // Amber-800
-      parentTagId: 'transportation',
-      level: 1,
+      category: 'transportation',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Food & Dining Subcategories (Level 1)
+    // Food & Dining Tags
+    {
+      id: 'food-dining',
+      name: 'Food & Dining',
+      color: '#84CC16', // Lime
+      category: 'food-dining',
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
     {
       id: 'groceries',
       name: 'Groceries',
       color: '#65A30D', // Lime-600
-      parentTagId: 'food-dining',
-      level: 1,
+      category: 'food-dining',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1627,9 +1556,8 @@ export const getDefaultTags = (): Tag[] => {
     {
       id: 'restaurants',
       name: 'Restaurants',
-      color: '#84CC16', // Lime-500
-      parentTagId: 'food-dining',
-      level: 1,
+      color: '#4D7C0F', // Lime-700
+      category: 'food-dining',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1638,22 +1566,30 @@ export const getDefaultTags = (): Tag[] => {
     {
       id: 'takeout',
       name: 'Takeout',
-      color: '#A3E635', // Lime-400
-      parentTagId: 'food-dining',
-      level: 1,
+      color: '#3F6212', // Lime-800
+      category: 'food-dining',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Entertainment Subcategories (Level 1)
+    // Entertainment Tags
+    {
+      id: 'entertainment',
+      name: 'Entertainment',
+      color: '#EC4899', // Pink
+      category: 'entertainment',
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
     {
       id: 'movies',
       name: 'Movies',
-      color: '#DB2777', // Pink-600
-      parentTagId: 'entertainment',
-      level: 1,
+      color: '#F472B6', // Pink-400
+      category: 'entertainment',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1662,9 +1598,8 @@ export const getDefaultTags = (): Tag[] => {
     {
       id: 'streaming',
       name: 'Streaming',
-      color: '#EC4899', // Pink-500
-      parentTagId: 'entertainment',
-      level: 1,
+      color: '#F9A8D4', // Pink-300
+      category: 'entertainment',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1674,8 +1609,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'hobbies',
       name: 'Hobbies',
       color: '#F472B6', // Pink-400
-      parentTagId: 'entertainment',
-      level: 1,
+      category: 'entertainment',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1685,21 +1619,29 @@ export const getDefaultTags = (): Tag[] => {
       id: 'travel',
       name: 'Travel',
       color: '#BE185D', // Pink-700
-      parentTagId: 'entertainment',
-      level: 1,
+      category: 'entertainment',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Healthcare Subcategories (Level 1)
+    // Healthcare Tags
+    {
+      id: 'healthcare',
+      name: 'Healthcare',
+      color: '#14B8A6', // Teal
+      category: 'healthcare',
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
     {
       id: 'medical',
       name: 'Medical',
       color: '#0D9488', // Teal-600
-      parentTagId: 'healthcare',
-      level: 1,
+      category: 'healthcare',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1709,8 +1651,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'dental',
       name: 'Dental',
       color: '#14B8A6', // Teal-500
-      parentTagId: 'healthcare',
-      level: 1,
+      category: 'healthcare',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1720,8 +1661,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'pharmacy',
       name: 'Pharmacy',
       color: '#2DD4BF', // Teal-400
-      parentTagId: 'healthcare',
-      level: 1,
+      category: 'healthcare',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1731,21 +1671,29 @@ export const getDefaultTags = (): Tag[] => {
       id: 'health-insurance',
       name: 'Health Insurance',
       color: '#0F766E', // Teal-700
-      parentTagId: 'healthcare',
-      level: 1,
+      category: 'healthcare',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Shopping Subcategories (Level 1)
+    // Shopping Tags
+    {
+      id: 'shopping',
+      name: 'Shopping',
+      color: '#F97316', // Orange
+      category: 'shopping',
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
     {
       id: 'clothing',
       name: 'Clothing',
       color: '#EA580C', // Orange-600
-      parentTagId: 'shopping',
-      level: 1,
+      category: 'shopping',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1755,8 +1703,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'electronics',
       name: 'Electronics',
       color: '#F97316', // Orange-500
-      parentTagId: 'shopping',
-      level: 1,
+      category: 'shopping',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1766,21 +1713,29 @@ export const getDefaultTags = (): Tag[] => {
       id: 'home-goods',
       name: 'Home Goods',
       color: '#FB923C', // Orange-400
-      parentTagId: 'shopping',
-      level: 1,
+      category: 'shopping',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Bills & Services Subcategories (Level 1)
+    // Bills & Services Tags
+    {
+      id: 'bills-services',
+      name: 'Bills & Services',
+      color: '#6B7280', // Gray
+      category: 'bills-services',
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
     {
       id: 'phone',
       name: 'Phone',
       color: '#4B5563', // Gray-600
-      parentTagId: 'bills-services',
-      level: 1,
+      category: 'bills-services',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1790,8 +1745,7 @@ export const getDefaultTags = (): Tag[] => {
       id: 'internet',
       name: 'Internet',
       color: '#6B7280', // Gray-500
-      parentTagId: 'bills-services',
-      level: 1,
+      category: 'bills-services',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1801,21 +1755,29 @@ export const getDefaultTags = (): Tag[] => {
       id: 'subscriptions',
       name: 'Subscriptions',
       color: '#9CA3AF', // Gray-400
-      parentTagId: 'bills-services',
-      level: 1,
+      category: 'bills-services',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
     },
     
-    // Personal Care Subcategories (Level 1)
+    // Personal Care Tags
+    {
+      id: 'personal-care',
+      name: 'Personal Care',
+      color: '#8B5CF6', // Purple
+      category: 'personal-care',
+      userId: 'system',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    },
     {
       id: 'haircuts',
       name: 'Haircuts',
-      color: '#7C3AED', // Purple-600
-      parentTagId: 'personal-care',
-      level: 1,
+      color: '#7C3AED', // Violet-600
+      category: 'personal-care',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1824,9 +1786,8 @@ export const getDefaultTags = (): Tag[] => {
     {
       id: 'gym',
       name: 'Gym',
-      color: '#8B5CF6', // Purple-500
-      parentTagId: 'personal-care',
-      level: 1,
+      color: '#8B5CF6', // Violet-500
+      category: 'personal-care',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),
@@ -1835,9 +1796,8 @@ export const getDefaultTags = (): Tag[] => {
     {
       id: 'beauty',
       name: 'Beauty',
-      color: '#A78BFA', // Purple-400
-      parentTagId: 'personal-care',
-      level: 1,
+      color: '#A78BFA', // Violet-400
+      category: 'personal-care',
       userId: 'system',
       isDefault: true,
       createdAt: Date.now(),

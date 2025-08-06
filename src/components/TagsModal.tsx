@@ -34,7 +34,6 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
   const [tagName, setTagName] = useState('');
   const [tagColor, setTagColor] = useState('#3B82F6');
   const [parentTagId, setParentTagId] = useState<string>('');
-  const [tagLevel, setTagLevel] = useState(0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -91,8 +90,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       await createTag(user.uid, {
         name: tagName.trim(),
         color: tagColor,
-        parentTagId: parentTagId || undefined,
-        level: tagLevel,
+        category: parentTagId || undefined,
         userId: user.uid,
         isDefault: false
       });
@@ -101,7 +99,6 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       setTagName('');
       setTagColor('#3B82F6');
       setParentTagId('');
-      setTagLevel(0);
       setShowAddForm(false);
       console.log('✅ Custom tag created successfully');
     } catch (error) {
@@ -123,8 +120,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       await updateTag(editingTag.id, {
         name: tagName.trim(),
         color: tagColor,
-        parentTagId: parentTagId || undefined,
-        level: tagLevel
+        category: parentTagId || undefined
       }, user.uid);
       
       await loadTags(user.uid);
@@ -132,7 +128,6 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       setTagName('');
       setTagColor('#3B82F6');
       setParentTagId('');
-      setTagLevel(0);
       console.log('✅ Tag updated successfully');
     } catch (error) {
       console.error('Error updating tag:', error);
@@ -190,8 +185,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     setEditingTag(tag);
     setTagName(tag.name);
     setTagColor(tag.color);
-    setParentTagId(tag.parentTagId || '');
-    setTagLevel(tag.level);
+    setParentTagId(tag.category || '');
   };
 
   const cancelEdit = () => {
@@ -199,43 +193,28 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     setTagName('');
     setTagColor('#3B82F6');
     setParentTagId('');
-    setTagLevel(0);
   };
 
 
 
-  const getAvailableParents = () => {
-    return tags.filter(tag => tag.level === 0); // Only root tags can be parents
+  const getAvailableCategories = () => {
+    const categories = ['income', 'housing', 'transportation', 'food-dining', 'entertainment', 'healthcare', 'shopping', 'bills-services', 'personal-care'];
+    return categories.map(category => ({
+      id: category,
+      name: category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ')
+    }));
   };
 
   const getTagGroups = () => {
-    const incomeTags = tags.filter(tag => 
-      ['salary', 'freelance', 'investment-returns', 'other-income'].includes(tag.id)
-    );
-    const housingTags = tags.filter(tag => 
-      tag.parentTagId === 'housing' || tag.id === 'housing'
-    );
-    const transportationTags = tags.filter(tag => 
-      tag.parentTagId === 'transportation' || tag.id === 'transportation'
-    );
-    const foodTags = tags.filter(tag => 
-      tag.parentTagId === 'food-dining' || tag.id === 'food-dining'
-    );
-    const entertainmentTags = tags.filter(tag => 
-      tag.parentTagId === 'entertainment' || tag.id === 'entertainment'
-    );
-    const healthcareTags = tags.filter(tag => 
-      tag.parentTagId === 'healthcare' || tag.id === 'healthcare'
-    );
-    const shoppingTags = tags.filter(tag => 
-      tag.parentTagId === 'shopping' || tag.id === 'shopping'
-    );
-    const billsTags = tags.filter(tag => 
-      tag.parentTagId === 'bills-services' || tag.id === 'bills-services'
-    );
-    const personalCareTags = tags.filter(tag => 
-      tag.parentTagId === 'personal-care' || tag.id === 'personal-care'
-    );
+    const incomeTags = tags.filter(tag => tag.category === 'income');
+    const housingTags = tags.filter(tag => tag.category === 'housing');
+    const transportationTags = tags.filter(tag => tag.category === 'transportation');
+    const foodTags = tags.filter(tag => tag.category === 'food-dining');
+    const entertainmentTags = tags.filter(tag => tag.category === 'entertainment');
+    const healthcareTags = tags.filter(tag => tag.category === 'healthcare');
+    const shoppingTags = tags.filter(tag => tag.category === 'shopping');
+    const billsTags = tags.filter(tag => tag.category === 'bills-services');
+    const personalCareTags = tags.filter(tag => tag.category === 'personal-care');
     const customTags = tags.filter(tag => !tag.isDefault);
 
     return {
@@ -333,14 +312,13 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                       value={parentTagId}
                       onChange={(e) => {
                         setParentTagId(e.target.value);
-                        setTagLevel(e.target.value ? 1 : 0);
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="">No Parent (Root Tag)</option>
-                      {getAvailableParents().map(tag => (
-                        <option key={tag.id} value={tag.id}>
-                          {tag.name}
+                      <option value="">No Category</option>
+                      {getAvailableCategories().map(category => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
                         </option>
                       ))}
                     </select>
