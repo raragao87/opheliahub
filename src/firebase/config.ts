@@ -1158,19 +1158,11 @@ export const forceUpdateAccountBalance = async (userId: string, accountId: strin
     // Recalculate the balance
     const newBalance = await recalculateAccountBalance(userId, accountId);
     
-    // Get the account to get the ownerId
-    const accountDoc = await getDoc(doc(db, 'users', userId, 'accounts', accountId));
-    if (!accountDoc.exists()) {
-      throw new Error('Account not found');
-    }
-    
-    const account = accountDoc.data() as Account;
-    
-    // Update the account balance in Firestore
-    await updateAccount(accountId, {
+    // Update the account balance in Firestore directly
+    // FIX: Use updateDoc directly instead of updateAccount wrapper to avoid ownerId corruption
+    await updateDoc(doc(db, 'users', userId, 'accounts', accountId), {
       balance: newBalance,
-      updatedAt: Date.now(),
-      ownerId: account.ownerId
+      updatedAt: Date.now()
     });
     
     console.log(`✅ Account balance force updated to: ${newBalance}`);
