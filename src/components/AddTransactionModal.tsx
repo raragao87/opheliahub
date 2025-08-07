@@ -106,8 +106,8 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   };
 
   const formatCurrency = (value: string) => {
-    // Remove any non-numeric characters except decimal point
-    const numericValue = value.replace(/[^0-9.]/g, '');
+    // Remove any non-numeric characters except decimal point and minus sign
+    const numericValue = value.replace(/[^0-9.-]/g, '');
     return numericValue;
   };
 
@@ -196,7 +196,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 type="text"
                 value={amount}
                 onChange={handleAmountChange}
-                placeholder="0.00"
+                placeholder="-50.00 or 100.00"
                 className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
