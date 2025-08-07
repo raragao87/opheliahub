@@ -29,11 +29,14 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
   const [deletingTag, setDeletingTag] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [tagUsageCount, setTagUsageCount] = useState<number>(0);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
   
   // Add/Edit form fields
   const [tagName, setTagName] = useState('');
   const [tagColor, setTagColor] = useState('#3B82F6');
   const [parentTagId, setParentTagId] = useState<string>('');
+  const [categoryName, setCategoryName] = useState('');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -141,6 +144,8 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     if (!user) return;
     
     try {
+      console.log('🗑️ Attempting to delete tag:', tagId);
+      
       // Check if tag is in use
       const transactions = await getTransactionsByTag(tagId, user.uid);
       const usageCount = transactions.length;
@@ -153,10 +158,11 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       
       setDeletingTag(tagId);
       await deleteTag(tagId, user.uid);
+      console.log('🔄 Reloading tags after deletion...');
       await loadTags(user.uid);
-      console.log('✅ Tag deleted successfully');
+      console.log('✅ Tag deleted and UI refreshed');
     } catch (error) {
-      console.error('Error deleting tag:', error);
+      console.error('❌ Error deleting tag:', error);
       setError('Failed to delete tag');
     } finally {
       setDeletingTag(null);
@@ -203,6 +209,24 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       id: category,
       name: category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ')
     }));
+  };
+
+  const handleEditCategory = (categoryId: string) => {
+    setEditingCategory(categoryId);
+    setCategoryName(categoryId.charAt(0).toUpperCase() + categoryId.slice(1).replace('-', ' '));
+    setShowCategoryModal(true);
+  };
+
+  const handleSaveCategory = () => {
+    if (!editingCategory || !categoryName.trim()) return;
+    
+    // For now, just log the category edit
+    // In a real implementation, this would update the category in the database
+    console.log('Editing category:', editingCategory, 'to:', categoryName);
+    
+    setShowCategoryModal(false);
+    setEditingCategory(null);
+    setCategoryName('');
   };
 
   const getTagGroups = () => {
@@ -355,12 +379,13 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Tag Categories</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <TagGroup
                   title="Income"
                   tags={getTagGroups().incomeTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -369,6 +394,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().housingTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -377,6 +403,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().transportationTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -385,6 +412,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().foodTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -393,6 +421,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().entertainmentTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -401,6 +430,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().healthcareTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -409,6 +439,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().shoppingTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -417,6 +448,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().billsTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -425,6 +457,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   tags={getTagGroups().personalCareTags}
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
+                  onEditCategory={handleEditCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -470,6 +503,49 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                 >
                   {deletingTag === showDeleteConfirm ? 'Deleting...' : 'Delete Tag'}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Edit Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Edit Category</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category Name
+                  </label>
+                  <input
+                    type="text"
+                    value={categoryName}
+                    onChange={(e) => setCategoryName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowCategoryModal(false);
+                      setEditingCategory(null);
+                      setCategoryName('');
+                    }}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveCategory}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Save Category
+                  </button>
+                </div>
               </div>
             </div>
           </div>

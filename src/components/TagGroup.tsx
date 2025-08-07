@@ -6,6 +6,7 @@ interface TagGroupProps {
   tags: Tag[];
   onEditTag: (tag: Tag) => void;
   onDeleteTag: (tagId: string) => void;
+  onEditCategory?: (categoryId: string) => void;
   deletingTagId?: string | null;
 }
 
@@ -14,6 +15,7 @@ const TagGroup: React.FC<TagGroupProps> = ({
   tags,
   onEditTag,
   onDeleteTag,
+  onEditCategory,
   deletingTagId
 }) => {
   const getTagColor = (color: string) => {
@@ -25,23 +27,36 @@ const TagGroup: React.FC<TagGroupProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3">
-      <h3 className="text-base font-semibold text-gray-800 mb-2">{title}</h3>
-      <div className="space-y-1">
+    <div className="bg-white rounded-lg border border-gray-200 p-2">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+        {onEditCategory && (
+          <button
+            onClick={() => onEditCategory(title.toLowerCase().replace(' ', '-'))}
+            className="p-0.5 text-gray-400 hover:text-blue-600 transition-colors"
+            title="Edit category"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <div className="space-y-0.5">
         {tags.map(tag => (
           <div
             key={tag.id}
-            className="flex items-center justify-between p-1.5 rounded-md hover:bg-gray-50 group"
+            className="flex items-center justify-between p-1 rounded-md hover:bg-gray-50 group"
           >
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1.5">
               <div
-                className="w-3 h-3 rounded-full border border-white shadow-sm"
+                className="w-2.5 h-2.5 rounded-full border border-white shadow-sm"
                 style={{ backgroundColor: getTagColor(tag.color) }}
               />
               <div>
-                <p className="text-sm font-medium text-gray-800">{tag.name}</p>
+                <p className="text-xs font-medium text-gray-800">{tag.name}</p>
                 {tag.isDefault && (
-                  <p className="text-xs text-gray-500">Default</p>
+                  <p className="text-xs text-gray-400">Default</p>
                 )}
               </div>
             </div>

@@ -1301,7 +1301,9 @@ export const getTransactionsByTag = async (tagId: string, userId: string): Promi
 // Tag Functions
 export const createTag = async (userId: string, tagData: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
-    console.log('🏷️ Creating tag:', tagData.name);
+    console.log('🏷️ Creating tag:', tagData.name, 'for user:', userId);
+    console.log('📁 Saving to path: users/', userId, '/tags');
+    console.log('📄 Tag data:', tagData);
     
     const tagWithTimestamps = {
       ...tagData,
@@ -1322,11 +1324,11 @@ export const createTag = async (userId: string, tagData: Omit<Tag, 'id' | 'creat
 export const getTags = async (userId: string): Promise<Tag[]> => {
   try {
     console.log('🏷️ Fetching tags for user:', userId);
+    console.log('📁 Reading from path: users/', userId, '/tags');
     
     const q = query(
       collection(db, 'users', userId, 'tags'),
-      orderBy('level', 'asc'),
-      orderBy('name', 'asc')
+      orderBy('createdAt', 'desc')
     );
     
     const querySnapshot = await getDocs(q);
@@ -1335,7 +1337,7 @@ export const getTags = async (userId: string): Promise<Tag[]> => {
       ...doc.data(),
     })) as Tag[];
     
-    console.log(`✅ Found ${tags.length} tags for user`);
+    console.log(`✅ Found ${tags.length} user tags:`, tags.map(t => ({ id: t.id, name: t.name })));
     return tags;
   } catch (error) {
     console.error('❌ Error getting tags:', error);
@@ -1361,12 +1363,12 @@ export const updateTag = async (tagId: string, updates: Partial<Tag>, userId: st
 
 export const deleteTag = async (tagId: string, userId: string): Promise<void> => {
   try {
-    console.log('🗑️ Deleting tag:', tagId);
+    console.log('🗑️ Deleting tag:', tagId, 'for user:', userId);
     
-    // Check if tag is in use
+    // Check if tag is in use by transactions
     const transactionsQuery = query(
-      collection(db, 'users', userId, 'transactionTags'),
-      where('tagId', '==', tagId)
+      collection(db, 'users', userId, 'transactions'),
+      where('tagIds', 'array-contains', tagId)
     );
     const transactionsSnapshot = await getDocs(transactionsQuery);
     
@@ -1374,10 +1376,17 @@ export const deleteTag = async (tagId: string, userId: string): Promise<void> =>
       throw new Error('Cannot delete tag that is in use by transactions');
     }
     
-
+    // Check if tag exists in user's tags collection
+    const tagDoc = await getDoc(doc(db, 'users', userId, 'tags', tagId));
+    if (!tagDoc.exists()) {
+      console.log('⚠️ Tag not found in user collection, might be a default tag');
+      // For default tags, we might need to handle them differently
+      // For now, we'll just log and return
+      return;
+    }
     
     await deleteDoc(doc(db, 'users', userId, 'tags', tagId));
-    console.log('✅ Tag deleted successfully');
+    console.log('✅ Tag deleted successfully from database');
   } catch (error) {
     console.error('❌ Error deleting tag:', error);
     throw error;
