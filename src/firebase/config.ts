@@ -2395,10 +2395,20 @@ export const createTransactionLink = async (
       throw new Error('Transaction link already exists');
     }
     
-    const linkDoc = {
-      ...linkData,
+    const cleanLinkData: any = {
+      sourceTransactionId: linkData.sourceTransactionId,
+      targetTransactionId: linkData.targetTransactionId,
+      linkType: linkData.linkType,
+      userId: linkData.userId,
       createdAt: Date.now()
     };
+
+    // Only add description if it exists and is not empty
+    if (linkData.description && linkData.description.trim()) {
+      cleanLinkData.description = linkData.description.trim();
+    }
+
+    const linkDoc = cleanLinkData;
     
     const docRef = await addDoc(
       collection(db, 'users', userId, 'transactionLinks'),

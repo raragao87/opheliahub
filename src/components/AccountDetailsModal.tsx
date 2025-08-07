@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, getTags, getDefaultTags, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
+import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, getTags, getDefaultTags, getLinkedTransactions, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
@@ -34,6 +34,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [transactionTags, setTransactionTags] = useState<Record<string, any[]>>({});
   const [transactionSplits, setTransactionSplits] = useState<Record<string, any[]>>({});
   const [availableTags, setAvailableTags] = useState<any[]>([]);
+  const [linkedTransactions, setLinkedTransactions] = useState<Record<string, any[]>>({});
   
   // Bulk selection state
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
@@ -79,6 +80,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       // Load tags and splits for all transactions
       const tagsMap: Record<string, any[]> = {};
       const splitsMap: Record<string, any[]> = {};
+      const linkedMap: Record<string, any[]> = {};
       
       // Load all available tags for split tag matching
       const allTags = await getTags(user.uid);
@@ -100,14 +102,20 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
             const splits = await getTransactionSplits(transaction.id, user.uid);
             splitsMap[transaction.id] = splits;
           }
+          
+          // Load linked transactions
+          const linked = await getLinkedTransactions(transaction.id, user.uid);
+          linkedMap[transaction.id] = linked;
         } catch (error) {
           console.error('Error loading data for transaction:', transaction.id, error);
           tagsMap[transaction.id] = [];
           splitsMap[transaction.id] = [];
+          linkedMap[transaction.id] = [];
         }
       }
       setTransactionTags(tagsMap);
       setTransactionSplits(splitsMap);
+      setLinkedTransactions(linkedMap);
     } catch (error) {
       console.error('Error loading transactions:', error);
       setError('Failed to load transactions');
@@ -292,6 +300,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
         return transaction.isManual;
       case 'imported':
         return !transaction.isManual;
+      case 'linked':
+        return linkedTransactions[transaction.id] && linkedTransactions[transaction.id].length > 0;
       default:
         return true;
     }
@@ -317,7 +327,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
              getSearchTextFilter(transaction) &&
              getTagFilter(transaction);
     });
-  }, [transactions, dateRange, minAmount, maxAmount, transactionType, searchText, selectedFilterTags]);
+  }, [transactions, dateRange, minAmount, maxAmount, transactionType, searchText, selectedFilterTags, linkedTransactions]);
 
   const handleBulkDelete = async () => {
     if (!user || selectedTransactions.length === 0) return;
@@ -555,6 +565,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                     <option value="expense">Expense</option>
                     <option value="manual">Manual</option>
                     <option value="imported">Imported</option>
+                    <option value="linked">Linked Transactions</option>
                   </select>
                 </div>
 
@@ -691,6 +702,11 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                           {transaction.isSplit && (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
                               ✂️ Split
+                            </span>
+                          )}
+                          {linkedTransactions[transaction.id] && linkedTransactions[transaction.id].length > 0 && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                              🔗 Linked
                             </span>
                           )}
                         </div>
