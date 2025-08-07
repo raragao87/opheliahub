@@ -10,12 +10,14 @@ interface AccountDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   account: Account;
+  onUpdate: () => void;
 }
 
 const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   isOpen,
   onClose,
-  account
+  account,
+  onUpdate
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -160,8 +162,9 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       await forceUpdateAccountBalance(user.uid, account.id);
       console.log('✅ Account balance force updated after transaction deletion');
       
-      // Reload transactions
+      // Reload transactions and trigger full refresh
       await loadTransactions();
+      onUpdate();
     } catch (error) {
       console.error('Error deleting transaction:', error);
       setError('Failed to delete transaction');
@@ -180,8 +183,9 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       await forceUpdateAccountBalance(user.uid, account.id);
       console.log('✅ Account balance force updated after transaction edit');
       
-      // Reload transactions
+      // Reload transactions & trigger full refresh
       await loadTransactions();
+      onUpdate();
       
       setEditingTransaction(null);
     } catch (error) {
@@ -389,6 +393,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
           onTransactionAdded={() => {
             setShowAddTransactionModal(false);
             loadTransactions(); // Refresh transaction list
+            onUpdate(); // <--- Trigger a full data refresh
           }}
         />
       )}
