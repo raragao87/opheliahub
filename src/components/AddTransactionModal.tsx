@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { createTransaction, recalculateAccountBalance, updateAccount, type Account } from '../firebase/config';
+import { createTransaction, forceUpdateAccountBalance, type Account } from '../firebase/config';
 import TagSelector from './TagSelector';
 
 interface AddTransactionModalProps {
@@ -90,14 +90,9 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       const transactionId = await createTransaction(user.uid, transactionData);
       console.log('✅ Transaction created with ID:', transactionId);
 
-      // Recalculate and update account balance
-      const newBalance = await recalculateAccountBalance(user.uid, account.id);
-      await updateAccount(account.id, {
-        balance: newBalance,
-        updatedAt: Date.now(),
-        ownerId: account.ownerId
-      });
-      console.log('✅ Account balance recalculated and updated to:', newBalance);
+      // Force update account balance
+      await forceUpdateAccountBalance(user.uid, account.id);
+      console.log('✅ Account balance force updated after transaction creation');
       
       // Success - close modal and notify parent
       onTransactionAdded();

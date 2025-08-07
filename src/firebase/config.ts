@@ -1109,6 +1109,9 @@ export const createTransaction = async (userId: string, transactionData: Omit<Tr
     const docRef = await addDoc(collection(db, 'users', userId, 'transactions'), transactionWithTimestamps);
     console.log('✅ Transaction created successfully with ID:', docRef.id);
     
+    // Force update account balance after creating transaction
+    await forceUpdateAccountBalance(userId, transactionData.accountId);
+    
     return docRef.id;
   } catch (error) {
     console.error('❌ Error creating transaction:', error);
@@ -1143,6 +1146,36 @@ export const recalculateAccountBalance = async (userId: string, accountId: strin
     return newBalance;
   } catch (error) {
     console.error('❌ Error recalculating account balance:', error);
+    throw error;
+  }
+};
+
+// Force update account balance in Firestore
+export const forceUpdateAccountBalance = async (userId: string, accountId: string): Promise<void> => {
+  try {
+    console.log('🔧 Force updating account balance for account:', accountId);
+    
+    // Recalculate the balance
+    const newBalance = await recalculateAccountBalance(userId, accountId);
+    
+    // Get the account to get the ownerId
+    const accountDoc = await getDoc(doc(db, 'users', userId, 'accounts', accountId));
+    if (!accountDoc.exists()) {
+      throw new Error('Account not found');
+    }
+    
+    const account = accountDoc.data() as Account;
+    
+    // Update the account balance in Firestore
+    await updateAccount(accountId, {
+      balance: newBalance,
+      updatedAt: Date.now(),
+      ownerId: account.ownerId
+    });
+    
+    console.log(`✅ Account balance force updated to: ${newBalance}`);
+  } catch (error) {
+    console.error('❌ Error force updating account balance:', error);
     throw error;
   }
 };
@@ -1182,6 +1215,14 @@ export const updateTransaction = async (transactionId: string, transactionData: 
     
     await updateDoc(doc(db, 'users', userId, 'transactions', transactionId), updateData);
     console.log('✅ Transaction updated successfully');
+    
+    // Get the account ID from the transaction to update balance
+    const transactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
+    if (transactionDoc.exists()) {
+      const transaction = transactionDoc.data() as Transaction;
+      // Force update account balance after updating transaction
+      await forceUpdateAccountBalance(userId, transaction.accountId);
+    }
   } catch (error) {
     console.error('❌ Error updating transaction:', error);
     throw error;
@@ -1192,8 +1233,22 @@ export const deleteTransaction = async (transactionId: string, userId: string): 
   try {
     console.log('💰 Deleting transaction:', transactionId);
     
+    // Get the account ID before deleting the transaction
+    const transactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
+    let accountId: string | null = null;
+    
+    if (transactionDoc.exists()) {
+      const transaction = transactionDoc.data() as Transaction;
+      accountId = transaction.accountId;
+    }
+    
     await deleteDoc(doc(db, 'users', userId, 'transactions', transactionId));
     console.log('✅ Transaction deleted successfully');
+    
+    // Force update account balance after deleting transaction
+    if (accountId) {
+      await forceUpdateAccountBalance(userId, accountId);
+    }
   } catch (error) {
     console.error('❌ Error deleting transaction:', error);
     throw error;

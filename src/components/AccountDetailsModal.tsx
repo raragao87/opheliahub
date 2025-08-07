@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, recalculateAccountBalance, updateAccount, type Account, type Transaction } from '../firebase/config';
+import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
@@ -112,18 +112,17 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     
     try {
       setLoading(true);
-      // Recalculate balance based on transactions
-      const balanceChange = calculateBalanceChange();
-      const newBalance = account.initialBalance + balanceChange;
+      console.log('🔄 Manual balance refresh requested');
       
-      // Update account balance
-      // Note: This would require an updateAccount function call
-      console.log('Refreshing balance:', { initial: account.initialBalance, change: balanceChange, new: newBalance });
+      // Force update account balance in Firestore
+      await forceUpdateAccountBalance(user.uid, account.id);
       
       // Reload transactions to ensure we have the latest data
       await loadTransactions();
+      
+      console.log('✅ Manual balance refresh completed');
     } catch (error) {
-      console.error('Error refreshing balance:', error);
+      console.error('❌ Error refreshing balance:', error);
       setError('Failed to refresh balance');
     } finally {
       setLoading(false);
@@ -157,14 +156,9 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       // Delete the transaction
       await deleteTransaction(transactionId, user.uid);
       
-      // Recalculate and update account balance
-      const newBalance = await recalculateAccountBalance(user.uid, account.id);
-      await updateAccount(account.id, {
-        balance: newBalance,
-        updatedAt: Date.now(),
-        ownerId: account.ownerId
-      });
-      console.log('✅ Account balance updated after transaction deletion:', newBalance);
+      // Force update account balance
+      await forceUpdateAccountBalance(user.uid, account.id);
+      console.log('✅ Account balance force updated after transaction deletion');
       
       // Reload transactions
       await loadTransactions();
@@ -182,14 +176,9 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     try {
       await updateTransaction(transactionId, updatedData, user.uid);
       
-      // Recalculate and update account balance
-      const newBalance = await recalculateAccountBalance(user.uid, account.id);
-      await updateAccount(account.id, {
-        balance: newBalance,
-        updatedAt: Date.now(),
-        ownerId: account.ownerId
-      });
-      console.log('✅ Account balance updated after transaction edit:', newBalance);
+      // Force update account balance
+      await forceUpdateAccountBalance(user.uid, account.id);
+      console.log('✅ Account balance force updated after transaction edit');
       
       // Reload transactions
       await loadTransactions();
