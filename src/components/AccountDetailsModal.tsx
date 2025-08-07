@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
+import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, getTags, getDefaultTags, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
@@ -32,6 +32,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [editingTransactionTags, setEditingTransactionTags] = useState<string[]>([]);
   const [transactionTags, setTransactionTags] = useState<Record<string, any[]>>({});
   const [transactionSplits, setTransactionSplits] = useState<Record<string, any[]>>({});
+  const [availableTags, setAvailableTags] = useState<any[]>([]);
   
   // Bulk selection state
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
@@ -75,6 +76,15 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       // Load tags and splits for all transactions
       const tagsMap: Record<string, any[]> = {};
       const splitsMap: Record<string, any[]> = {};
+      
+      // Load all available tags for split tag matching
+      const allTags = await getTags(user.uid);
+      const defaultTags = getDefaultTags();
+      const tagMap = new Map();
+      defaultTags.forEach(tag => tagMap.set(tag.id, tag));
+      allTags.forEach(tag => tagMap.set(tag.id, tag));
+      const availableTags = Array.from(tagMap.values());
+      setAvailableTags(availableTags);
       
       for (const transaction of accountTransactions) {
         try {
@@ -673,8 +683,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                         <p className="text-sm text-gray-500">
                           {formatDate(transaction.date)} • {transaction.isManual ? 'Manual' : 'Imported'}
                         </p>
-                        {/* Transaction Tags */}
-                        {transactionTags[transaction.id] && transactionTags[transaction.id].length > 0 && (
+                        {/* Transaction Tags - Hide for split transactions */}
+                        {!transaction.isSplit && transactionTags[transaction.id] && transactionTags[transaction.id].length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {transactionTags[transaction.id].map((tag: any, index: number) => (
                               <button
@@ -690,16 +700,28 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                           </div>
                         )}
                         
-                        {/* Split Summary */}
+                        {/* Split Summary with Tags */}
                         {transaction.isSplit && transactionSplits[transaction.id] && (
                           <div className="mt-2 text-xs text-gray-600">
                             <span className="font-medium">Split into:</span>
-                            {transactionSplits[transaction.id].map((split: any, index: number) => (
-                              <span key={split.id} className="ml-2">
-                                {split.description} ({formatCurrency(split.amount)})
-                                {index < transactionSplits[transaction.id].length - 1 ? ', ' : ''}
-                              </span>
-                            ))}
+                            {transactionSplits[transaction.id].map((split: any, index: number) => {
+                              // Get tags for this split from available tags
+                              const splitTags = split.tagIds && split.tagIds.length > 0 
+                                ? availableTags.filter((tag: any) => split.tagIds.includes(tag.id)) || []
+                                : [];
+                              
+                              return (
+                                <span key={split.id} className="ml-2">
+                                  {split.description} ({formatCurrency(split.amount)})
+                                  {splitTags.length > 0 && (
+                                    <span className="text-gray-500">
+                                      {' '}Tags: {splitTags.map((tag: any) => tag.name).join(', ')}
+                                    </span>
+                                  )}
+                                  {index < transactionSplits[transaction.id].length - 1 ? ', ' : ''}
+                                </span>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -719,9 +741,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                           className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
                           title="Split transaction"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l6 6-6 6M18 6l-6 6 6 6" />
-                          </svg>
+                          ✂️
                         </button>
                         <button
                           onClick={() => handleEditTransaction(transaction)}

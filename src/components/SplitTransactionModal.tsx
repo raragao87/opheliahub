@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { splitTransaction, mergeTransactionSplits, getTransactionSplits, updateTransactionSplit, getTags } from '../firebase/config';
-import type { Transaction, Tag } from '../firebase/config';
+import { splitTransaction, mergeTransactionSplits, getTransactionSplits, updateTransactionSplit } from '../firebase/config';
+import type { Transaction } from '../firebase/config';
+import TagSelector from './TagSelector';
 
 interface SplitTransactionModalProps {
   isOpen: boolean;
@@ -26,7 +27,6 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [splits, setSplits] = useState<SplitEntry[]>([]);
-  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
@@ -42,7 +42,6 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
   useEffect(() => {
     if (isOpen && user) {
       loadSplits();
-      loadTags();
     }
   }, [isOpen, user]);
 
@@ -75,16 +74,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
     }
   };
 
-  const loadTags = async () => {
-    if (!user) return;
-    
-    try {
-      const tags = await getTags(user.uid);
-      setAvailableTags(tags);
-    } catch (error) {
-      console.error('Error loading tags:', error);
-    }
-  };
+
 
   const addSplit = () => {
     const newId = `new-${Date.now()}`;
@@ -315,29 +305,11 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Tags
                   </label>
-                  <div className="flex flex-wrap gap-2">
-                    {availableTags.map(tag => (
-                      <button
-                        key={tag.id}
-                        onClick={() => {
-                          const newTagIds = split.tagIds.includes(tag.id)
-                            ? split.tagIds.filter(id => id !== tag.id)
-                            : [...split.tagIds, tag.id];
-                          updateSplit(index, 'tagIds', newTagIds);
-                        }}
-                        className={`px-2 py-1 rounded-full text-xs font-medium transition-colors ${
-                          split.tagIds.includes(tag.id)
-                            ? 'text-white'
-                            : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
-                        }`}
-                        style={{
-                          backgroundColor: split.tagIds.includes(tag.id) ? tag.color : undefined
-                        }}
-                      >
-                        {tag.name}
-                      </button>
-                    ))}
-                  </div>
+                  <TagSelector
+                    selectedTagIds={split.tagIds}
+                    onTagChange={(tagIds) => updateSplit(index, 'tagIds', tagIds)}
+                    placeholder="Select tags for this split..."
+                  />
                 </div>
               </div>
             ))}
