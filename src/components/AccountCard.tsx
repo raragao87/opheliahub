@@ -178,6 +178,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
           isOpen={showAccountDetailsModal}
           onClose={() => setShowAccountDetailsModal(false)}
           account={account}
+          onUpdate={onUpdate}
         />
       )}
 
