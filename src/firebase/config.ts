@@ -219,6 +219,16 @@ export interface Account {
   updatedAt: number;
 }
 
+export interface TransactionSplit {
+  id: string;
+  transactionId: string; // Parent transaction
+  amount: number;
+  description: string;
+  tagIds: string[]; // Different tags per split
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Transaction {
   id: string;
   accountId: string;
@@ -228,6 +238,8 @@ export interface Transaction {
   isManual: boolean;
   source: 'manual' | 'csv' | 'excel';
   tagIds?: string[]; // Array of tag IDs assigned to this transaction
+  isSplit?: boolean; // Whether this transaction has been split
+  splitIds?: string[]; // References to TransactionSplit records
   createdAt: number;
   updatedAt: number;
 }
@@ -2153,4 +2165,186 @@ export const getDefaultTags = (): Tag[] => {
       updatedAt: Date.now()
     }
   ];
+};
+
+// Transaction Split Management Functions
+export const createTransactionSplit = async (
+  userId: string, 
+  splitData: Omit<TransactionSplit, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<string> => {
+  try {
+    console.log('🔧 Creating transaction split:', splitData);
+    const splitDoc = {
+      ...splitData,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    
+    const docRef = await addDoc(
+      collection(db, 'users', userId, 'transactionSplits'),
+      splitDoc
+    );
+    
+    console.log('✅ Transaction split created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating transaction split:', error);
+    throw error;
+  }
+};
+
+export const getTransactionSplits = async (
+  transactionId: string, 
+  userId: string
+): Promise<TransactionSplit[]> => {
+  try {
+    console.log('🔧 Getting splits for transaction:', transactionId);
+    const splitsQuery = query(
+      collection(db, 'users', userId, 'transactionSplits'),
+      where('transactionId', '==', transactionId),
+      orderBy('createdAt', 'asc')
+    );
+    
+    const splitsSnapshot = await getDocs(splitsQuery);
+    const splits: TransactionSplit[] = [];
+    
+    splitsSnapshot.forEach((doc) => {
+      splits.push({ id: doc.id, ...doc.data() } as TransactionSplit);
+    });
+    
+    console.log(`✅ Found ${splits.length} splits for transaction ${transactionId}`);
+    return splits;
+  } catch (error) {
+    console.error('❌ Error getting transaction splits:', error);
+    throw error;
+  }
+};
+
+export const updateTransactionSplit = async (
+  splitId: string, 
+  updates: Partial<TransactionSplit>, 
+  userId: string
+): Promise<void> => {
+  try {
+    console.log('🔧 Updating transaction split:', splitId, updates);
+    await updateDoc(
+      doc(db, 'users', userId, 'transactionSplits', splitId),
+      {
+        ...updates,
+        updatedAt: Date.now()
+      }
+    );
+    console.log('✅ Transaction split updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating transaction split:', error);
+    throw error;
+  }
+};
+
+export const deleteTransactionSplit = async (
+  splitId: string, 
+  userId: string
+): Promise<void> => {
+  try {
+    console.log('🔧 Deleting transaction split:', splitId);
+    await deleteDoc(doc(db, 'users', userId, 'transactionSplits', splitId));
+    console.log('✅ Transaction split deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting transaction split:', error);
+    throw error;
+  }
+};
+
+export const splitTransaction = async (
+  transactionId: string, 
+  splits: Omit<TransactionSplit, 'id' | 'transactionId' | 'createdAt' | 'updatedAt'>[], 
+  userId: string
+): Promise<void> => {
+  try {
+    console.log('🔧 Splitting transaction:', transactionId, 'into', splits.length, 'parts');
+    
+    // Validate that splits sum to original transaction amount
+    const originalTransaction = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
+    if (!originalTransaction.exists()) {
+      throw new Error('Original transaction not found');
+    }
+    
+    const originalAmount = originalTransaction.data().amount;
+    const splitSum = splits.reduce((sum, split) => sum + split.amount, 0);
+    
+    if (Math.abs(splitSum - originalAmount) > 0.01) {
+      throw new Error(`Split amounts (${splitSum}) must equal original amount (${originalAmount})`);
+    }
+    
+    // Create all splits in a batch
+    const batch = writeBatch(db);
+    const splitIds: string[] = [];
+    
+    for (const splitData of splits) {
+      const splitDoc = {
+        transactionId,
+        ...splitData,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      
+      const splitRef = doc(collection(db, 'users', userId, 'transactionSplits'));
+      batch.set(splitRef, splitDoc);
+      splitIds.push(splitRef.id);
+    }
+    
+    // Update the original transaction to mark it as split
+    batch.update(
+      doc(db, 'users', userId, 'transactions', transactionId),
+      {
+        isSplit: true,
+        splitIds,
+        updatedAt: Date.now()
+      }
+    );
+    
+    // Commit the batch
+    await batch.commit();
+    
+    console.log('✅ Transaction split successfully into', splits.length, 'parts');
+  } catch (error) {
+    console.error('❌ Error splitting transaction:', error);
+    throw error;
+  }
+};
+
+export const mergeTransactionSplits = async (
+  transactionId: string, 
+  userId: string
+): Promise<void> => {
+  try {
+    console.log('🔧 Merging splits for transaction:', transactionId);
+    
+    // Get all splits for this transaction
+    const splits = await getTransactionSplits(transactionId, userId);
+    
+    // Delete all splits
+    const batch = writeBatch(db);
+    splits.forEach(split => {
+      batch.delete(doc(db, 'users', userId, 'transactionSplits', split.id));
+    });
+    
+    // Update the original transaction to remove split status
+    batch.update(
+      doc(db, 'users', userId, 'transactions', transactionId),
+      {
+        isSplit: false,
+        splitIds: [],
+        updatedAt: Date.now()
+      }
+    );
+    
+    // Commit the batch
+    await batch.commit();
+    
+    console.log('✅ Transaction splits merged successfully');
+  } catch (error) {
+    console.error('❌ Error merging transaction splits:', error);
+    throw error;
+  }
 };

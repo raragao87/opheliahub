@@ -6,6 +6,7 @@ import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
 import BulkTagModal from './BulkTagModal';
+import SplitTransactionModal from './SplitTransactionModal';
 
 interface AccountDetailsModalProps {
   isOpen: boolean;
@@ -35,6 +36,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
 
   const [showBulkTagModal, setShowBulkTagModal] = useState(false);
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
   
   // Filter state
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
@@ -180,6 +183,20 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     }
     // Clear selection
     clearSelection();
+  };
+
+  const handleSplitTransaction = (transaction: Transaction) => {
+    setSplittingTransaction(transaction);
+    setShowSplitModal(true);
+  };
+
+  const handleSplitSuccess = async () => {
+    await loadTransactions();
+    if (user) {
+      await forceUpdateAccountBalance(user.uid, account.id);
+    }
+    setShowSplitModal(false);
+    setSplittingTransaction(null);
   };
 
   // Filter functions
@@ -633,7 +650,14 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                       />
                       <div className="text-2xl">{getTransactionIcon(transaction.amount)}</div>
                       <div>
-                        <p className="font-medium text-gray-800">{transaction.description}</p>
+                        <div className="flex items-center space-x-2">
+                          <p className="font-medium text-gray-800">{transaction.description}</p>
+                          {transaction.isSplit && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
+                              ✂️ Split
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-500">
                           {formatDate(transaction.date)} • {transaction.isManual ? 'Manual' : 'Imported'}
                         </p>
@@ -665,6 +689,15 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                         </p>
                       </div>
                       <div className="flex space-x-1 ml-4">
+                        <button
+                          onClick={() => handleSplitTransaction(transaction)}
+                          className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
+                          title="Split transaction"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
                         <button
                           onClick={() => handleEditTransaction(transaction)}
                           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -846,6 +879,16 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
           onClose={() => setShowBulkTagModal(false)}
           selectedTransactions={transactions.filter(t => selectedTransactions.includes(t.id))}
           onSuccess={handleBulkTagSuccess}
+        />
+      )}
+
+      {/* Split Transaction Modal */}
+      {showSplitModal && splittingTransaction && (
+        <SplitTransactionModal
+          isOpen={showSplitModal}
+          onClose={() => setShowSplitModal(false)}
+          transaction={splittingTransaction}
+          onSuccess={handleSplitSuccess}
         />
       )}
     </div>
