@@ -7,6 +7,7 @@ import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
 import BulkTagModal from './BulkTagModal';
 import SplitTransactionModal from './SplitTransactionModal';
+import LinkTransactionModal from './LinkTransactionModal';
 
 interface AccountDetailsModalProps {
   isOpen: boolean;
@@ -40,6 +41,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [showBulkTagModal, setShowBulkTagModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkingTransaction, setLinkingTransaction] = useState<Transaction | null>(null);
   
   // Filter state
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
@@ -219,6 +222,17 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     }
     setShowSplitModal(false);
     setSplittingTransaction(null);
+  };
+
+  const handleLinkTransaction = (transaction: Transaction) => {
+    setLinkingTransaction(transaction);
+    setShowLinkModal(true);
+  };
+
+  const handleLinkSuccess = async () => {
+    await loadTransactions();
+    setShowLinkModal(false);
+    setLinkingTransaction(null);
   };
 
   // Filter functions
@@ -744,6 +758,13 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                           ✂️
                         </button>
                         <button
+                          onClick={() => handleLinkTransaction(transaction)}
+                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Link transaction"
+                        >
+                          🔗
+                        </button>
+                        <button
                           onClick={() => handleEditTransaction(transaction)}
                           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                           title="Edit transaction"
@@ -934,6 +955,16 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
           onClose={() => setShowSplitModal(false)}
           transaction={splittingTransaction}
           onSuccess={handleSplitSuccess}
+        />
+      )}
+
+      {/* Link Transaction Modal */}
+      {showLinkModal && linkingTransaction && (
+        <LinkTransactionModal
+          isOpen={showLinkModal}
+          onClose={() => setShowLinkModal(false)}
+          sourceTransaction={linkingTransaction}
+          onSuccess={handleLinkSuccess}
         />
       )}
     </div>

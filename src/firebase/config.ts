@@ -229,6 +229,16 @@ export interface TransactionSplit {
   updatedAt: number;
 }
 
+export interface TransactionLink {
+  id: string;
+  sourceTransactionId: string;
+  targetTransactionId: string;
+  linkType: 'transfer' | 'payment' | 'related';
+  description?: string;
+  userId: string;
+  createdAt: number;
+}
+
 export interface Transaction {
   id: string;
   accountId: string;
@@ -2350,6 +2360,217 @@ export const mergeTransactionSplits = async (
     console.log('✅ Transaction splits merged successfully');
   } catch (error) {
     console.error('❌ Error merging transaction splits:', error);
+    throw error;
+  }
+};
+
+// Transaction Linking Functions
+export const createTransactionLink = async (
+  userId: string, 
+  linkData: Omit<TransactionLink, 'id' | 'createdAt'>
+): Promise<string> => {
+  try {
+    console.log('🔗 Creating transaction link:', linkData);
+    
+    // Validate that both transactions exist
+    const sourceTransaction = await getDoc(doc(db, 'users', userId, 'transactions', linkData.sourceTransactionId));
+    const targetTransaction = await getDoc(doc(db, 'users', userId, 'transactions', linkData.targetTransactionId));
+    
+    if (!sourceTransaction.exists()) {
+      throw new Error('Source transaction not found');
+    }
+    if (!targetTransaction.exists()) {
+      throw new Error('Target transaction not found');
+    }
+    
+    // Check if link already exists
+    const existingLinkQuery = query(
+      collection(db, 'users', userId, 'transactionLinks'),
+      where('sourceTransactionId', '==', linkData.sourceTransactionId),
+      where('targetTransactionId', '==', linkData.targetTransactionId)
+    );
+    const existingLinkSnapshot = await getDocs(existingLinkQuery);
+    
+    if (!existingLinkSnapshot.empty) {
+      throw new Error('Transaction link already exists');
+    }
+    
+    const linkDoc = {
+      ...linkData,
+      createdAt: Date.now()
+    };
+    
+    const docRef = await addDoc(
+      collection(db, 'users', userId, 'transactionLinks'),
+      linkDoc
+    );
+    
+    console.log('✅ Transaction link created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating transaction link:', error);
+    throw error;
+  }
+};
+
+export const getLinkedTransactions = async (
+  transactionId: string, 
+  userId: string
+): Promise<{ link: TransactionLink; transaction: Transaction }[]> => {
+  try {
+    console.log('🔗 Getting linked transactions for:', transactionId);
+    
+    // Get all links where this transaction is source or target
+    const linksQuery = query(
+      collection(db, 'users', userId, 'transactionLinks'),
+      where('sourceTransactionId', '==', transactionId)
+    );
+    const linksSnapshot = await getDocs(linksQuery);
+    
+    const linkedTransactions: { link: TransactionLink; transaction: Transaction }[] = [];
+    
+    for (const linkDoc of linksSnapshot.docs) {
+      const link = { id: linkDoc.id, ...linkDoc.data() } as TransactionLink;
+      
+      // Get the target transaction
+      const targetTransactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', link.targetTransactionId));
+      if (targetTransactionDoc.exists()) {
+        const transaction = { id: targetTransactionDoc.id, ...targetTransactionDoc.data() } as Transaction;
+        linkedTransactions.push({ link, transaction });
+      }
+    }
+    
+    // Also check for links where this transaction is the target
+    const reverseLinksQuery = query(
+      collection(db, 'users', userId, 'transactionLinks'),
+      where('targetTransactionId', '==', transactionId)
+    );
+    const reverseLinksSnapshot = await getDocs(reverseLinksQuery);
+    
+    for (const linkDoc of reverseLinksSnapshot.docs) {
+      const link = { id: linkDoc.id, ...linkDoc.data() } as TransactionLink;
+      
+      // Get the source transaction
+      const sourceTransactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', link.sourceTransactionId));
+      if (sourceTransactionDoc.exists()) {
+        const transaction = { id: sourceTransactionDoc.id, ...sourceTransactionDoc.data() } as Transaction;
+        linkedTransactions.push({ link, transaction });
+      }
+    }
+    
+    console.log(`✅ Found ${linkedTransactions.length} linked transactions`);
+    return linkedTransactions;
+  } catch (error) {
+    console.error('❌ Error getting linked transactions:', error);
+    throw error;
+  }
+};
+
+export const deleteTransactionLink = async (
+  linkId: string, 
+  userId: string
+): Promise<void> => {
+  try {
+    console.log('🔗 Deleting transaction link:', linkId);
+    await deleteDoc(doc(db, 'users', userId, 'transactionLinks', linkId));
+    console.log('✅ Transaction link deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting transaction link:', error);
+    throw error;
+  }
+};
+
+export const suggestTransactionLinks = async (
+  transactionId: string, 
+  userId: string
+): Promise<Transaction[]> => {
+  try {
+    console.log('🔗 Suggesting transaction links for:', transactionId);
+    
+    // Get the source transaction
+    const sourceTransactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
+    if (!sourceTransactionDoc.exists()) {
+      throw new Error('Source transaction not found');
+    }
+    
+    const sourceTransaction = { id: sourceTransactionDoc.id, ...sourceTransactionDoc.data() } as Transaction;
+    
+    // Get all other transactions for the user
+    const allTransactionsQuery = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('id', '!=', transactionId)
+    );
+    const allTransactionsSnapshot = await getDocs(allTransactionsQuery);
+    
+    const allTransactions = allTransactionsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Transaction[];
+    
+    // Get existing links to exclude already linked transactions
+    const existingLinks = await getLinkedTransactions(transactionId, userId);
+    const linkedTransactionIds = new Set(existingLinks.map(lt => lt.transaction.id));
+    
+    // Filter out already linked transactions
+    const unlinkedTransactions = allTransactions.filter(t => !linkedTransactionIds.has(t.id));
+    
+    // Score transactions based on similarity
+    const scoredTransactions = unlinkedTransactions.map(transaction => {
+      let score = 0;
+      
+      // Amount matching (exact or opposite)
+      if (Math.abs(transaction.amount) === Math.abs(sourceTransaction.amount)) {
+        score += 50; // High score for exact amount match
+      } else if (Math.abs(transaction.amount - sourceTransaction.amount) < 0.01) {
+        score += 30; // Good score for very close amounts
+      }
+      
+      // Date proximity (within 3 days)
+      const sourceDate = new Date(sourceTransaction.date);
+      const targetDate = new Date(transaction.date);
+      const daysDiff = Math.abs(sourceDate.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24);
+      
+      if (daysDiff <= 1) {
+        score += 40; // High score for same day
+      } else if (daysDiff <= 3) {
+        score += 20; // Medium score for within 3 days
+      } else if (daysDiff <= 7) {
+        score += 10; // Low score for within a week
+      }
+      
+      // Description similarity
+      const sourceDesc = sourceTransaction.description.toLowerCase();
+      const targetDesc = transaction.description.toLowerCase();
+      
+      if (sourceDesc.includes('transfer') && targetDesc.includes('transfer')) {
+        score += 30;
+      }
+      if (sourceDesc.includes('payment') && targetDesc.includes('payment')) {
+        score += 25;
+      }
+      if (sourceDesc.includes('loan') && targetDesc.includes('loan')) {
+        score += 25;
+      }
+      
+      // Account type matching (transfers between different accounts)
+      if (transaction.accountId !== sourceTransaction.accountId) {
+        score += 15; // Bonus for cross-account transactions
+      }
+      
+      return { transaction, score };
+    });
+    
+    // Sort by score and return top 10 suggestions
+    const suggestions = scoredTransactions
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(item => item.transaction);
+    
+    console.log(`✅ Found ${suggestions.length} transaction link suggestions`);
+    return suggestions;
+  } catch (error) {
+    console.error('❌ Error suggesting transaction links:', error);
     throw error;
   }
 };
