@@ -333,9 +333,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       await forceUpdateAccountBalance(user.uid, account.id);
       console.log('✅ Account balance force updated after transaction deletion');
       
-      // Reload transactions and trigger full refresh
+      // Reload transactions (don't call onUpdate to avoid modal closing)
       await loadTransactions();
-      onUpdate();
     } catch (error) {
       console.error('Error deleting transaction:', error);
       setError('Failed to delete transaction');
@@ -354,9 +353,8 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       await forceUpdateAccountBalance(user.uid, account.id);
       console.log('✅ Account balance force updated after transaction edit');
       
-      // Reload transactions & trigger full refresh
+      // Reload transactions (don't call onUpdate to avoid modal closing)
       await loadTransactions();
-      onUpdate();
       
       setEditingTransaction(null);
     } catch (error) {
@@ -642,9 +640,9 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                         {/* Transaction Tags */}
                         {transactionTags[transaction.id] && transactionTags[transaction.id].length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {transactionTags[transaction.id].map((tag: any) => (
+                            {transactionTags[transaction.id].map((tag: any, index: number) => (
                               <button
-                                key={tag.id}
+                                key={`${transaction.id}-${tag.id}-${index}`}
                                 onClick={() => handleTagFilterClick(tag.id)}
                                 className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white hover:opacity-80 transition-opacity cursor-pointer"
                                 style={{ backgroundColor: tag.color }}
