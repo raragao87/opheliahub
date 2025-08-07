@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
@@ -35,6 +35,15 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
 
   const [showBulkTagModal, setShowBulkTagModal] = useState(false);
+  
+  // Filter state
+  const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<string>('all');
+  const [transactionType, setTransactionType] = useState<string>('all');
+  const [searchText, setSearchText] = useState<string>('');
+  const [minAmount, setMinAmount] = useState<string>('');
+  const [maxAmount, setMaxAmount] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -148,7 +157,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
 
   const handleSelectAll = (isSelected: boolean) => {
     if (isSelected) {
-      setSelectedTransactions(transactions.map(t => t.id));
+      setSelectedTransactions(filteredTransactions.map(t => t.id));
     } else {
       setSelectedTransactions([]);
     }
@@ -172,6 +181,90 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     // Clear selection
     clearSelection();
   };
+
+  // Filter functions
+  const handleTagFilterClick = (tagId: string) => {
+    if (selectedFilterTags.includes(tagId)) {
+      setSelectedFilterTags(prev => prev.filter(id => id !== tagId));
+    } else {
+      setSelectedFilterTags(prev => [...prev, tagId]);
+    }
+  };
+
+  const clearAllFilters = () => {
+    setSelectedFilterTags([]);
+    setDateRange('all');
+    setTransactionType('all');
+    setSearchText('');
+    setMinAmount('');
+    setMaxAmount('');
+  };
+
+  const getDateRangeFilter = (transaction: Transaction) => {
+    const transactionDate = new Date(transaction.date);
+    const now = new Date();
+    
+    switch (dateRange) {
+      case 'this-month':
+        return transactionDate.getMonth() === now.getMonth() && 
+               transactionDate.getFullYear() === now.getFullYear();
+      case 'last-month':
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
+        return transactionDate.getMonth() === lastMonth.getMonth() && 
+               transactionDate.getFullYear() === lastMonth.getFullYear();
+      case 'last-3-months':
+        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3);
+        return transactionDate >= threeMonthsAgo;
+      case 'this-year':
+        return transactionDate.getFullYear() === now.getFullYear();
+      default:
+        return true;
+    }
+  };
+
+  const getAmountRangeFilter = (transaction: Transaction) => {
+    const amount = transaction.amount;
+    const min = minAmount ? parseFloat(minAmount) : -Infinity;
+    const max = maxAmount ? parseFloat(maxAmount) : Infinity;
+    return amount >= min && amount <= max;
+  };
+
+  const getTransactionTypeFilter = (transaction: Transaction) => {
+    switch (transactionType) {
+      case 'income':
+        return transaction.amount > 0;
+      case 'expense':
+        return transaction.amount < 0;
+      case 'manual':
+        return transaction.isManual;
+      case 'imported':
+        return !transaction.isManual;
+      default:
+        return true;
+    }
+  };
+
+  const getSearchTextFilter = (transaction: Transaction) => {
+    if (!searchText.trim()) return true;
+    return transaction.description.toLowerCase().includes(searchText.toLowerCase());
+  };
+
+  const getTagFilter = (transaction: Transaction) => {
+    if (selectedFilterTags.length === 0) return true;
+    const transactionTagIds = transaction.tagIds || [];
+    return selectedFilterTags.some(tagId => transactionTagIds.includes(tagId));
+  };
+
+  // Filtered transactions using useMemo for performance
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(transaction => {
+      return getDateRangeFilter(transaction) &&
+             getAmountRangeFilter(transaction) &&
+             getTransactionTypeFilter(transaction) &&
+             getSearchTextFilter(transaction) &&
+             getTagFilter(transaction);
+    });
+  }, [transactions, dateRange, minAmount, maxAmount, transactionType, searchText, selectedFilterTags]);
 
   const handleBulkDelete = async () => {
     if (!user || selectedTransactions.length === 0) return;
@@ -345,7 +438,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    checked={selectedTransactions.length === transactions.length && transactions.length > 0}
+                    checked={selectedTransactions.length === filteredTransactions.length && filteredTransactions.length > 0}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="rounded border-gray-300"
                   />
@@ -353,10 +446,112 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                 </div>
               )}
             </div>
-            <div className="text-sm text-gray-500">
-              {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
+            <div className="flex items-center space-x-3">
+              <div className="text-sm text-gray-500">
+                {filteredTransactions.length} of {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
+              </div>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+              >
+                {showFilters ? 'Hide' : 'Show'} Filters
+              </button>
             </div>
           </div>
+
+          {/* Filter Controls */}
+          {showFilters && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Search */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                  <input
+                    type="text"
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    placeholder="Search descriptions..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Date Range */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                  <select
+                    value={dateRange}
+                    onChange={(e) => setDateRange(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="this-month">This Month</option>
+                    <option value="last-month">Last Month</option>
+                    <option value="last-3-months">Last 3 Months</option>
+                    <option value="this-year">This Year</option>
+                  </select>
+                </div>
+
+                {/* Transaction Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <select
+                    value={transactionType}
+                    onChange={(e) => setTransactionType(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                    <option value="manual">Manual</option>
+                    <option value="imported">Imported</option>
+                  </select>
+                </div>
+
+                {/* Amount Range */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Min Amount</label>
+                  <input
+                    type="number"
+                    value={minAmount}
+                    onChange={(e) => setMinAmount(e.target.value)}
+                    placeholder="Min amount..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Amount</label>
+                  <input
+                    type="number"
+                    value={maxAmount}
+                    onChange={(e) => setMaxAmount(e.target.value)}
+                    placeholder="Max amount..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Tag Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Tags</label>
+                  <TagSelector
+                    selectedTagIds={selectedFilterTags}
+                    onTagChange={setSelectedFilterTags}
+                    placeholder="Select tags to filter..."
+                  />
+                </div>
+              </div>
+
+              {/* Clear Filters Button */}
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={clearAllFilters}
+                  className="px-4 py-2 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  Clear All Filters
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Bulk Actions Toolbar */}
           {selectedTransactions.length > 0 && (
@@ -405,15 +600,30 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                 Try Again
               </button>
             </div>
-          ) : transactions.length === 0 ? (
+          ) : filteredTransactions.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-gray-400 text-6xl mb-4">📊</div>
-              <h3 className="text-lg font-medium text-gray-800 mb-2">No transactions yet</h3>
-              <p className="text-gray-600">Add your first transaction to see the history here</p>
+              <div className="text-gray-400 text-6xl mb-4">🔍</div>
+              <h3 className="text-lg font-medium text-gray-800 mb-2">
+                {transactions.length === 0 ? 'No transactions yet' : 'No transactions match your filters'}
+              </h3>
+              <p className="text-gray-600">
+                {transactions.length === 0 
+                  ? 'Add your first transaction to see the history here'
+                  : 'Try adjusting your filters to see more transactions'
+                }
+              </p>
+              {transactions.length > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Clear All Filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
-              {transactions.map((transaction) => (
+              {filteredTransactions.map((transaction) => (
                 <div key={transaction.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
@@ -433,13 +643,15 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                         {transactionTags[transaction.id] && transactionTags[transaction.id].length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {transactionTags[transaction.id].map((tag: any) => (
-                              <span
+                              <button
                                 key={tag.id}
-                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                                onClick={() => handleTagFilterClick(tag.id)}
+                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white hover:opacity-80 transition-opacity cursor-pointer"
                                 style={{ backgroundColor: tag.color }}
+                                title={`Click to filter by ${tag.name}`}
                               >
                                 {tag.name}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         )}
