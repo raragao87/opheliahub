@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
+import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
@@ -31,6 +31,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [deletingTransaction, setDeletingTransaction] = useState<string | null>(null);
   const [editingTransactionTags, setEditingTransactionTags] = useState<string[]>([]);
   const [transactionTags, setTransactionTags] = useState<Record<string, any[]>>({});
+  const [transactionSplits, setTransactionSplits] = useState<Record<string, any[]>>({});
   
   // Bulk selection state
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
@@ -71,18 +72,29 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       const accountTransactions = await getTransactionsByAccount(user.uid, account.id);
       setTransactions(accountTransactions);
       
-      // Load tags for all transactions
+      // Load tags and splits for all transactions
       const tagsMap: Record<string, any[]> = {};
+      const splitsMap: Record<string, any[]> = {};
+      
       for (const transaction of accountTransactions) {
         try {
+          // Load tags
           const tags = await getTransactionTags(transaction.id, user.uid);
           tagsMap[transaction.id] = tags;
+          
+          // Load splits if transaction is split
+          if (transaction.isSplit) {
+            const splits = await getTransactionSplits(transaction.id, user.uid);
+            splitsMap[transaction.id] = splits;
+          }
         } catch (error) {
-          console.error('Error loading tags for transaction:', transaction.id, error);
+          console.error('Error loading data for transaction:', transaction.id, error);
           tagsMap[transaction.id] = [];
+          splitsMap[transaction.id] = [];
         }
       }
       setTransactionTags(tagsMap);
+      setTransactionSplits(splitsMap);
     } catch (error) {
       console.error('Error loading transactions:', error);
       setError('Failed to load transactions');
@@ -677,6 +689,19 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                             ))}
                           </div>
                         )}
+                        
+                        {/* Split Summary */}
+                        {transaction.isSplit && transactionSplits[transaction.id] && (
+                          <div className="mt-2 text-xs text-gray-600">
+                            <span className="font-medium">Split into:</span>
+                            {transactionSplits[transaction.id].map((split: any, index: number) => (
+                              <span key={split.id} className="ml-2">
+                                {split.description} ({formatCurrency(split.amount)})
+                                {index < transactionSplits[transaction.id].length - 1 ? ', ' : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -695,7 +720,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                           title="Split transaction"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l6 6-6 6M18 6l-6 6 6 6" />
                           </svg>
                         </button>
                         <button

@@ -1318,10 +1318,15 @@ export const getTransactionTags = async (transactionId: string, userId: string):
       return [];
     }
     
-    // Get all tags (default + user tags)
+    // Get all tags (default + user tags) with deduplication
     const userTags = await getTags(userId);
     const defaultTags = getDefaultTags();
-    const allTags = [...defaultTags, ...userTags];
+    
+    // Create a map to deduplicate tags by ID (user tags take precedence)
+    const tagMap = new Map();
+    defaultTags.forEach(tag => tagMap.set(tag.id, tag));
+    userTags.forEach(tag => tagMap.set(tag.id, tag));
+    const allTags = Array.from(tagMap.values());
     
     // Filter tags that are assigned to this transaction
     const transactionTags = allTags.filter(tag => tagIds.includes(tag.id));
