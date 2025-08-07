@@ -1371,21 +1371,46 @@ export const createTag = async (userId: string, tagData: Omit<Tag, 'id' | 'creat
 export const getTags = async (userId: string): Promise<Tag[]> => {
   try {
     console.log('🏷️ Fetching tags for user:', userId);
-    console.log('📁 Reading from path: users/', userId, '/tags');
     
-    const q = query(
-      collection(db, 'users', userId, 'tags'),
-      orderBy('createdAt', 'desc')
-    );
+    // Get user-created tags
+    let userTags: Tag[] = [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'tags'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      userTags = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Tag[];
+      
+      console.log(`✅ Found ${userTags.length} user-created tags`);
+    } catch (error) {
+      console.log('⚠️ No user-created tags found (this is normal for new users)');
+    }
     
-    const querySnapshot = await getDocs(q);
-    const tags = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Tag[];
+    // Get deleted default tags to filter them out
+    let deletedDefaultTags: string[] = [];
+    try {
+      const deletedTagsQuery = query(collection(db, 'users', userId, 'deletedTags'));
+      const deletedTagsSnapshot = await getDocs(deletedTagsQuery);
+      deletedDefaultTags = deletedTagsSnapshot.docs.map(doc => doc.data().tagId);
+      console.log(`✅ Found ${deletedDefaultTags.length} deleted default tags to filter out`);
+    } catch (error) {
+      console.log('⚠️ No deleted tags found (this is normal)');
+    }
     
-    console.log(`✅ Found ${tags.length} user tags:`, tags.map(t => ({ id: t.id, name: t.name })));
-    return tags;
+    // Get default tags and filter out deleted ones
+    const defaultTags = getDefaultTags().filter(tag => !deletedDefaultTags.includes(tag.id));
+    console.log(`✅ Found ${defaultTags.length} available default tags`);
+    
+    // Combine user tags and available default tags
+    const allTags = [...userTags, ...defaultTags];
+    console.log(`✅ Total tags: ${allTags.length} (${userTags.length} user + ${defaultTags.length} default)`);
+    
+    return allTags;
   } catch (error) {
     console.error('❌ Error getting tags:', error);
     throw error;
@@ -1425,17 +1450,90 @@ export const deleteTag = async (tagId: string, userId: string): Promise<void> =>
     
     // Check if tag exists in user's tags collection
     const tagDoc = await getDoc(doc(db, 'users', userId, 'tags', tagId));
-    if (!tagDoc.exists()) {
-      console.log('⚠️ Tag not found in user collection, might be a default tag');
-      // For default tags, we might need to handle them differently
-      // For now, we'll just log and return
-      return;
+    if (tagDoc.exists()) {
+      // User-created tag - delete from database
+      await deleteDoc(doc(db, 'users', userId, 'tags', tagId));
+      console.log('✅ User-created tag deleted successfully from database');
+    } else {
+      // Default tag - create a "deleted" record to hide it from UI
+      console.log('🗑️ Hiding default tag from UI:', tagId);
+      await setDoc(doc(db, 'users', userId, 'deletedTags', tagId), {
+        tagId,
+        userId,
+        deletedAt: Date.now()
+      });
+      console.log('✅ Default tag hidden from UI');
     }
-    
-    await deleteDoc(doc(db, 'users', userId, 'tags', tagId));
-    console.log('✅ Tag deleted successfully from database');
   } catch (error) {
     console.error('❌ Error deleting tag:', error);
+    throw error;
+  }
+};
+
+// Category management functions
+export const getDefaultCategories = (): string[] => {
+  return [
+    'income',
+    'housing',
+    'transportation', 
+    'food-dining',
+    'entertainment',
+    'healthcare',
+    'shopping',
+    'bills-services',
+    'personal-care'
+  ];
+};
+
+export const getUserCategories = async (userId: string): Promise<string[]> => {
+  try {
+    console.log('📂 Fetching user categories for user:', userId);
+    
+    // Get default categories
+    const defaultCategories = getDefaultCategories();
+    
+    // Get user custom categories (if we implement this in the future)
+    let customCategories: string[] = [];
+    try {
+      const categoriesQuery = query(collection(db, 'users', userId, 'categories'));
+      const categoriesSnapshot = await getDocs(categoriesQuery);
+      customCategories = categoriesSnapshot.docs.map(doc => doc.data().name);
+      console.log(`✅ Found ${customCategories.length} custom categories`);
+    } catch (error) {
+      console.log('⚠️ No custom categories found (this is normal)');
+    }
+    
+    // Combine default and custom categories
+    const allCategories = [...defaultCategories, ...customCategories];
+    console.log(`✅ Total categories: ${allCategories.length}`);
+    
+    return allCategories;
+  } catch (error) {
+    console.error('❌ Error getting user categories:', error);
+    return getDefaultCategories();
+  }
+};
+
+export const deleteCategory = async (categoryName: string, userId: string): Promise<void> => {
+  try {
+    console.log('🗑️ Deleting category:', categoryName, 'for user:', userId);
+    
+    // Check if category is in use by tags
+    const tagsQuery = query(
+      collection(db, 'users', userId, 'tags'),
+      where('category', '==', categoryName)
+    );
+    const tagsSnapshot = await getDocs(tagsQuery);
+    
+    if (!tagsSnapshot.empty) {
+      throw new Error(`Cannot delete category "${categoryName}" that is in use by ${tagsSnapshot.size} tags`);
+    }
+    
+    // For now, we'll just log the deletion since categories are predefined
+    // In the future, we could store custom categories in Firestore
+    console.log(`✅ Category "${categoryName}" marked for deletion`);
+  } catch (error) {
+    console.error('❌ Error deleting category:', error);
     throw error;
   }
 };

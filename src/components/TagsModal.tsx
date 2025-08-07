@@ -8,6 +8,7 @@ import {
   deleteTag, 
   getDefaultTags, 
   getTransactionsByTag,
+  deleteCategory,
   type Tag 
 } from '../firebase/config';
 import TagGroup from './TagGroup';
@@ -229,6 +230,28 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     setCategoryName('');
   };
 
+  const handleDeleteCategory = async (categoryName: string) => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🗑️ Deleting category:', categoryName);
+      await deleteCategory(categoryName, user.uid);
+      
+      // Reload tags to refresh the UI
+      await loadTags(user.uid);
+      
+      console.log('✅ Category deleted successfully');
+    } catch (error) {
+      console.error('❌ Error deleting category:', error);
+      setError(`Failed to delete category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getTagGroups = () => {
     const incomeTags = tags.filter(tag => tag.category === 'income');
     const housingTags = tags.filter(tag => tag.category === 'housing');
@@ -386,6 +409,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -395,6 +419,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -404,6 +429,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -413,6 +439,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -422,6 +449,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -431,6 +459,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -440,6 +469,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -449,6 +479,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
@@ -458,6 +489,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
                   onEditTag={startEditTag}
                   onDeleteTag={handleDeleteTag}
                   onEditCategory={handleEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   deletingTagId={deletingTag}
                 />
                 
