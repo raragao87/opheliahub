@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { createTransaction, forceUpdateAccountBalance, type Account } from '../firebase/config';
+import { createTransaction, forceUpdateAccountBalance, getSuggestedTags, type Account } from '../firebase/config';
 import TagSelector from './TagSelector';
 
 interface AddTransactionModalProps {
@@ -26,6 +26,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [suggestedTags, setSuggestedTags] = useState<any[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -115,6 +116,25 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     setAmount(formattedValue);
   };
 
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDescription(value);
+    
+    // Get tag suggestions when description changes
+    if (value.trim() && user) {
+      const transactionAmount = parseFloat(amount) || 0;
+      getSuggestedTags(value.trim(), transactionAmount, user.uid)
+        .then(suggestions => {
+          setSuggestedTags(suggestions);
+        })
+        .catch(error => {
+          console.error('Error getting tag suggestions:', error);
+        });
+    } else {
+      setSuggestedTags([]);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -194,12 +214,38 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             <input
               type="text"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={handleDescriptionChange}
               placeholder="e.g., Grocery shopping, Salary deposit"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
+
+          {/* Tag Suggestions */}
+          {suggestedTags.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Suggested Tags
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {suggestedTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => {
+                      if (!selectedTagIds.includes(tag.id)) {
+                        setSelectedTagIds([...selectedTagIds, tag.id]);
+                      }
+                    }}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white hover:opacity-80 transition-opacity"
+                    style={{ backgroundColor: tag.color }}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Date */}
           <div>

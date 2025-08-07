@@ -5,6 +5,7 @@ import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTran
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
+import BulkTagModal from './BulkTagModal';
 
 interface AccountDetailsModalProps {
   isOpen: boolean;
@@ -29,6 +30,11 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [deletingTransaction, setDeletingTransaction] = useState<string | null>(null);
   const [editingTransactionTags, setEditingTransactionTags] = useState<string[]>([]);
   const [transactionTags, setTransactionTags] = useState<Record<string, any[]>>({});
+  
+  // Bulk selection state
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
+
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -126,6 +132,78 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     } catch (error) {
       console.error('❌ Error refreshing balance:', error);
       setError('Failed to refresh balance');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Bulk selection functions
+  const handleTransactionSelect = (transactionId: string, isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedTransactions(prev => [...prev, transactionId]);
+    } else {
+      setSelectedTransactions(prev => prev.filter(id => id !== transactionId));
+    }
+  };
+
+  const handleSelectAll = (isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedTransactions(transactions.map(t => t.id));
+    } else {
+      setSelectedTransactions([]);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedTransactions([]);
+  };
+
+  const handleBulkTagging = () => {
+    setShowBulkTagModal(true);
+  };
+
+  const handleBulkTagSuccess = async () => {
+    // Reload transactions to show updated tags
+    await loadTransactions();
+    // Force update account balance
+    if (user) {
+      await forceUpdateAccountBalance(user.uid, account.id);
+    }
+    // Clear selection
+    clearSelection();
+  };
+
+  const handleBulkDelete = async () => {
+    if (!user || selectedTransactions.length === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${selectedTransactions.length} transactions? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🗑️ Bulk deleting transactions:', selectedTransactions);
+      
+      // Delete each transaction
+      for (const transactionId of selectedTransactions) {
+        await deleteTransaction(transactionId, user.uid);
+      }
+      
+      // Force update account balance
+      await forceUpdateAccountBalance(user.uid, account.id);
+      
+      // Reload transactions
+      await loadTransactions();
+      
+      // Clear selection
+      clearSelection();
+      
+      console.log('✅ Bulk delete completed');
+    } catch (error) {
+      console.error('❌ Error bulk deleting transactions:', error);
+      setError('Failed to delete transactions');
     } finally {
       setLoading(false);
     }
@@ -261,11 +339,55 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
         {/* Transactions Section */}
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Transaction History</h3>
+            <div className="flex items-center space-x-4">
+              <h3 className="text-lg font-semibold text-gray-800">Transaction History</h3>
+              {transactions.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedTransactions.length === transactions.length && transactions.length > 0}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-600">Select All</span>
+                </div>
+              )}
+            </div>
             <div className="text-sm text-gray-500">
               {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
             </div>
           </div>
+
+          {/* Bulk Actions Toolbar */}
+          {selectedTransactions.length > 0 && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedTransactions.length} transaction{selectedTransactions.length !== 1 ? 's' : ''} selected
+                </span>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleBulkTagging}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  >
+                    Add Tags
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                  >
+                    Delete Selected
+                  </button>
+                  <button
+                    onClick={clearSelection}
+                    className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
@@ -295,6 +417,12 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                 <div key={transaction.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedTransactions.includes(transaction.id)}
+                        onChange={(e) => handleTransactionSelect(transaction.id, e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
                       <div className="text-2xl">{getTransactionIcon(transaction.amount)}</div>
                       <div>
                         <p className="font-medium text-gray-800">{transaction.description}</p>
@@ -499,6 +627,16 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bulk Tag Modal */}
+      {showBulkTagModal && (
+        <BulkTagModal
+          isOpen={showBulkTagModal}
+          onClose={() => setShowBulkTagModal(false)}
+          selectedTransactions={transactions.filter(t => selectedTransactions.includes(t.id))}
+          onSuccess={handleBulkTagSuccess}
+        />
       )}
     </div>
   );

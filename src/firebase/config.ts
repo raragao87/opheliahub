@@ -1538,6 +1538,201 @@ export const deleteCategory = async (categoryName: string, userId: string): Prom
   }
 };
 
+// Bulk operations functions
+export const bulkAssignTags = async (
+  transactionIds: string[], 
+  tagIds: string[], 
+  userId: string,
+  mode: 'add' | 'replace' = 'add'
+): Promise<void> => {
+  try {
+    console.log('🔄 Bulk assigning tags:', {
+      transactionIds,
+      tagIds,
+      mode,
+      userId
+    });
+    
+    const batch = writeBatch(db);
+    
+    for (const transactionId of transactionIds) {
+      const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);
+      
+      if (mode === 'replace') {
+        // Replace existing tags
+        batch.update(transactionRef, {
+          tagIds,
+          updatedAt: Date.now()
+        });
+      } else {
+        // Add to existing tags (avoid duplicates)
+        const transactionDoc = await getDoc(transactionRef);
+        if (transactionDoc.exists()) {
+          const transaction = transactionDoc.data() as Transaction;
+          const existingTagIds = transaction.tagIds || [];
+          const newTagIds = [...new Set([...existingTagIds, ...tagIds])]; // Remove duplicates
+          
+          batch.update(transactionRef, {
+            tagIds: newTagIds,
+            updatedAt: Date.now()
+          });
+        }
+      }
+    }
+    
+    await batch.commit();
+    console.log('✅ Bulk tag assignment completed');
+  } catch (error) {
+    console.error('❌ Error bulk assigning tags:', error);
+    throw error;
+  }
+};
+
+export const bulkRemoveTags = async (
+  transactionIds: string[], 
+  tagIds: string[], 
+  userId: string
+): Promise<void> => {
+  try {
+    console.log('🔄 Bulk removing tags:', {
+      transactionIds,
+      tagIds,
+      userId
+    });
+    
+    const batch = writeBatch(db);
+    
+    for (const transactionId of transactionIds) {
+      const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);
+      const transactionDoc = await getDoc(transactionRef);
+      
+      if (transactionDoc.exists()) {
+        const transaction = transactionDoc.data() as Transaction;
+        const existingTagIds = transaction.tagIds || [];
+        const newTagIds = existingTagIds.filter(id => !tagIds.includes(id));
+        
+        batch.update(transactionRef, {
+          tagIds: newTagIds,
+          updatedAt: Date.now()
+        });
+      }
+    }
+    
+    await batch.commit();
+    console.log('✅ Bulk tag removal completed');
+  } catch (error) {
+    console.error('❌ Error bulk removing tags:', error);
+    throw error;
+  }
+};
+
+export const bulkDeleteTransactions = async (
+  transactionIds: string[], 
+  userId: string
+): Promise<void> => {
+  try {
+    console.log('🗑️ Bulk deleting transactions:', {
+      transactionIds,
+      userId
+    });
+    
+    const batch = writeBatch(db);
+    
+    for (const transactionId of transactionIds) {
+      const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);
+      batch.delete(transactionRef);
+    }
+    
+    await batch.commit();
+    console.log('✅ Bulk transaction deletion completed');
+  } catch (error) {
+    console.error('❌ Error bulk deleting transactions:', error);
+    throw error;
+  }
+};
+
+// Smart tag suggestions based on transaction description and amount
+export const getSuggestedTags = async (
+  description: string, 
+  amount: number, 
+  userId: string
+): Promise<Tag[]> => {
+  try {
+    console.log('🤖 Getting tag suggestions for:', { description, amount });
+    
+    const allTags = await getTags(userId);
+    const suggestions: Tag[] = [];
+    
+    const lowerDescription = description.toLowerCase();
+    
+    // Description-based suggestions
+    const descriptionPatterns = [
+      { pattern: /mcdonald|burger|kfc|subway|pizza|restaurant|cafe|coffee/, tags: ['Restaurants', 'Food & Dining'] },
+      { pattern: /shell|exxon|bp|gas|fuel|petrol/, tags: ['Gas', 'Transportation'] },
+      { pattern: /netflix|spotify|hulu|disney|streaming/, tags: ['Streaming', 'Entertainment'] },
+      { pattern: /salary|payroll|income|bonus/, tags: ['Salary', 'Income'] },
+      { pattern: /amazon|walmart|target|shopping/, tags: ['Shopping', 'Online Shopping'] },
+      { pattern: /uber|lyft|taxi|transport/, tags: ['Transportation', 'Ride Share'] },
+      { pattern: /gym|fitness|workout/, tags: ['Fitness', 'Personal Care'] },
+      { pattern: /doctor|hospital|medical|pharmacy/, tags: ['Healthcare', 'Medical'] },
+      { pattern: /electric|water|gas|utility/, tags: ['Utilities', 'Bills & Services'] },
+      { pattern: /rent|mortgage|housing/, tags: ['Housing', 'Rent'] }
+    ];
+    
+    for (const pattern of descriptionPatterns) {
+      if (pattern.pattern.test(lowerDescription)) {
+        const matchingTags = allTags.filter(tag => 
+          pattern.tags.some(suggestion => 
+            tag.name.toLowerCase().includes(suggestion.toLowerCase())
+          )
+        );
+        suggestions.push(...matchingTags);
+      }
+    }
+    
+    // Amount-based suggestions
+    if (amount > 0) {
+      // Income suggestions
+      const incomeTags = allTags.filter(tag => 
+        tag.category === 'income' || 
+        tag.name.toLowerCase().includes('salary') ||
+        tag.name.toLowerCase().includes('income')
+      );
+      suggestions.push(...incomeTags);
+    } else {
+      // Expense suggestions based on amount ranges
+      if (Math.abs(amount) > 1000) {
+        // Large expenses - suggest housing, major purchases
+        const largeExpenseTags = allTags.filter(tag => 
+          tag.category === 'housing' || 
+          tag.name.toLowerCase().includes('rent') ||
+          tag.name.toLowerCase().includes('mortgage')
+        );
+        suggestions.push(...largeExpenseTags);
+      } else if (Math.abs(amount) > 100) {
+        // Medium expenses - suggest bills, services
+        const mediumExpenseTags = allTags.filter(tag => 
+          tag.category === 'bills-services' || 
+          tag.name.toLowerCase().includes('utility') ||
+          tag.name.toLowerCase().includes('service')
+        );
+        suggestions.push(...mediumExpenseTags);
+      }
+    }
+    
+    // Remove duplicates
+    const uniqueSuggestions = suggestions.filter((tag, index, self) => 
+      index === self.findIndex(t => t.id === tag.id)
+    );
+    
+    console.log('✅ Tag suggestions:', uniqueSuggestions.map(t => t.name));
+    return uniqueSuggestions.slice(0, 5); // Return top 5 suggestions
+  } catch (error) {
+    console.error('❌ Error getting tag suggestions:', error);
+    return [];
+  }
+};
+
 export const getDefaultTags = (): Tag[] => {
   return [
     // Income Tags
