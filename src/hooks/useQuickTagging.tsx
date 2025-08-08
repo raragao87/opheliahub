@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getTags, getDefaultTags, addTransactionTag, removeTransactionTag } from '../firebase/config';
+import { getTags, getDefaultTags, updateTransaction } from '../firebase/config';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase/config';
 
@@ -124,9 +124,9 @@ export const useQuickTagging = ({ transaction, onTagsUpdate }: UseQuickTaggingPr
     
     try {
       setIsUpdating(true);
-      await addTransactionTag(transaction.id, tagId, user.uid);
-      
       const newTagIds = [...(transaction.tagIds || []), tagId];
+      await updateTransaction(transaction.id, { tagIds: newTagIds }, user.uid);
+      
       onTagsUpdate(transaction.id, newTagIds);
     } catch (error) {
       console.error('Error adding tag:', error);
@@ -141,9 +141,9 @@ export const useQuickTagging = ({ transaction, onTagsUpdate }: UseQuickTaggingPr
     
     try {
       setIsUpdating(true);
-      await removeTransactionTag(transaction.id, tagId, user.uid);
-      
       const newTagIds = (transaction.tagIds || []).filter(id => id !== tagId);
+      await updateTransaction(transaction.id, { tagIds: newTagIds }, user.uid);
+      
       onTagsUpdate(transaction.id, newTagIds);
     } catch (error) {
       console.error('Error removing tag:', error);
