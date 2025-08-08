@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, getTags, getDefaultTags, getLinkedTransactions, forceUpdateAccountBalance, type Account, type Transaction, getTransactionsByAccountWithData, getTransactionsByAccountPaginated } from '../firebase/config';
+import { updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, getTags, getDefaultTags, getLinkedTransactions, forceUpdateAccountBalance, type Account, type Transaction, getTransactionsByAccountWithData, getTransactionsByAccountPaginated } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
 import BulkTagModal from './BulkTagModal';
 import SplitTransactionModal from './SplitTransactionModal';
 import LinkTransactionModal from './LinkTransactionModal';
+import TagPill from './TagPill';
+import QuickTagEditor from './QuickTagEditor';
 
 
 interface AccountDetailsModalProps {
@@ -59,6 +61,15 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [hasMore, setHasMore] = useState(true);
   const [lastTransaction, setLastTransaction] = useState<Transaction | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Quick tag editor state
+  const [activeTagEditor, setActiveTagEditor] = useState<string | null>(null);
+  const [tagEditorPosition, setTagEditorPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const transactionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -497,6 +508,61 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     }
   };
 
+  // Quick tag editor functions
+  const handleQuickTag = (transactionId: string) => {
+    const transactionElement = transactionRefs.current[transactionId];
+    if (!transactionElement) return;
+
+    const rect = transactionElement.getBoundingClientRect();
+    setTagEditorPosition({
+      top: rect.bottom + window.scrollY,
+      left: rect.left + window.scrollX,
+      width: rect.width,
+    });
+    setActiveTagEditor(transactionId);
+  };
+
+  const handleCloseTagEditor = () => {
+    setActiveTagEditor(null);
+    setTagEditorPosition(null);
+  };
+
+  const handleTagsUpdate = (transactionId: string, newTagIds: string[]) => {
+    // Update the transaction with new tag IDs
+    const updatedTransaction = transactions.find(t => t.id === transactionId);
+    if (!updatedTransaction) return;
+
+    // Update local state immediately for responsive UI
+    setTransactions(prev => 
+      prev.map(t => t.id === transactionId ? { ...t, tagIds: newTagIds } : t)
+    );
+
+    // Update the tags map for display
+    const updatedTags = availableTags.filter((tag: any) => newTagIds.includes(tag.id));
+    setTransactionTags(prev => ({
+      ...prev,
+      [transactionId]: updatedTags
+    }));
+  };
+
+  const handleRemoveTag = async (transactionId: string, tagId: string) => {
+    if (!user) return;
+
+    try {
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) return;
+
+      const newTagIds = (transaction.tagIds || []).filter(id => id !== tagId);
+      await updateTransaction(transactionId, { tagIds: newTagIds }, user.uid);
+      
+      // Update local state
+      handleTagsUpdate(transactionId, newTagIds);
+    } catch (error) {
+      console.error('Error removing tag:', error);
+      setError('Failed to remove tag');
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -757,7 +823,11 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
           ) : (
             <div className="space-y-3">
               {filteredTransactions.map((transaction) => (
-                <div key={transaction.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <div 
+                  key={transaction.id} 
+                  ref={(el) => { transactionRefs.current[transaction.id] = el; }}
+                  className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors relative"
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <input
@@ -784,20 +854,33 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                         <p className="text-sm text-gray-500">
                           {formatDate(transaction.date)} • {transaction.isManual ? 'Manual' : 'Imported'}
                         </p>
-                        {/* Transaction Tags - Hide for split transactions */}
-                        {!transaction.isSplit && transactionTags[transaction.id] && transactionTags[transaction.id].length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {transactionTags[transaction.id].map((tag: any, index: number) => (
-                              <button
-                                key={`${transaction.id}-${tag.id}-${index}`}
-                                onClick={() => handleTagFilterClick(tag.id)}
-                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white hover:opacity-80 transition-opacity cursor-pointer"
-                                style={{ backgroundColor: tag.color }}
-                                title={`Click to filter by ${tag.name}`}
-                              >
-                                {tag.name}
-                              </button>
+                        
+                        {/* Inline Tag Pills and Quick Tag Button - Hide for split transactions */}
+                        {!transaction.isSplit && (
+                          <div className="flex flex-wrap items-center gap-1 mt-2">
+                            {/* Current Tag Pills */}
+                            {transactionTags[transaction.id] && transactionTags[transaction.id].map((tag: any, index: number) => (
+                              <div key={`${transaction.id}-${tag.id}-${index}`} onClick={() => handleTagFilterClick(tag.id)}>
+                                <TagPill
+                                  tag={tag}
+                                  onRemove={(tagId) => handleRemoveTag(transaction.id, tagId)}
+                                  size="sm"
+                                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                                />
+                              </div>
                             ))}
+                            
+                            {/* Quick Tag Button */}
+                            <button
+                              onClick={() => handleQuickTag(transaction.id)}
+                              className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                              title="Add tags"
+                            >
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              Tag
+                            </button>
                           </div>
                         )}
                         
@@ -1072,6 +1155,16 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
           onClose={() => setShowLinkModal(false)}
           sourceTransaction={linkingTransaction}
           onSuccess={handleLinkSuccess}
+        />
+      )}
+
+      {/* Quick Tag Editor */}
+      {activeTagEditor && tagEditorPosition && (
+        <QuickTagEditor
+          transaction={transactions.find(t => t.id === activeTagEditor)!}
+          onTagsUpdate={handleTagsUpdate}
+          onClose={handleCloseTagEditor}
+          position={tagEditorPosition}
         />
       )}
     </div>
