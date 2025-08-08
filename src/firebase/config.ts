@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { config, getCurrentDomain, isDomainAllowed, getSecurityInfo } from '../config/environment';
 
@@ -3284,6 +3284,251 @@ export const suggestTagsForImport = async (
     return uniqueSuggestions;
   } catch (error) {
     console.error('❌ Error suggesting tags for import:', error);
+    return [];
+  }
+};
+
+export const getTransactionsByAccountWithData = async (userId: string, accountId: string): Promise<{
+  transactions: Transaction[];
+  tagsMap: Record<string, Tag[]>;
+  splitsMap: Record<string, TransactionSplit[]>;
+  linkedMap: Record<string, { link: TransactionLink; transaction: Transaction }[]>;
+}> => {
+  try {
+    console.log('💰 Fetching transactions with related data for account:', accountId);
+    
+    // Get transactions with limit for performance
+    const q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('accountId', '==', accountId),
+      orderBy('date', 'desc'),
+      limit(50) // Limit initial load to 50 transactions
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const transactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Transaction[];
+    
+    if (transactions.length === 0) {
+      return {
+        transactions: [],
+        tagsMap: {},
+        splitsMap: {},
+        linkedMap: {}
+      };
+    }
+    
+    // Batch load all related data efficiently
+    const [allTags, allSplits, allLinks] = await Promise.all([
+      // Get all tags in one query
+      getTags(userId),
+      // Get all splits for transactions that are split
+      getTransactionSplitsBatch(transactions.filter(t => t.isSplit).map(t => t.id), userId),
+      // Get all linked transactions in one query
+      getLinkedTransactionsBatch(transactions.map(t => t.id), userId)
+    ]);
+    
+    // Build maps efficiently
+    const tagsMap: Record<string, Tag[]> = {};
+    const splitsMap: Record<string, TransactionSplit[]> = {};
+    const linkedMap: Record<string, { link: TransactionLink; transaction: Transaction }[]> = {};
+    
+    // Process transactions and build maps
+    for (const transaction of transactions) {
+      // Build tags map
+      if (transaction.tagIds && transaction.tagIds.length > 0) {
+        tagsMap[transaction.id] = transaction.tagIds
+          .map(tagId => allTags.find((tag: any) => tag.id === tagId))
+          .filter(Boolean) as Tag[];
+      } else {
+        tagsMap[transaction.id] = [];
+      }
+      
+      // Build splits map
+      if (transaction.isSplit) {
+        splitsMap[transaction.id] = allSplits.filter((split: any) => split.transactionId === transaction.id);
+      } else {
+        splitsMap[transaction.id] = [];
+      }
+      
+      // Build linked map
+      linkedMap[transaction.id] = allLinks.filter((link: any) => link.transaction.id === transaction.id);
+    }
+    
+    console.log(`✅ Loaded ${transactions.length} transactions with related data`);
+    
+    return {
+      transactions,
+      tagsMap,
+      splitsMap,
+      linkedMap
+    };
+  } catch (error) {
+    console.error('❌ Error fetching transactions with data:', error);
+    throw error;
+  }
+};
+
+export const getTransactionsByAccountPaginated = async (
+  userId: string, 
+  accountId: string, 
+  pageSize: number = 50,
+  lastTransaction?: Transaction
+): Promise<{
+  transactions: Transaction[];
+  hasMore: boolean;
+  lastDoc: any;
+}> => {
+  try {
+    console.log(`💰 Fetching ${pageSize} transactions for account:`, accountId);
+    
+    let q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('accountId', '==', accountId),
+      orderBy('date', 'desc'),
+      limit(pageSize)
+    );
+    
+    // Add pagination cursor if provided
+    if (lastTransaction) {
+      q = query(
+        collection(db, 'users', userId, 'transactions'),
+        where('accountId', '==', accountId),
+        orderBy('date', 'desc'),
+        startAfter(lastTransaction.date),
+        limit(pageSize)
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    const transactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Transaction[];
+    
+    const hasMore = querySnapshot.docs.length === pageSize;
+    const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+    
+    console.log(`✅ Found ${transactions.length} transactions (hasMore: ${hasMore})`);
+    
+    return {
+      transactions,
+      hasMore,
+      lastDoc
+    };
+  } catch (error) {
+    console.error('❌ Error getting paginated transactions:', error);
+    throw error;
+  }
+};
+
+export const getTransactionSplitsBatch = async (transactionIds: string[], userId: string): Promise<TransactionSplit[]> => {
+  try {
+    if (transactionIds.length === 0) return [];
+    
+    console.log(`💰 Batch loading splits for ${transactionIds.length} transactions`);
+    
+    const splitsQuery = query(
+      collection(db, 'users', userId, 'transactionSplits'),
+      where('transactionId', 'in', transactionIds)
+    );
+    
+    const splitsSnapshot = await getDocs(splitsQuery);
+    const splits = splitsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as TransactionSplit[];
+    
+    console.log(`✅ Loaded ${splits.length} splits`);
+    return splits;
+  } catch (error) {
+    console.error('❌ Error batch loading splits:', error);
+    return [];
+  }
+};
+
+export const getLinkedTransactionsBatch = async (transactionIds: string[], userId: string): Promise<{ link: TransactionLink; transaction: Transaction }[]> => {
+  try {
+    if (transactionIds.length === 0) return [];
+    
+    console.log(`💰 Batch loading linked transactions for ${transactionIds.length} transactions`);
+    
+    // Get all links where these transactions are source or target
+    const [sourceLinks, targetLinks] = await Promise.all([
+      getDocs(query(
+        collection(db, 'users', userId, 'transactionLinks'),
+        where('sourceTransactionId', 'in', transactionIds)
+      )),
+      getDocs(query(
+        collection(db, 'users', userId, 'transactionLinks'),
+        where('targetTransactionId', 'in', transactionIds)
+      ))
+    ]);
+    
+    // Collect all linked transaction IDs
+    const linkedIds = new Set<string>();
+    sourceLinks.docs.forEach(doc => {
+      const link = doc.data() as TransactionLink;
+      linkedIds.add(link.targetTransactionId);
+    });
+    targetLinks.docs.forEach(doc => {
+      const link = doc.data() as TransactionLink;
+      linkedIds.add(link.sourceTransactionId);
+    });
+    
+    // Batch load all linked transactions
+    let linkedTransactions: Transaction[] = [];
+    if (linkedIds.size > 0) {
+      const linkedIdsArray = Array.from(linkedIds);
+      // Firestore 'in' query has a limit of 10, so we need to batch
+      const batches = [];
+      for (let i = 0; i < linkedIdsArray.length; i += 10) {
+        const batch = linkedIdsArray.slice(i, i + 10);
+        batches.push(
+          getDocs(query(
+            collection(db, 'users', userId, 'transactions'),
+            where('__name__', 'in', batch)
+          ))
+        );
+      }
+      
+      const batchResults = await Promise.all(batches);
+      batchResults.forEach(snapshot => {
+        const transactions = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Transaction[];
+        linkedTransactions.push(...transactions);
+      });
+    }
+    
+    // Build result map
+    const linkedMap: { link: TransactionLink; transaction: Transaction }[] = [];
+    
+    // Process source links
+    sourceLinks.docs.forEach(doc => {
+      const link = { id: doc.id, ...doc.data() } as TransactionLink;
+      const targetTransaction = linkedTransactions.find(t => t.id === link.targetTransactionId);
+      if (targetTransaction) {
+        linkedMap.push({ link, transaction: targetTransaction });
+      }
+    });
+    
+    // Process target links
+    targetLinks.docs.forEach(doc => {
+      const link = { id: doc.id, ...doc.data() } as TransactionLink;
+      const sourceTransaction = linkedTransactions.find(t => t.id === link.sourceTransactionId);
+      if (sourceTransaction) {
+        linkedMap.push({ link, transaction: sourceTransaction });
+      }
+    });
+    
+    console.log(`✅ Loaded ${linkedMap.length} linked transactions`);
+    return linkedMap;
+  } catch (error) {
+    console.error('❌ Error batch loading linked transactions:', error);
     return [];
   }
 };

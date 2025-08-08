@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, getTags, getDefaultTags, getLinkedTransactions, forceUpdateAccountBalance, type Account, type Transaction } from '../firebase/config';
+import { getTransactionsByAccount, updateTransaction, deleteTransaction, getTransactionTags, getTransactionSplits, getTags, getDefaultTags, getLinkedTransactions, forceUpdateAccountBalance, type Account, type Transaction, getTransactionsByAccountWithData, getTransactionsByAccountPaginated } from '../firebase/config';
 import EditAccountModal from './EditAccountModal';
 import AddTransactionModal from './AddTransactionModal';
 import TagSelector from './TagSelector';
 import BulkTagModal from './BulkTagModal';
 import SplitTransactionModal from './SplitTransactionModal';
 import LinkTransactionModal from './LinkTransactionModal';
+
 
 interface AccountDetailsModalProps {
   isOpen: boolean;
@@ -54,6 +55,11 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   const [maxAmount, setMaxAmount] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Pagination state
+  const [hasMore, setHasMore] = useState(true);
+  const [lastTransaction, setLastTransaction] = useState<Transaction | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
@@ -68,19 +74,38 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
     }
   }, [isOpen, user, account]);
 
-  const loadTransactions = async () => {
+  const loadTransactions = async (isInitialLoad: boolean = true) => {
     if (!user) return;
 
     try {
-      setLoading(true);
-      setError(null);
-      const accountTransactions = await getTransactionsByAccount(user.uid, account.id);
-      setTransactions(accountTransactions);
+      if (isInitialLoad) {
+        setLoading(true);
+        setError(null);
+        setLastTransaction(undefined);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      // Use the new optimized batch loading function
+      const result = await getTransactionsByAccountWithData(user.uid, account.id);
       
-      // Load tags and splits for all transactions
-      const tagsMap: Record<string, any[]> = {};
-      const splitsMap: Record<string, any[]> = {};
-      const linkedMap: Record<string, any[]> = {};
+      if (isInitialLoad) {
+        setTransactions(result.transactions);
+        setTransactionTags(result.tagsMap);
+        setTransactionSplits(result.splitsMap);
+        setLinkedTransactions(result.linkedMap);
+        setLastTransaction(result.transactions[result.transactions.length - 1] || undefined);
+        setHasMore(result.transactions.length === 50); // Assuming default page size
+      } else {
+        // Append new transactions for pagination
+        setTransactions(prev => [...prev, ...result.transactions]);
+        setTransactionTags(prev => ({ ...prev, ...result.tagsMap }));
+        setTransactionSplits(prev => ({ ...prev, ...result.splitsMap }));
+        setLinkedTransactions(prev => ({ ...prev, ...result.linkedMap }));
+        setLastTransaction(result.transactions[result.transactions.length - 1] || undefined);
+        setHasMore(result.transactions.length === 50);
+      }
       
       // Load all available tags for split tag matching
       const allTags = await getTags(user.uid);
@@ -91,36 +116,82 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
       const availableTags = Array.from(tagMap.values());
       setAvailableTags(availableTags);
       
-      for (const transaction of accountTransactions) {
-        try {
-          // Load tags
-          const tags = await getTransactionTags(transaction.id, user.uid);
-          tagsMap[transaction.id] = tags;
-          
-          // Load splits if transaction is split
-          if (transaction.isSplit) {
-            const splits = await getTransactionSplits(transaction.id, user.uid);
-            splitsMap[transaction.id] = splits;
-          }
-          
-          // Load linked transactions
-          const linked = await getLinkedTransactions(transaction.id, user.uid);
-          linkedMap[transaction.id] = linked;
-        } catch (error) {
-          console.error('Error loading data for transaction:', transaction.id, error);
-          tagsMap[transaction.id] = [];
-          splitsMap[transaction.id] = [];
-          linkedMap[transaction.id] = [];
-        }
-      }
-      setTransactionTags(tagsMap);
-      setTransactionSplits(splitsMap);
-      setLinkedTransactions(linkedMap);
     } catch (error) {
       console.error('Error loading transactions:', error);
       setError('Failed to load transactions');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMoreTransactions = async () => {
+    if (!user || !hasMore || loadingMore) return;
+    
+    try {
+      setLoadingMore(true);
+      
+      // Use paginated loading for additional transactions
+      const result = await getTransactionsByAccountPaginated(
+        user.uid, 
+        account.id, 
+        50, 
+        lastTransaction
+      );
+      
+      if (result.transactions.length > 0) {
+        setTransactions(prev => [...prev, ...result.transactions]);
+        setLastTransaction(result.transactions[result.transactions.length - 1]);
+        setHasMore(result.hasMore);
+        
+        // Load related data for new transactions
+        const newTagsMap: Record<string, any[]> = {};
+        const newSplitsMap: Record<string, any[]> = {};
+        const newLinkedMap: Record<string, any[]> = {};
+        
+        // Get all available tags
+        const allTags = await getTags(user.uid);
+        const defaultTags = getDefaultTags();
+        const tagMap = new Map();
+        defaultTags.forEach(tag => tagMap.set(tag.id, tag));
+        allTags.forEach(tag => tagMap.set(tag.id, tag));
+        
+        // Process new transactions
+        for (const transaction of result.transactions) {
+          // Build tags map
+          if (transaction.tagIds && transaction.tagIds.length > 0) {
+            newTagsMap[transaction.id] = transaction.tagIds
+              .map(tagId => tagMap.get(tagId))
+              .filter(Boolean) as any[];
+          } else {
+            newTagsMap[transaction.id] = [];
+          }
+          
+          // Load splits if transaction is split
+          if (transaction.isSplit) {
+            const splits = await getTransactionSplits(transaction.id, user.uid);
+            newSplitsMap[transaction.id] = splits;
+          } else {
+            newSplitsMap[transaction.id] = [];
+          }
+          
+          // Load linked transactions
+          const linked = await getLinkedTransactions(transaction.id, user.uid);
+          newLinkedMap[transaction.id] = linked;
+        }
+        
+        // Update state with new data
+        setTransactionTags(prev => ({ ...prev, ...newTagsMap }));
+        setTransactionSplits(prev => ({ ...prev, ...newSplitsMap }));
+        setLinkedTransactions(prev => ({ ...prev, ...newLinkedMap }));
+      }
+      
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error('Error loading more transactions:', error);
+      setError('Failed to load more transactions');
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -656,7 +727,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
               <div className="text-red-500 text-6xl mb-4">❌</div>
               <p className="text-gray-600 mb-4">{error}</p>
               <button
-                onClick={loadTransactions}
+                onClick={() => loadTransactions()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Try Again
@@ -808,6 +879,26 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                   </div>
                 </div>
               ))}
+              
+              {/* Load More Button */}
+              {hasMore && (
+                <div className="flex justify-center mt-4">
+                  <button
+                    onClick={loadMoreTransactions}
+                    disabled={loadingMore}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Loading...
+                      </>
+                    ) : (
+                      'Load More Transactions'
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
