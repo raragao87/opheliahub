@@ -316,31 +316,26 @@ export interface BudgetItem {
 }
 
 export interface DashboardPreferences {
-  userId: string;
-  visibleCards: {
-    // Financial Hub - Family
-    familyAccounts: boolean;
-    familyBudget: boolean;
-    familyInvestments: boolean;
-    familyCommitments: boolean;
-    // Financial Hub - Personal
-    personalAccounts: boolean;
-    personalBudget: boolean;
-    personalInvestments: boolean;
-    personalCommitments: boolean;
-    // Household Hub
-    taskManager: boolean;
-    shoppingLists: boolean;
-    homeMaintenance: boolean;
-    // Family Hub
-    familyCalendar: boolean;
-    growthTracker: boolean;
-    cloudStorage: boolean;
-    medicalRecords: boolean;
-    schoolActivities: boolean;
-  };
-  createdAt: number;
-  updatedAt: number;
+  visibleCards: string[];
+  cardOrder: string[];
+  theme: 'light' | 'dark';
+}
+
+// CSV/Excel Import System
+export interface ImportMapping {
+  dateColumn: string;
+  amountColumn: string;
+  descriptionColumn: string;
+  accountColumn?: string;
+  categoryColumn?: string;
+}
+
+export interface ImportPreview {
+  fileName: string;
+  totalRows: number;
+  columns: string[];
+  sampleData: any[];
+  mappings: ImportMapping;
 }
 
 // Get user's accessible child profiles (own + shared)
@@ -2881,31 +2876,9 @@ export const getDashboardPreferences = async (userId: string): Promise<Dashboard
     } else {
       // Return default preferences
       const defaultPreferences: DashboardPreferences = {
-        userId,
-        visibleCards: {
-          // Financial Hub - Family
-          familyAccounts: true,
-          familyBudget: true,
-          familyInvestments: false,
-          familyCommitments: false,
-          // Financial Hub - Personal
-          personalAccounts: true,
-          personalBudget: true,
-          personalInvestments: false,
-          personalCommitments: false,
-          // Household Hub
-          taskManager: false,
-          shoppingLists: false,
-          homeMaintenance: false,
-          // Family Hub
-          familyCalendar: false,
-          growthTracker: true,
-          cloudStorage: false,
-          medicalRecords: false,
-          schoolActivities: false,
-        },
-        createdAt: Date.now(),
-        updatedAt: Date.now()
+        visibleCards: ['familyAccounts', 'familyBudget', 'familyInvestments', 'familyCommitments', 'personalAccounts', 'personalBudget', 'personalInvestments', 'personalCommitments', 'taskManager', 'shoppingLists', 'homeMaintenance', 'familyCalendar', 'growthTracker', 'cloudStorage', 'medicalRecords', 'schoolActivities'],
+        cardOrder: ['familyAccounts', 'familyBudget', 'familyInvestments', 'familyCommitments', 'personalAccounts', 'personalBudget', 'personalInvestments', 'personalCommitments', 'taskManager', 'shoppingLists', 'homeMaintenance', 'familyCalendar', 'growthTracker', 'cloudStorage', 'medicalRecords', 'schoolActivities'],
+        theme: 'light'
       };
       
       console.log('✅ Created default dashboard preferences:', defaultPreferences);
@@ -2925,7 +2898,6 @@ export const saveDashboardPreferences = async (userId: string, preferences: Part
     
     await setDoc(preferencesRef, {
       ...preferences,
-      userId,
       updatedAt: Date.now()
     }, { merge: true });
     
@@ -2936,16 +2908,34 @@ export const saveDashboardPreferences = async (userId: string, preferences: Part
   }
 };
 
-export const updateCardVisibility = async (userId: string, cardId: keyof DashboardPreferences['visibleCards'], visible: boolean): Promise<void> => {
+export const updateCardVisibility = async (userId: string, cardId: string, visible: boolean): Promise<void> => {
   try {
     console.log('🎛️ Updating card visibility:', cardId, 'to', visible);
     
     const preferencesRef = doc(db, 'users', userId, 'preferences', 'dashboard');
     
-    await updateDoc(preferencesRef, {
-      [`visibleCards.${cardId}`]: visible,
+    // Get current preferences
+    const currentPrefs = await getDoc(preferencesRef);
+    let visibleCards: string[] = [];
+    
+    if (currentPrefs.exists()) {
+      const data = currentPrefs.data() as DashboardPreferences;
+      visibleCards = data.visibleCards || [];
+    }
+    
+    // Update the visible cards array
+    if (visible) {
+      if (!visibleCards.includes(cardId)) {
+        visibleCards.push(cardId);
+      }
+    } else {
+      visibleCards = visibleCards.filter(id => id !== cardId);
+    }
+    
+    await setDoc(preferencesRef, {
+      visibleCards,
       updatedAt: Date.now()
-    });
+    }, { merge: true });
     
     console.log('✅ Card visibility updated successfully');
   } catch (error) {
@@ -3016,5 +3006,284 @@ export const getBudgetsByCategory = async (userId: string, category: 'family' | 
   } catch (error) {
     console.error(`❌ Error loading ${category} budgets:`, error);
     throw error;
+  }
+};
+
+// CSV/Excel Import System Functions
+export const parseImportFile = async (file: File): Promise<any[]> => {
+  try {
+    console.log('📁 Parsing import file:', file.name);
+    
+    if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+      return await parseCSVFile(file);
+    } else if (file.type.includes('excel') || file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      return await parseExcelFile(file);
+    } else {
+      throw new Error('Unsupported file type. Please upload a CSV or Excel file.');
+    }
+  } catch (error) {
+    console.error('❌ Error parsing import file:', error);
+    throw error;
+  }
+};
+
+const parseCSVFile = async (file: File): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const csv = e.target?.result as string;
+        const lines = csv.split('\n').filter(line => line.trim());
+        
+        if (lines.length === 0) {
+          resolve([]);
+          return;
+        }
+
+        // Parse headers
+        const headerLine = lines[0];
+        const headers = parseCSVLine(headerLine).map(h => h.trim().replace(/"/g, ''));
+        
+        // Parse data rows
+        const data = lines.slice(1).map(line => {
+          const values = parseCSVLine(line);
+          const row: any = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+          });
+          return row;
+        });
+
+        resolve(data);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+};
+
+// Helper function to parse CSV line with proper handling of quotes and commas
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const char = line[i];
+    
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote
+        current += '"';
+        i += 2;
+      } else {
+        // Toggle quote state
+        inQuotes = !inQuotes;
+        i++;
+      }
+    } else if (char === ',' && !inQuotes) {
+      // End of field
+      result.push(current.trim());
+      current = '';
+      i++;
+    } else {
+      current += char;
+      i++;
+    }
+  }
+  
+  // Add the last field
+  result.push(current.trim());
+  
+  return result;
+};
+
+const parseExcelFile = async (file: File): Promise<any[]> => {
+  // For now, we'll use a simple approach
+  // In production, you might want to use a library like 'xlsx' or 'exceljs'
+  throw new Error('Excel file parsing not yet implemented. Please use CSV files for now.');
+};
+
+export const processImportData = async (
+  data: any[], 
+  mappings: ImportMapping, 
+  accountId: string,
+  userId: string
+): Promise<Omit<Transaction, 'id'>[]> => {
+  try {
+    console.log('🔄 Processing import data:', data.length, 'rows');
+    
+    const transactions: Omit<Transaction, 'id'>[] = [];
+    
+    for (const row of data) {
+      try {
+        // Parse date
+        const dateStr = row[mappings.dateColumn];
+        if (!dateStr) continue;
+        
+        let date: string;
+        if (typeof dateStr === 'string') {
+          // Try to parse common date formats
+          const parsedDate = new Date(dateStr);
+          if (isNaN(parsedDate.getTime())) {
+            console.warn('⚠️ Invalid date format:', dateStr);
+            continue;
+          }
+          date = parsedDate.toISOString().split('T')[0];
+        } else {
+          date = new Date(dateStr).toISOString().split('T')[0];
+        }
+        
+        // Parse amount
+        const amountStr = row[mappings.amountColumn];
+        if (!amountStr) continue;
+        
+        let amount: number;
+        if (typeof amountStr === 'string') {
+          // Remove currency symbols and commas, handle negative amounts
+          const cleanAmount = amountStr.replace(/[$,€£¥]/g, '').replace(/\(/g, '-').replace(/\)/g, '');
+          amount = parseFloat(cleanAmount);
+        } else {
+          amount = parseFloat(amountStr);
+        }
+        
+        if (isNaN(amount)) {
+          console.warn('⚠️ Invalid amount:', amountStr);
+          continue;
+        }
+        
+        // Get description
+        const description = row[mappings.descriptionColumn] || 'Imported transaction';
+        
+        // Create transaction object
+        const transaction: Omit<Transaction, 'id'> = {
+          accountId,
+          amount,
+          description: description.trim(),
+          date,
+          isManual: false,
+          source: 'csv',
+          tagIds: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        
+        transactions.push(transaction);
+      } catch (error) {
+        console.warn('⚠️ Error processing row:', row, error);
+        continue;
+      }
+    }
+    
+    console.log('✅ Processed', transactions.length, 'valid transactions');
+    return transactions;
+  } catch (error) {
+    console.error('❌ Error processing import data:', error);
+    throw error;
+  }
+};
+
+export const bulkCreateTransactions = async (
+  transactions: Omit<Transaction, 'id'>[], 
+  userId: string
+): Promise<string[]> => {
+  try {
+    console.log('📦 Creating', transactions.length, 'transactions in bulk');
+    
+    const batch = writeBatch(db);
+    const transactionRefs: any[] = [];
+    
+    // Create document references and add to batch
+    for (const transaction of transactions) {
+      const transactionRef = doc(collection(db, 'users', userId, 'transactions'));
+      batch.set(transactionRef, transaction);
+      transactionRefs.push(transactionRef);
+    }
+    
+    // Commit the batch
+    await batch.commit();
+    console.log('✅ Bulk transactions created successfully');
+    
+    // Get the IDs from the committed documents
+    const transactionIds = transactionRefs.map(ref => ref.id);
+    
+    // Update account balances for affected accounts
+    const accountIds = [...new Set(transactions.map(t => t.accountId))];
+    for (const accountId of accountIds) {
+      await forceUpdateAccountBalance(userId, accountId);
+    }
+    
+    return transactionIds;
+  } catch (error) {
+    console.error('❌ Error creating bulk transactions:', error);
+    throw error;
+  }
+};
+
+export const suggestTagsForImport = async (
+  description: string, 
+  amount: number, 
+  userId: string
+): Promise<Tag[]> => {
+  try {
+    console.log('🏷️ Suggesting tags for import:', description, amount);
+    
+    // Get user's tags
+    const userTags = await getTags(userId);
+    
+    // Simple pattern matching for common merchants/descriptions
+    const suggestions: Tag[] = [];
+    const lowerDesc = description.toLowerCase();
+    
+    // Groceries
+    if (lowerDesc.includes('walmart') || lowerDesc.includes('target') || lowerDesc.includes('kroger') || 
+        lowerDesc.includes('safeway') || lowerDesc.includes('food') || lowerDesc.includes('grocery')) {
+      const groceryTag = userTags.find(t => t.name.toLowerCase().includes('grocery') || t.name.toLowerCase().includes('food'));
+      if (groceryTag) suggestions.push(groceryTag);
+    }
+    
+    // Gas/Transportation
+    if (lowerDesc.includes('shell') || lowerDesc.includes('exxon') || lowerDesc.includes('chevron') || 
+        lowerDesc.includes('gas') || lowerDesc.includes('fuel') || lowerDesc.includes('uber') || lowerDesc.includes('lyft')) {
+      const transportTag = userTags.find(t => t.name.toLowerCase().includes('transport') || t.name.toLowerCase().includes('gas'));
+      if (transportTag) suggestions.push(transportTag);
+    }
+    
+    // Restaurants
+    if (lowerDesc.includes('mcdonalds') || lowerDesc.includes('starbucks') || lowerDesc.includes('restaurant') || 
+        lowerDesc.includes('pizza') || lowerDesc.includes('burger')) {
+      const restaurantTag = userTags.find(t => t.name.toLowerCase().includes('restaurant') || t.name.toLowerCase().includes('dining'));
+      if (restaurantTag) suggestions.push(restaurantTag);
+    }
+    
+    // Bills/Recurring payments
+    if (lowerDesc.includes('netflix') || lowerDesc.includes('spotify') || lowerDesc.includes('amazon prime') || 
+        lowerDesc.includes('subscription') || lowerDesc.includes('bill')) {
+      const billTag = userTags.find(t => t.name.toLowerCase().includes('bill') || t.name.toLowerCase().includes('subscription'));
+      if (billTag) suggestions.push(billTag);
+    }
+    
+    // Amount-based suggestions
+    if (amount < 0) {
+      const expenseTag = userTags.find(t => t.name.toLowerCase().includes('expense') || t.name.toLowerCase().includes('spending'));
+      if (expenseTag) suggestions.push(expenseTag);
+    } else {
+      const incomeTag = userTags.find(t => t.name.toLowerCase().includes('income') || t.name.toLowerCase().includes('salary'));
+      if (incomeTag) suggestions.push(incomeTag);
+    }
+    
+    // Remove duplicates
+    const uniqueSuggestions = suggestions.filter((tag, index, self) => 
+      index === self.findIndex(t => t.id === tag.id)
+    );
+    
+    console.log('✅ Suggested', uniqueSuggestions.length, 'tags');
+    return uniqueSuggestions;
+  } catch (error) {
+    console.error('❌ Error suggesting tags for import:', error);
+    return [];
   }
 };

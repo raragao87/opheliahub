@@ -7,6 +7,7 @@ import AccountCard from '../components/AccountCard';
 import CreateAccountModal from '../components/CreateAccountModal';
 import AccountTypesModal from '../components/AccountTypesModal';
 import TagsModal from '../components/TagsModal';
+import ImportModal from '../components/ImportModal';
 
 const FinancialHubPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ const FinancialHubPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAccountTypesModal, setShowAccountTypesModal] = useState(false);
   const [showTagsModal, setShowTagsModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -47,6 +49,12 @@ const FinancialHubPage: React.FC = () => {
 
   const handleAccountCreated = () => {
     setShowCreateModal(false);
+    if (user) {
+      loadAccounts(user.uid);
+    }
+  };
+
+  const handleImportComplete = () => {
     if (user) {
       loadAccounts(user.uid);
     }
@@ -105,15 +113,26 @@ const FinancialHubPage: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Account
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Import Transactions
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Account
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -249,6 +268,17 @@ const FinancialHubPage: React.FC = () => {
         <TagsModal
           isOpen={showTagsModal}
           onClose={() => setShowTagsModal(false)}
+        />
+      )}
+
+      {/* Import Transactions Modal */}
+      {showImportModal && user && (
+        <ImportModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          onImportComplete={handleImportComplete}
+          accounts={accounts}
+          userId={user.uid}
         />
       )}
     </div>
