@@ -182,6 +182,33 @@ const DashboardPage: FC = () => {
             </div>
           </div>
 
+          {/* Budget Card */}
+          <div 
+            className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group"
+            onClick={() => navigate('/budgets')}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <svg className="w-6 h-6 text-gray-400 group-hover:text-gray-600 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-3">Monthly Budgets</h3>
+            <p className="text-gray-600 leading-relaxed mb-4">
+              Create and manage monthly budgets using tag-based categories. Track spending vs budget in real-time.
+            </p>
+            <div className="flex items-center text-purple-600 font-medium text-sm">
+              <span>View Budgets</span>
+              <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+
           {/* Family Finance Card */}
           <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 opacity-75">
             <div className="flex items-center justify-between mb-6">

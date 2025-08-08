@@ -292,6 +292,27 @@ export interface TransactionTag {
   userId: string;
 }
 
+export interface Budget {
+  id: string;
+  name: string;
+  month: number; // 1-12
+  year: number;
+  userId: string;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BudgetItem {
+  id: string;
+  budgetId: string;
+  tagIds: string[]; // Tags included in this budget item
+  budgetedAmount: number;
+  category: string; // e.g., "Housing", "Food", "Transportation"
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Get user's accessible child profiles (own + shared)
 export const getAccessibleChildProfiles = async (userId: string): Promise<(ChildProfile & { id: string })[]> => {
   try {
@@ -2581,6 +2602,218 @@ export const suggestTransactionLinks = async (
     return suggestions;
   } catch (error) {
     console.error('❌ Error suggesting transaction links:', error);
+    throw error;
+  }
+};
+
+// ============================================================================
+// BUDGET FUNCTIONS
+// ============================================================================
+
+export const createBudget = async (userId: string, budgetData: Omit<Budget, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    console.log('💰 Creating budget:', budgetData);
+    
+    const budgetDoc = {
+      ...budgetData,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'budgets'), budgetDoc);
+    console.log('✅ Budget created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating budget:', error);
+    throw error;
+  }
+};
+
+export const getBudgets = async (userId: string): Promise<(Budget & { id: string })[]> => {
+  try {
+    console.log('💰 Loading budgets for user:', userId);
+    
+    const budgetsQuery = query(
+      collection(db, 'users', userId, 'budgets'),
+      orderBy('year', 'desc'),
+      orderBy('month', 'desc')
+    );
+    const budgetsSnapshot = await getDocs(budgetsQuery);
+    
+    const budgets = budgetsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as (Budget & { id: string })[];
+    
+    console.log(`✅ Loaded ${budgets.length} budgets`);
+    return budgets;
+  } catch (error) {
+    console.error('❌ Error loading budgets:', error);
+    throw error;
+  }
+};
+
+export const createBudgetItem = async (userId: string, budgetItemData: Omit<BudgetItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    console.log('💰 Creating budget item:', budgetItemData);
+    
+    const budgetItemDoc = {
+      ...budgetItemData,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'budgetItems'), budgetItemDoc);
+    console.log('✅ Budget item created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating budget item:', error);
+    throw error;
+  }
+};
+
+export const getBudgetItems = async (budgetId: string, userId: string): Promise<(BudgetItem & { id: string })[]> => {
+  try {
+    console.log('💰 Loading budget items for budget:', budgetId);
+    
+    const budgetItemsQuery = query(
+      collection(db, 'users', userId, 'budgetItems'),
+      where('budgetId', '==', budgetId),
+      orderBy('category')
+    );
+    const budgetItemsSnapshot = await getDocs(budgetItemsQuery);
+    
+    const budgetItems = budgetItemsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as (BudgetItem & { id: string })[];
+    
+    console.log(`✅ Loaded ${budgetItems.length} budget items`);
+    return budgetItems;
+  } catch (error) {
+    console.error('❌ Error loading budget items:', error);
+    throw error;
+  }
+};
+
+export const updateBudgetItem = async (budgetItemId: string, updates: Partial<BudgetItem>, userId: string): Promise<void> => {
+  try {
+    console.log('💰 Updating budget item:', budgetItemId, updates);
+    
+    const budgetItemRef = doc(db, 'users', userId, 'budgetItems', budgetItemId);
+    await updateDoc(budgetItemRef, {
+      ...updates,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Budget item updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating budget item:', error);
+    throw error;
+  }
+};
+
+export const deleteBudgetItem = async (budgetItemId: string, userId: string): Promise<void> => {
+  try {
+    console.log('💰 Deleting budget item:', budgetItemId);
+    
+    const budgetItemRef = doc(db, 'users', userId, 'budgetItems', budgetItemId);
+    await deleteDoc(budgetItemRef);
+    
+    console.log('✅ Budget item deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting budget item:', error);
+    throw error;
+  }
+};
+
+export const getBudgetVsActual = async (budgetId: string, userId: string): Promise<{
+  budgetItems: (BudgetItem & { id: string; actualSpent: number; remaining: number; percentageUsed: number })[];
+  totalBudgeted: number;
+  totalSpent: number;
+  totalRemaining: number;
+  overallPercentageUsed: number;
+}> => {
+  try {
+    console.log('💰 Calculating budget vs actual for budget:', budgetId);
+    
+    // Get budget items
+    const budgetItems = await getBudgetItems(budgetId, userId);
+    
+    // Get budget details
+    const budgetQuery = query(
+      collection(db, 'users', userId, 'budgets'),
+      where('__name__', '==', budgetId)
+    );
+    const budgetSnapshot = await getDocs(budgetQuery);
+    const budget = budgetSnapshot.docs[0]?.data() as Budget;
+    
+    if (!budget) {
+      throw new Error('Budget not found');
+    }
+    
+    // Get all transactions for the month/year
+    const startDate = new Date(budget.year, budget.month - 1, 1);
+    const endDate = new Date(budget.year, budget.month, 0);
+    
+    const transactionsQuery = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('date', '>=', startDate.toISOString().split('T')[0]),
+      where('date', '<=', endDate.toISOString().split('T')[0])
+    );
+    const transactionsSnapshot = await getDocs(transactionsQuery);
+    const transactions = transactionsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Transaction[];
+    
+    // Calculate actual spending for each budget item
+    const budgetItemsWithActual = await Promise.all(
+      budgetItems.map(async (budgetItem) => {
+        // Get transactions that match the budget item's tags
+        const matchingTransactions = transactions.filter(transaction => {
+          const transactionTags = transaction.tagIds || [];
+          return budgetItem.tagIds.some(tagId => transactionTags.includes(tagId));
+        });
+        
+        // Calculate actual spent (only negative amounts for expenses)
+        const actualSpent = Math.abs(
+          matchingTransactions
+            .filter(t => t.amount < 0) // Only expenses
+            .reduce((sum, t) => sum + t.amount, 0)
+        );
+        
+        const remaining = Math.max(0, budgetItem.budgetedAmount - actualSpent);
+        const percentageUsed = budgetItem.budgetedAmount > 0 
+          ? (actualSpent / budgetItem.budgetedAmount) * 100 
+          : 0;
+        
+        return {
+          ...budgetItem,
+          actualSpent,
+          remaining,
+          percentageUsed
+        };
+      })
+    );
+    
+    // Calculate totals
+    const totalBudgeted = budgetItems.reduce((sum, item) => sum + item.budgetedAmount, 0);
+    const totalSpent = budgetItemsWithActual.reduce((sum, item) => sum + item.actualSpent, 0);
+    const totalRemaining = Math.max(0, totalBudgeted - totalSpent);
+    const overallPercentageUsed = totalBudgeted > 0 ? (totalSpent / totalBudgeted) * 100 : 0;
+    
+    console.log('✅ Budget vs actual calculation completed');
+    
+    return {
+      budgetItems: budgetItemsWithActual,
+      totalBudgeted,
+      totalSpent,
+      totalRemaining,
+      overallPercentageUsed
+    };
+  } catch (error) {
+    console.error('❌ Error calculating budget vs actual:', error);
     throw error;
   }
 };

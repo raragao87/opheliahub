@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage';
 import DashboardPage from './pages/DashboardPage';
 import GrowthTrackerPage from './pages/GrowthTrackerPage';
 import FinancialHubPage from './pages/FinancialHubPage';
+import BudgetPage from './pages/BudgetPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -31,6 +32,14 @@ function App() {
           element={
             <ProtectedRoute>
               <FinancialHubPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/budgets" 
+          element={
+            <ProtectedRoute>
+              <BudgetPage />
             </ProtectedRoute>
           } 
         />
