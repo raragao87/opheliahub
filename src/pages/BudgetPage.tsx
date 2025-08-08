@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { 
@@ -14,6 +15,8 @@ interface BudgetPageProps {
 }
 
 const BudgetPage: React.FC<BudgetPageProps> = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [budgets, setBudgets] = useState<(Budget & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,12 +24,34 @@ const BudgetPage: React.FC<BudgetPageProps> = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedBudget, setSelectedBudget] = useState<(Budget & { id: string }) | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [category, setCategory] = useState<'family' | 'personal'>('personal');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        loadBudgets();
+        try {
+          setLoading(true);
+          setError(null);
+          console.log('💰 Loading budgets for user:', user.uid);
+          
+          // Get category from URL params or default to personal
+          const urlCategory = searchParams.get('category') as 'family' | 'personal' | null;
+          const selectedCategory = urlCategory || 'personal';
+          setCategory(selectedCategory);
+          
+          const userBudgets = await getBudgets(user.uid);
+          // Filter budgets by category
+          const filteredBudgets = userBudgets.filter(budget => 
+            (budget.category || 'personal') === selectedCategory
+          );
+          setBudgets(filteredBudgets);
+        } catch (error) {
+          console.error('❌ Error loading budgets:', error);
+          setError('Failed to load budgets');
+        } finally {
+          setLoading(false);
+        }
       } else {
         setBudgets([]);
         setLoading(false);
@@ -34,7 +59,7 @@ const BudgetPage: React.FC<BudgetPageProps> = () => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [searchParams]);
 
   const loadBudgets = async () => {
     if (!user) return;
@@ -142,11 +167,16 @@ const BudgetPage: React.FC<BudgetPageProps> = () => {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Monthly Budgets</h1>
-              <p className="mt-2 text-gray-600">
-                Create and manage monthly budgets using tag-based categories
-              </p>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span>Back to Dashboard</span>
+              </button>
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
@@ -154,6 +184,14 @@ const BudgetPage: React.FC<BudgetPageProps> = () => {
             >
               + Create Budget
             </button>
+          </div>
+          <div className="mt-4">
+            <h1 className="text-3xl font-bold text-gray-900">
+              {category === 'family' ? 'Family Budgets' : 'Personal Budgets'}
+            </h1>
+            <p className="mt-2 text-gray-600">
+              Create and manage {category} monthly budgets using tag-based categories
+            </p>
           </div>
         </div>
 

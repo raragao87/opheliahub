@@ -77,7 +77,8 @@ const FinancialTest: React.FC = () => {
         currency: 'EUR',
         sharedWith: [],
         ownerId: user.uid,
-        isReal: false
+        isReal: false,
+        category: 'personal'
       });
       setTestResults(prev => [...prev, `✅ Test account created with ID: ${accountId}`]);
 

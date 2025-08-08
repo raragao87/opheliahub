@@ -24,6 +24,7 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [isActive, setIsActive] = useState(true);
+  const [category, setCategory] = useState<'family' | 'personal'>('personal');
   
   // Budget items state
   const [budgetItems, setBudgetItems] = useState<Array<{
@@ -42,6 +43,18 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset form when modal closes
+      setName('');
+      setMonth(new Date().getMonth() + 1);
+      setYear(new Date().getFullYear());
+      setIsActive(true);
+      setCategory('personal');
+      setBudgetItems([]);
+      setError(null);
+    }
+  }, [isOpen]);
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,7 +81,8 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
         month,
         year,
         userId: user.uid,
-        isActive
+        isActive,
+        category
       };
       
       // Create the budget first
@@ -253,6 +267,40 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
                   </label>
                 </div>
               </div>
+            </div>
+
+            {/* Category Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Category *
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="category"
+                    value="personal"
+                    checked={category === 'personal'}
+                    onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                    className="mr-2 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Personal</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="category"
+                    value="family"
+                    checked={category === 'family'}
+                    onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                    className="mr-2 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Family</span>
+                </label>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Choose whether this budget is for personal or family use
+              </p>
             </div>
 
             {/* Budget Items */}

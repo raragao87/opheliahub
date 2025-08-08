@@ -215,6 +215,7 @@ export interface Account {
   sharedWith: string[];
   ownerId: string;
   isReal: boolean;
+  category: 'family' | 'personal';
   createdAt: number;
   updatedAt: number;
 }
@@ -299,6 +300,7 @@ export interface Budget {
   year: number;
   userId: string;
   isActive: boolean;
+  category: 'family' | 'personal';
   createdAt: number;
   updatedAt: number;
 }
@@ -309,6 +311,34 @@ export interface BudgetItem {
   tagIds: string[]; // Tags included in this budget item
   budgetedAmount: number;
   category: string; // e.g., "Housing", "Food", "Transportation"
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DashboardPreferences {
+  userId: string;
+  visibleCards: {
+    // Financial Hub - Family
+    familyAccounts: boolean;
+    familyBudget: boolean;
+    familyInvestments: boolean;
+    familyCommitments: boolean;
+    // Financial Hub - Personal
+    personalAccounts: boolean;
+    personalBudget: boolean;
+    personalInvestments: boolean;
+    personalCommitments: boolean;
+    // Household Hub
+    taskManager: boolean;
+    shoppingLists: boolean;
+    homeMaintenance: boolean;
+    // Family Hub
+    familyCalendar: boolean;
+    growthTracker: boolean;
+    cloudStorage: boolean;
+    medicalRecords: boolean;
+    schoolActivities: boolean;
+  };
   createdAt: number;
   updatedAt: number;
 }
@@ -927,10 +957,14 @@ export const getAccountsByUser = async (userId: string): Promise<Account[]> => {
     );
     
     const querySnapshot = await getDocs(q);
-    const accounts = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Account[];
+    const accounts = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        category: data.category || 'personal' // Default to 'personal' for existing accounts
+      };
+    }) as Account[];
     
     console.log(`✅ Found ${accounts.length} accounts for user`);
     return accounts;
@@ -976,6 +1010,7 @@ export const getAccessibleAccounts = async (userId: string): Promise<Account[]> 
               id: accountId,
               // Mark as shared
               sharedWith: [userId],
+              category: accountData.category || 'personal' // Default to 'personal' for existing accounts
             };
             sharedAccounts.push(sharedAccount);
           }
@@ -2640,10 +2675,14 @@ export const getBudgets = async (userId: string): Promise<(Budget & { id: string
     );
     const budgetsSnapshot = await getDocs(budgetsQuery);
     
-    const budgets = budgetsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as (Budget & { id: string })[];
+    const budgets = budgetsSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        category: data.category || 'personal' // Default to 'personal' for existing budgets
+      };
+    }) as (Budget & { id: string })[];
     
     console.log(`✅ Loaded ${budgets.length} budgets`);
     return budgets;
@@ -2814,6 +2853,168 @@ export const getBudgetVsActual = async (budgetId: string, userId: string): Promi
     };
   } catch (error) {
     console.error('❌ Error calculating budget vs actual:', error);
+    throw error;
+  }
+};
+
+// ============================================================================
+// DASHBOARD PREFERENCES FUNCTIONS
+// ============================================================================
+
+export const getDashboardPreferences = async (userId: string): Promise<DashboardPreferences> => {
+  try {
+    console.log('🎛️ Loading dashboard preferences for user:', userId);
+    console.log('🎛️ Firebase db object:', db);
+    
+    if (!db) {
+      console.error('❌ Firebase db is not initialized');
+      throw new Error('Firebase database is not initialized');
+    }
+    
+    const preferencesDoc = await getDoc(doc(db, 'users', userId, 'preferences', 'dashboard'));
+    console.log('🎛️ Preferences doc exists:', preferencesDoc.exists());
+    
+    if (preferencesDoc.exists()) {
+      const preferences = preferencesDoc.data() as DashboardPreferences;
+      console.log('✅ Loaded existing dashboard preferences:', preferences);
+      return preferences;
+    } else {
+      // Return default preferences
+      const defaultPreferences: DashboardPreferences = {
+        userId,
+        visibleCards: {
+          // Financial Hub - Family
+          familyAccounts: true,
+          familyBudget: true,
+          familyInvestments: false,
+          familyCommitments: false,
+          // Financial Hub - Personal
+          personalAccounts: true,
+          personalBudget: true,
+          personalInvestments: false,
+          personalCommitments: false,
+          // Household Hub
+          taskManager: false,
+          shoppingLists: false,
+          homeMaintenance: false,
+          // Family Hub
+          familyCalendar: false,
+          growthTracker: true,
+          cloudStorage: false,
+          medicalRecords: false,
+          schoolActivities: false,
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      
+      console.log('✅ Created default dashboard preferences:', defaultPreferences);
+      return defaultPreferences;
+    }
+  } catch (error) {
+    console.error('❌ Error loading dashboard preferences:', error);
+    throw error;
+  }
+};
+
+export const saveDashboardPreferences = async (userId: string, preferences: Partial<DashboardPreferences>): Promise<void> => {
+  try {
+    console.log('🎛️ Saving dashboard preferences for user:', userId);
+    
+    const preferencesRef = doc(db, 'users', userId, 'preferences', 'dashboard');
+    
+    await setDoc(preferencesRef, {
+      ...preferences,
+      userId,
+      updatedAt: Date.now()
+    }, { merge: true });
+    
+    console.log('✅ Dashboard preferences saved successfully');
+  } catch (error) {
+    console.error('❌ Error saving dashboard preferences:', error);
+    throw error;
+  }
+};
+
+export const updateCardVisibility = async (userId: string, cardId: keyof DashboardPreferences['visibleCards'], visible: boolean): Promise<void> => {
+  try {
+    console.log('🎛️ Updating card visibility:', cardId, 'to', visible);
+    
+    const preferencesRef = doc(db, 'users', userId, 'preferences', 'dashboard');
+    
+    await updateDoc(preferencesRef, {
+      [`visibleCards.${cardId}`]: visible,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Card visibility updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating card visibility:', error);
+    throw error;
+  }
+};
+
+// Get accounts by category
+export const getAccountsByCategory = async (userId: string, category: 'family' | 'personal'): Promise<Account[]> => {
+  try {
+    console.log(`💰 Fetching ${category} accounts for user:`, userId);
+    
+    // First, get all accounts for the user
+    const q = query(
+      collection(db, 'users', userId, 'accounts'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const allAccounts = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        category: data.category || 'personal' // Default to 'personal' for existing accounts
+      };
+    }) as Account[];
+    
+    // Filter by category
+    const filteredAccounts = allAccounts.filter(account => account.category === category);
+    
+    console.log(`✅ Found ${filteredAccounts.length} ${category} accounts for user (out of ${allAccounts.length} total)`);
+    return filteredAccounts;
+  } catch (error) {
+    console.error(`❌ Error getting ${category} accounts:`, error);
+    throw error;
+  }
+};
+
+// Get budgets by category
+export const getBudgetsByCategory = async (userId: string, category: 'family' | 'personal'): Promise<(Budget & { id: string })[]> => {
+  try {
+    console.log(`💰 Loading ${category} budgets for user:`, userId);
+    
+    // First, get all budgets for the user
+    const budgetsQuery = query(
+      collection(db, 'users', userId, 'budgets'),
+      orderBy('year', 'desc'),
+      orderBy('month', 'desc')
+    );
+    const budgetsSnapshot = await getDocs(budgetsQuery);
+    
+    const allBudgets = budgetsSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        category: data.category || 'personal' // Default to 'personal' for existing budgets
+      };
+    }) as (Budget & { id: string })[];
+    
+    // Filter by category
+    const filteredBudgets = allBudgets.filter(budget => budget.category === category);
+    
+    console.log(`✅ Loaded ${filteredBudgets.length} ${category} budgets (out of ${allBudgets.length} total)`);
+    return filteredBudgets;
+  } catch (error) {
+    console.error(`❌ Error loading ${category} budgets:`, error);
     throw error;
   }
 };

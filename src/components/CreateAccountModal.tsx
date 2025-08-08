@@ -26,6 +26,7 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   const [isRealAccount, setIsRealAccount] = useState(true);
   const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
+  const [category, setCategory] = useState<'family' | 'personal'>('personal');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -55,6 +56,7 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
       setInitialBalance('');
       setIsRealAccount(true);
       setSelectedAccountType(null);
+      setCategory('personal');
       setError(null);
     }
   }, [isOpen]);
@@ -101,7 +103,8 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
         currency: 'EUR',
         sharedWith: [],
         ownerId: user.uid,
-        isReal: isRealAccount
+        isReal: isRealAccount,
+        category: category
       };
 
       await createAccount(user.uid, accountData);
@@ -212,6 +215,40 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
             </div>
             <p className="text-xs text-gray-500 mt-1">
               Enter the current balance of this account
+            </p>
+          </div>
+
+          {/* Category Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Category *
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="category"
+                  value="personal"
+                  checked={category === 'personal'}
+                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                  className="mr-2 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Personal</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="category"
+                  value="family"
+                  checked={category === 'family'}
+                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                  className="mr-2 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Family</span>
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Choose whether this account is for personal or family use
             </p>
           </div>
 
