@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getAccessibleAccounts, type Account } from '../firebase/config';
+import { getAccessibleAccounts, getAccountsByCategory, type Account } from '../firebase/config';
 import AccountCard from '../components/AccountCard';
 import CreateAccountModal from '../components/CreateAccountModal';
 import AccountTypesModal from '../components/AccountTypesModal';
@@ -11,6 +11,7 @@ import ImportModal from '../components/ImportModal';
 
 const FinancialHubPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +20,9 @@ const FinancialHubPage: React.FC = () => {
   const [showAccountTypesModal, setShowAccountTypesModal] = useState(false);
   const [showTagsModal, setShowTagsModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  
+  // Get account type filter from URL
+  const accountType = searchParams.get('type');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -37,7 +41,19 @@ const FinancialHubPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const accessibleAccounts = await getAccessibleAccounts(userId);
+      
+      let accessibleAccounts: Account[];
+      
+      if (accountType === 'family' || accountType === 'personal') {
+        // Load accounts filtered by type
+        accessibleAccounts = await getAccountsByCategory(userId, accountType);
+        console.log(`🔍 Loaded ${accountType} accounts:`, accessibleAccounts.length);
+      } else {
+        // Load all accessible accounts (default behavior)
+        accessibleAccounts = await getAccessibleAccounts(userId);
+        console.log('🔍 Loaded all accessible accounts:', accessibleAccounts.length);
+      }
+      
       setAccounts(accessibleAccounts);
     } catch (error) {
       console.error('Error loading accounts:', error);
@@ -109,7 +125,16 @@ const FinancialHubPage: React.FC = () => {
               </button>
               <div className="flex items-center">
                 <div className="text-2xl mr-3">💰</div>
-                <h1 className="text-2xl font-bold text-gray-800">Financial Hub</h1>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800">
+                    Financial Hub
+                    {accountType && (
+                      <span className="ml-2 text-lg font-medium text-blue-600">
+                        ({accountType === 'family' ? 'Family' : 'Personal'} Accounts)
+                      </span>
+                    )}
+                  </h1>
+                </div>
               </div>
             </div>
 
@@ -180,7 +205,25 @@ const FinancialHubPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-800">Your Accounts</h2>
-                <p className="text-sm text-gray-600">Manage your financial accounts and track your balances</p>
+                <p className="text-sm text-gray-600">
+                  {accountType 
+                    ? `${accountType === 'family' ? 'Family' : 'Personal'} accounts`
+                    : 'Manage your financial accounts and track your balances'
+                  }
+                </p>
+                {accountType && (
+                  <div className="flex items-center mt-2">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {accountType === 'family' ? '👨‍👩‍👧‍👦 Family' : '👤 Personal'} Filter Active
+                    </span>
+                    <button
+                      onClick={() => navigate('/financial-hub')}
+                      className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Clear Filter
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex space-x-2">
                 <button
@@ -222,14 +265,34 @@ const FinancialHubPage: React.FC = () => {
             ) : accounts.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-6xl mb-4">💰</div>
-                <h3 className="text-lg font-medium text-gray-800 mb-2">No accounts yet</h3>
-                <p className="text-gray-600 mb-6">Start by adding your first financial account</p>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  Add Your First Account
-                </button>
+                <h3 className="text-lg font-medium text-gray-800 mb-2">
+                  {accountType 
+                    ? `No ${accountType === 'family' ? 'family' : 'personal'} accounts found`
+                    : 'No accounts yet'
+                  }
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {accountType 
+                    ? `You don't have any ${accountType === 'family' ? 'family' : 'personal'} accounts yet.`
+                    : 'Start by adding your first financial account'
+                  }
+                </p>
+                <div className="space-x-3">
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Add {accountType ? `${accountType === 'family' ? 'Family' : 'Personal'} ` : ''}Account
+                  </button>
+                  {accountType && (
+                    <button
+                      onClick={() => navigate('/financial-hub')}
+                      className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                    >
+                      View All Accounts
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

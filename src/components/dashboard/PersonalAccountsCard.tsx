@@ -56,7 +56,7 @@ const PersonalAccountsCard: React.FC = () => {
   return (
     <div 
       className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group"
-      onClick={() => navigate('/financial-hub')}
+      onClick={() => navigate('/financial-hub?type=personal')}
     >
       <div className="flex items-center justify-between mb-6">
         <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
