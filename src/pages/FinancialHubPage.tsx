@@ -140,6 +140,12 @@ const FinancialHubPage: React.FC = () => {
 
             <div className="flex space-x-2">
               <button
+                onClick={() => navigate('/financial-hub-split-test')}
+                className="px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Test Split View
+              </button>
+              <button
                 onClick={() => setShowImportModal(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
               >

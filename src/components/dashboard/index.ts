@@ -10,6 +10,9 @@ export { default as PersonalBudgetCard } from './PersonalBudgetCard';
 export { default as PersonalInvestmentsCard } from './PersonalInvestmentsCard';
 export { default as PersonalCommitmentsCard } from './PersonalCommitmentsCard';
 
+// Financial Hub - Test Features
+export { default as FinancialHubSplitTestCard } from './FinancialHubSplitTestCard';
+
 // Household Hub
 export { default as TaskManagerCard } from './TaskManagerCard';
 export { default as ShoppingListsCard } from './ShoppingListsCard';

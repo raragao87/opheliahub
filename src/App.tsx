@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage';
 import DashboardPage from './pages/DashboardPage';
 import GrowthTrackerPage from './pages/GrowthTrackerPage';
 import FinancialHubPage from './pages/FinancialHubPage';
+import FinancialHubSplitViewPage from './pages/FinancialHubSplitViewPage';
 import BudgetPage from './pages/BudgetPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -32,6 +33,14 @@ function App() {
           element={
             <ProtectedRoute>
               <FinancialHubPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/financial-hub-split-test" 
+          element={
+            <ProtectedRoute>
+              <FinancialHubSplitViewPage />
             </ProtectedRoute>
           } 
         />
