@@ -3532,3 +3532,25 @@ export const getLinkedTransactionsBatch = async (transactionIds: string[], userI
     return [];
   }
 };
+
+// Link transactions function for manual linking
+export const linkTransactions = async (userId: string, transactionId1: string, transactionId2: string): Promise<void> => {
+  try {
+    console.log('🔗 Linking transactions:', transactionId1, 'and', transactionId2);
+    
+    // Create a link record
+    await addDoc(collection(db, 'users', userId, 'transactionLinks'), {
+      sourceTransactionId: transactionId1,
+      targetTransactionId: transactionId2,
+      linkType: 'manual_link',
+      description: 'Manually linked transactions',
+      createdAt: Date.now(),
+      userId: userId
+    });
+    
+    console.log('✅ Transactions linked successfully');
+  } catch (error) {
+    console.error('❌ Error linking transactions:', error);
+    throw error;
+  }
+};

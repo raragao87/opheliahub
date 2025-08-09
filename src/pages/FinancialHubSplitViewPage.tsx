@@ -16,6 +16,7 @@ import CreateAccountModal from '../components/CreateAccountModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import TagSelector from '../components/TagSelector';
 import SharingModal from '../components/SharingModal';
+import EnhancedLinkTransactionsModal from '../components/EnhancedLinkTransactionsModal';
 
 
 // AccountListItem Component
@@ -295,6 +296,7 @@ interface TransactionRowProps {
   onDescriptionUpdate: (id: string, description: string) => void;
   onTagsUpdate: (id: string, tags: string[]) => void;
   onSplitTransaction: (id: string) => void;
+  onLinkTransaction: (transaction: Transaction & { id: string }) => void;
   onDeleteTransaction: (id: string) => void;
 }
 
@@ -308,6 +310,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
   onDescriptionUpdate,
   onTagsUpdate,
   onSplitTransaction,
+  onLinkTransaction,
   onDeleteTransaction
 }) => {
   return (
@@ -346,19 +349,38 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
         <div className="flex items-center justify-end space-x-2">
           {isMain && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onSplitTransaction(transaction.id);
-              }}
-              className="p-1 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
-              title="Split Transaction"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2z" />
-              </svg>
-            </button>
+            <>
+              {/* Split button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSplitTransaction(transaction.id);
+                }}
+                className="p-1 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                title="Split Transaction"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2z" />
+                </svg>
+              </button>
+
+              {/* Link button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLinkTransaction(transaction);
+                }}
+                className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                title="Link Transaction"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </button>
+            </>
           )}
+          
+          {/* Delete button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -383,13 +405,15 @@ interface TransactionTableProps {
   transactionTags: Record<string, Tag[]>;
   transactionSplits: Record<string, TransactionSplit[]>;
   onTransactionUpdate: () => void;
+  onLinkTransaction: (transaction: Transaction & { id: string }) => void;
 }
 
 const TransactionTable: React.FC<TransactionTableProps> = ({ 
   transactions, 
   transactionTags,
   transactionSplits,
-  onTransactionUpdate 
+  onTransactionUpdate,
+  onLinkTransaction
 }) => {
   const [user, setUser] = useState<User | null>(null);
 
@@ -502,6 +526,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                 onDescriptionUpdate={handleDescriptionUpdate}
                 onTagsUpdate={handleTagsUpdate}
                 onSplitTransaction={handleSplitTransaction}
+                onLinkTransaction={onLinkTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
               />
               
@@ -527,6 +552,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                   onDescriptionUpdate={handleDescriptionUpdate}
                   onTagsUpdate={handleTagsUpdate}
                   onSplitTransaction={handleSplitTransaction}
+                  onLinkTransaction={onLinkTransaction}
                   onDeleteTransaction={handleDeleteTransaction}
                 />
               ))}
@@ -556,6 +582,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [showSharingModal, setShowSharingModal] = useState(false);
   const [selectedAccountForSharing, setSelectedAccountForSharing] = useState<Account | null>(null);
   const [showLinkTransactionsModal, setShowLinkTransactionsModal] = useState(false);
+  const [selectedTransactionForLinking, setSelectedTransactionForLinking] = useState<(Transaction & { id: string }) | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -637,6 +664,13 @@ const FinancialHubSplitViewPage: React.FC = () => {
     setSelectedAccountForSharing(account);
     setShowSharingModal(true);
   };
+
+  const handleLinkTransaction = (transaction: Transaction & { id: string }) => {
+    setSelectedTransactionForLinking(transaction);
+    setShowLinkTransactionsModal(true);
+  };
+
+
 
   // Calculate financial summary
   const familyAccounts = accounts.filter(account => account.category === 'family');
@@ -894,7 +928,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center justify-between mb-4">
-                <div className="flex space-x-3">
+                <div>
                   <button
                     onClick={() => setShowAddTransactionModal(true)}
                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
@@ -903,16 +937,6 @@ const FinancialHubSplitViewPage: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     Add Transaction
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowLinkTransactionsModal(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                    Link Transactions
                   </button>
                 </div>
               </div>
@@ -924,12 +948,13 @@ const FinancialHubSplitViewPage: React.FC = () => {
                   <p className="text-gray-600">Loading transactions...</p>
                 </div>
               ) : (
-                <TransactionTable 
-                  transactions={transactions}
-                  transactionTags={transactionTags}
-                  transactionSplits={transactionSplits}
-                  onTransactionUpdate={handleTransactionUpdate}
-                />
+                              <TransactionTable
+                transactions={transactions}
+                transactionTags={transactionTags}
+                transactionSplits={transactionSplits}
+                onTransactionUpdate={handleTransactionUpdate}
+                onLinkTransaction={handleLinkTransaction}
+              />
               )}
             </div>
           ) : (
@@ -981,34 +1006,25 @@ const FinancialHubSplitViewPage: React.FC = () => {
         />
       )}
 
-      {/* Link Transactions Modal - TODO: Implement general transaction linking */}
-      {showLinkTransactionsModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                  Link Transactions
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Transaction linking feature will be implemented here. This will allow you to connect related transactions across accounts.
-                </p>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={() => setShowLinkTransactionsModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Enhanced Link Transactions Modal */}
+      {showLinkTransactionsModal && selectedTransactionForLinking && selectedAccount && (
+        <EnhancedLinkTransactionsModal
+          isOpen={showLinkTransactionsModal}
+          onClose={() => {
+            setShowLinkTransactionsModal(false);
+            setSelectedTransactionForLinking(null);
+          }}
+          transaction={selectedTransactionForLinking}
+          currentAccount={selectedAccount}
+          allAccounts={accounts}
+          onTransactionLinked={() => {
+            if (user && selectedAccount) {
+              loadTransactions(user.uid, selectedAccount.id);
+            }
+            setShowLinkTransactionsModal(false);
+            setSelectedTransactionForLinking(null);
+          }}
+        />
       )}
     </div>
   );
