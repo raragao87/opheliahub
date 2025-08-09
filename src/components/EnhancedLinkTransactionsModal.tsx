@@ -112,7 +112,6 @@ const EnhancedLinkTransactionsModal: React.FC<EnhancedLinkTransactionsModalProps
           amount: duplicatedAmount,
           description: transaction.description,
           date: transaction.date,
-          type: duplicatedAmount > 0 ? 'income' : 'expense',
           isRecurring: false
         });
 

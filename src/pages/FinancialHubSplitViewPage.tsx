@@ -13,10 +13,12 @@ import {
   type TransactionSplit 
 } from '../firebase/config';
 import CreateAccountModal from '../components/CreateAccountModal';
-import AddTransactionModal from '../components/AddTransactionModal';
 import TagSelector from '../components/TagSelector';
 import SharingModal from '../components/SharingModal';
 import EnhancedLinkTransactionsModal from '../components/EnhancedLinkTransactionsModal';
+import ImportModal from '../components/ImportModal';
+import InlineTransactionRow from '../components/InlineTransactionRow';
+import InlineAddTransactionButton from '../components/InlineAddTransactionButton';
 
 
 // AccountListItem Component
@@ -404,6 +406,7 @@ interface TransactionTableProps {
   transactions: (Transaction & { id: string })[];
   transactionTags: Record<string, Tag[]>;
   transactionSplits: Record<string, TransactionSplit[]>;
+  selectedAccount: Account;
   onTransactionUpdate: () => void;
   onLinkTransaction: (transaction: Transaction & { id: string }) => void;
 }
@@ -412,10 +415,12 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   transactions, 
   transactionTags,
   transactionSplits,
+  selectedAccount,
   onTransactionUpdate,
   onLinkTransaction
 }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [showInlineAdd, setShowInlineAdd] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -481,12 +486,92 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     }
   };
 
-  if (transactions.length === 0) {
+  const handleInlineTransactionCreated = () => {
+    setShowInlineAdd(false);
+    onTransactionUpdate();
+  };
+
+  const handleCancelInlineAdd = () => {
+    setShowInlineAdd(false);
+  };
+
+  if (transactions.length === 0 && !showInlineAdd) {
     return (
-      <div className="bg-white rounded-lg shadow text-center py-12">
-        <div className="text-6xl mb-4">📊</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No Transactions</h3>
-        <p className="text-gray-500">This account doesn't have any transactions yet</p>
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Description
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Tags
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Amount
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            <InlineAddTransactionButton onClick={() => setShowInlineAdd(true)} />
+            <tr>
+              <td colSpan={5} className="px-6 py-12 text-center">
+                <div className="text-gray-500">
+                  <div className="text-4xl mb-4">📊</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No transactions yet</h3>
+                  <p className="text-gray-500 mb-4">Get started by adding your first transaction</p>
+                  <button
+                    onClick={() => setShowInlineAdd(true)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Add First Transaction
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (transactions.length === 0 && showInlineAdd) {
+    return (
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Description
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Tags
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Amount
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            <InlineTransactionRow
+              accountId={selectedAccount.id}
+              onTransactionCreated={handleInlineTransactionCreated}
+              onCancel={handleCancelInlineAdd}
+            />
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -514,6 +599,18 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
+          {/* Inline Add Transaction Row */}
+          {showInlineAdd ? (
+            <InlineTransactionRow
+              accountId={selectedAccount.id}
+              onTransactionCreated={handleInlineTransactionCreated}
+              onCancel={handleCancelInlineAdd}
+            />
+          ) : (
+            <InlineAddTransactionButton onClick={() => setShowInlineAdd(true)} />
+          )}
+
+          {/* Existing Transactions */}
           {transactions.map((transaction) => (
             <React.Fragment key={transaction.id}>
               {/* Main Transaction Row */}
@@ -578,7 +675,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [showSharingModal, setShowSharingModal] = useState(false);
   const [selectedAccountForSharing, setSelectedAccountForSharing] = useState<Account | null>(null);
   const [showLinkTransactionsModal, setShowLinkTransactionsModal] = useState(false);
@@ -668,6 +765,14 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const handleLinkTransaction = (transaction: Transaction & { id: string }) => {
     setSelectedTransactionForLinking(transaction);
     setShowLinkTransactionsModal(true);
+  };
+
+  const handleImportComplete = () => {
+    if (user && selectedAccount) {
+      loadTransactions(user.uid, selectedAccount.id);
+      loadAccounts(user.uid); // Refresh account balances
+    }
+    setShowImportModal(false);
   };
 
 
@@ -930,13 +1035,13 @@ const FinancialHubSplitViewPage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <button
-                    onClick={() => setShowAddTransactionModal(true)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+                    onClick={() => setShowImportModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                    Add Transaction
+                    Import Transactions
                   </button>
                 </div>
               </div>
@@ -952,6 +1057,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 transactions={transactions}
                 transactionTags={transactionTags}
                 transactionSplits={transactionSplits}
+                selectedAccount={selectedAccount}
                 onTransactionUpdate={handleTransactionUpdate}
                 onLinkTransaction={handleLinkTransaction}
               />
@@ -978,16 +1084,14 @@ const FinancialHubSplitViewPage: React.FC = () => {
         />
       )}
 
-      {/* Add Transaction Modal */}
-      {showAddTransactionModal && selectedAccount && user && (
-        <AddTransactionModal
-          isOpen={showAddTransactionModal}
-          onClose={() => setShowAddTransactionModal(false)}
-          account={selectedAccount}
-          onTransactionAdded={() => {
-            setShowAddTransactionModal(false);
-            handleTransactionUpdate();
-          }}
+      {/* Import Modal */}
+      {showImportModal && user && (
+        <ImportModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          onImportComplete={handleImportComplete}
+          accounts={accounts}
+          userId={user.uid}
         />
       )}
 
