@@ -15,6 +15,7 @@ import {
 import CreateAccountModal from '../components/CreateAccountModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import TagSelector from '../components/TagSelector';
+import SharingModal from '../components/SharingModal';
 
 
 // AccountListItem Component
@@ -22,9 +23,10 @@ interface AccountListItemProps {
   account: Account;
   isSelected: boolean;
   onClick: () => void;
+  onShare: (account: Account) => void;
 }
 
-const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, onClick }) => {
+const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, onClick, onShare }) => {
   const getCurrencySymbol = (currency: string) => {
     switch (currency) {
       case 'EUR': return '€';
@@ -61,7 +63,7 @@ const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, 
   return (
     <div
       onClick={onClick}
-      className={`p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+      className={`account-list-item p-3 rounded-lg cursor-pointer transition-all duration-200 ${
         isSelected
           ? 'bg-blue-50 border-l-4 border-blue-500 shadow-sm'
           : 'bg-white hover:bg-gray-50 border border-gray-200'
@@ -84,17 +86,33 @@ const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, 
             )}
           </div>
         </div>
-        <div className="text-right">
-          <p className={`text-sm font-semibold ${
-            account.defaultSign === 'positive' 
-              ? (account.balance >= 0 ? 'text-green-600' : 'text-red-600')
-              : (account.balance <= 0 ? 'text-green-600' : 'text-red-600')
-          }`}>
-            {getCurrencySymbol(account.currency)}{Math.abs(account.balance).toLocaleString()}
-          </p>
-          {account.defaultSign === 'negative' && (
-            <p className="text-xs text-gray-400">Liability</p>
-          )}
+        <div className="flex items-center space-x-2">
+          <div className="text-right">
+            <p className={`text-sm font-semibold ${
+              account.defaultSign === 'positive' 
+                ? (account.balance >= 0 ? 'text-green-600' : 'text-red-600')
+                : (account.balance <= 0 ? 'text-green-600' : 'text-red-600')
+            }`}>
+              {getCurrencySymbol(account.currency)}{Math.abs(account.balance).toLocaleString()}
+            </p>
+            {account.defaultSign === 'negative' && (
+              <p className="text-xs text-gray-400">Liability</p>
+            )}
+          </div>
+          
+          {/* Share button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent account selection
+              onShare(account);
+            }}
+            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            title="Share Account"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -145,11 +163,123 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({ value, onSave
   return (
     <span
       onClick={() => setIsEditing(true)}
-      className={`cursor-pointer hover:bg-gray-100 px-2 py-1 rounded ${className}`}
+      className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-1 rounded ${className}`}
       title="Click to edit"
     >
       {value}
     </span>
+  );
+};
+
+// InlineEditableDate Component
+interface InlineEditableDateProps {
+  value: string;
+  onSave: (value: string) => void;
+  className?: string;
+}
+
+const InlineEditableDate: React.FC<InlineEditableDateProps> = ({ value, onSave, className = "" }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+
+  const handleSave = () => {
+    if (editValue !== value) {
+      onSave(editValue);
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setEditValue(value);
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        type="date"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyPress}
+        className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        autoFocus
+      />
+    );
+  }
+
+  return (
+    <div className="group">
+      <span
+        onClick={() => setIsEditing(true)}
+        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-1 rounded group-hover:bg-gray-50 transition-colors ${className}`}
+        title="Click to edit date"
+      >
+        {new Date(value).toLocaleDateString()}
+      </span>
+    </div>
+  );
+};
+
+// InlineEditableAmount Component
+interface InlineEditableAmountProps {
+  value: number;
+  onSave: (value: number) => void;
+  className?: string;
+}
+
+const InlineEditableAmount: React.FC<InlineEditableAmountProps> = ({ value, onSave, className = "" }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value.toString());
+
+  const handleSave = () => {
+    const numValue = parseFloat(editValue);
+    if (!isNaN(numValue) && numValue !== value) {
+      onSave(numValue);
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setEditValue(value.toString());
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        type="number"
+        step="0.01"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyPress}
+        className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+        autoFocus
+      />
+    );
+  }
+
+  return (
+    <div className="group">
+      <span
+        onClick={() => setIsEditing(true)}
+        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-1 rounded font-medium group-hover:bg-gray-50 transition-colors ${
+          value >= 0 ? 'text-green-600' : 'text-red-600'
+        } ${className}`}
+        title="Click to edit amount"
+      >
+        {value >= 0 ? '+' : ''}${Math.abs(value).toLocaleString()}
+      </span>
+    </div>
   );
 };
 
@@ -160,10 +290,11 @@ interface TransactionRowProps {
   isSplit?: boolean;
   splits?: TransactionSplit[];
   tags?: Tag[];
+  onDateUpdate: (id: string, date: string) => void;
+  onAmountUpdate: (id: string, amount: number) => void;
   onDescriptionUpdate: (id: string, description: string) => void;
   onTagsUpdate: (id: string, tags: string[]) => void;
   onSplitTransaction: (id: string) => void;
-  onEditTransaction: (id: string) => void;
   onDeleteTransaction: (id: string) => void;
 }
 
@@ -172,19 +303,23 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
   isMain, 
   isSplit, 
   tags = [],
+  onDateUpdate,
+  onAmountUpdate,
   onDescriptionUpdate,
   onTagsUpdate,
   onSplitTransaction,
-  onEditTransaction,
   onDeleteTransaction
 }) => {
   return (
-    <tr className={`${isSplit ? 'opacity-60 bg-gray-25' : ''} hover:bg-gray-50`}>
+    <tr className={`transaction-row ${isSplit ? 'split-row opacity-60 bg-gray-25' : ''} hover:bg-gray-50 transition-colors`}>
       <td className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${
         isSplit ? 'pl-12' : ''
       }`}>
         {isSplit && <span className="mr-2 text-gray-400">↳</span>}
-        {new Date(transaction.date).toLocaleDateString()}
+        <InlineEditableDate
+          value={transaction.date}
+          onSave={(value) => onDateUpdate(transaction.id, value)}
+        />
       </td>
       
       <td className="px-6 py-4 text-sm text-gray-900">
@@ -202,37 +337,39 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
       </td>
       
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-        <span className={`font-medium ${
-          transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
-        }`}>
-          {transaction.amount >= 0 ? '+' : ''}${Math.abs(transaction.amount).toLocaleString()}
-        </span>
+        <InlineEditableAmount
+          value={transaction.amount}
+          onSave={(value) => onAmountUpdate(transaction.id, value)}
+        />
       </td>
       
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
         <div className="flex items-center justify-end space-x-2">
           {isMain && (
             <button
-              onClick={() => onSplitTransaction(transaction.id)}
-              className="text-blue-600 hover:text-blue-900 text-xs px-2 py-1 rounded"
-              title="Split transaction"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSplitTransaction(transaction.id);
+              }}
+              className="p-1 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+              title="Split Transaction"
             >
-              Split
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2z" />
+              </svg>
             </button>
           )}
           <button
-            onClick={() => onEditTransaction(transaction.id)}
-            className="text-indigo-600 hover:text-indigo-900 text-xs px-2 py-1 rounded"
-            title="Edit transaction"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteTransaction(transaction.id);
+            }}
+            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+            title="Delete Transaction"
           >
-            Edit
-          </button>
-          <button
-            onClick={() => onDeleteTransaction(transaction.id)}
-            className="text-red-600 hover:text-red-900 text-xs px-2 py-1 rounded"
-            title="Delete transaction"
-          >
-            Delete
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </button>
         </div>
       </td>
@@ -263,6 +400,26 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     return unsubscribe;
   }, []);
 
+  const handleDateUpdate = async (transactionId: string, date: string) => {
+    if (!user) return;
+    try {
+      await updateTransaction(transactionId, { date }, user.uid);
+      onTransactionUpdate();
+    } catch (error) {
+      console.error('Error updating transaction date:', error);
+    }
+  };
+
+  const handleAmountUpdate = async (transactionId: string, amount: number) => {
+    if (!user) return;
+    try {
+      await updateTransaction(transactionId, { amount }, user.uid);
+      onTransactionUpdate();
+    } catch (error) {
+      console.error('Error updating transaction amount:', error);
+    }
+  };
+
   const handleDescriptionUpdate = async (transactionId: string, description: string) => {
     if (!user) return;
     try {
@@ -286,11 +443,6 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   const handleSplitTransaction = (transactionId: string) => {
     // This would open the split modal - placeholder for now
     console.log('Split transaction:', transactionId);
-  };
-
-  const handleEditTransaction = (transactionId: string) => {
-    // This would open the edit modal - placeholder for now
-    console.log('Edit transaction:', transactionId);
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
@@ -345,10 +497,11 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                 transaction={transaction}
                 isMain={true}
                 tags={transactionTags[transaction.id] || []}
+                onDateUpdate={handleDateUpdate}
+                onAmountUpdate={handleAmountUpdate}
                 onDescriptionUpdate={handleDescriptionUpdate}
                 onTagsUpdate={handleTagsUpdate}
                 onSplitTransaction={handleSplitTransaction}
-                onEditTransaction={handleEditTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
               />
               
@@ -369,10 +522,11 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                   isMain={false}
                   isSplit={true}
                   tags={[]} // Split tags would need separate handling
+                  onDateUpdate={handleDateUpdate}
+                  onAmountUpdate={handleAmountUpdate}
                   onDescriptionUpdate={handleDescriptionUpdate}
                   onTagsUpdate={handleTagsUpdate}
                   onSplitTransaction={handleSplitTransaction}
-                  onEditTransaction={handleEditTransaction}
                   onDeleteTransaction={handleDeleteTransaction}
                 />
               ))}
@@ -399,6 +553,9 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
+  const [showSharingModal, setShowSharingModal] = useState(false);
+  const [selectedAccountForSharing, setSelectedAccountForSharing] = useState<Account | null>(null);
+  const [showLinkTransactionsModal, setShowLinkTransactionsModal] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -476,6 +633,11 @@ const FinancialHubSplitViewPage: React.FC = () => {
     navigate('/financial-hub');
   };
 
+  const handleShareAccount = (account: Account) => {
+    setSelectedAccountForSharing(account);
+    setShowSharingModal(true);
+  };
+
   // Calculate financial summary
   const familyAccounts = accounts.filter(account => account.category === 'family');
   const personalAccounts = accounts.filter(account => account.category === 'personal');
@@ -510,6 +672,42 @@ const FinancialHubSplitViewPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Custom Styles for Enhanced Visual Feedback */}
+      <style>{`
+        .inline-editable {
+          transition: all 0.2s ease-in-out;
+        }
+        .inline-editable:hover {
+          background-color: rgba(243, 244, 246, 0.5);
+          border-radius: 4px;
+        }
+        .split-row {
+          position: relative;
+        }
+        .split-row::before {
+          content: '';
+          position: absolute;
+          left: 3rem;
+          top: 0;
+          width: 1px;
+          height: 100%;
+          background-color: rgba(209, 213, 219, 0.5);
+        }
+        .account-list-item {
+          transition: all 0.2s ease-in-out;
+        }
+        .account-list-item:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .transaction-row {
+          transition: all 0.15s ease-in-out;
+        }
+        .transaction-row:hover {
+          background-color: rgba(249, 250, 251, 0.8);
+        }
+      `}</style>
+      
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -602,6 +800,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                         account={account}
                         isSelected={selectedAccountId === account.id}
                         onClick={() => setSelectedAccountId(account.id)}
+                        onShare={handleShareAccount}
                       />
                     ))}
                   </div>
@@ -621,6 +820,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                         account={account}
                         isSelected={selectedAccountId === account.id}
                         onClick={() => setSelectedAccountId(account.id)}
+                        onShare={handleShareAccount}
                       />
                     ))}
                   </div>
@@ -644,6 +844,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                           account={account}
                           isSelected={selectedAccountId === account.id}
                           onClick={() => setSelectedAccountId(account.id)}
+                          onShare={handleShareAccount}
                         />
                       ))}
                   </div>
@@ -691,17 +892,29 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Add Transaction Button */}
-              <div className="mb-4">
-                <button
-                  onClick={() => setShowAddTransactionModal(true)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Transaction
-                </button>
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowAddTransactionModal(true)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Transaction
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowLinkTransactionsModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    Link Transactions
+                  </button>
+                </div>
               </div>
 
               {/* Transaction Table */}
@@ -751,6 +964,51 @@ const FinancialHubSplitViewPage: React.FC = () => {
             handleTransactionUpdate();
           }}
         />
+      )}
+
+      {/* Sharing Modal */}
+      {showSharingModal && selectedAccountForSharing && (
+        <SharingModal
+          isOpen={showSharingModal}
+          onClose={() => {
+            setShowSharingModal(false);
+            setSelectedAccountForSharing(null);
+            loadAccounts(user?.uid || ''); // Refresh accounts after sharing
+          }}
+          itemId={selectedAccountForSharing.id}
+          itemName={selectedAccountForSharing.name}
+          itemType="account"
+        />
+      )}
+
+      {/* Link Transactions Modal - TODO: Implement general transaction linking */}
+      {showLinkTransactionsModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                  Link Transactions
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Transaction linking feature will be implemented here. This will allow you to connect related transactions across accounts.
+                </p>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={() => setShowLinkTransactionsModal(false)}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
