@@ -117,8 +117,21 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
       return false;
     }
     
-    if (splits.some(split => split.amount <= 0)) {
-      setError('All split amounts must be greater than 0');
+    // For negative transactions, splits should be negative; for positive transactions, splits should be positive
+    const isNegativeTransaction = transaction.amount < 0;
+    const invalidSplits = splits.filter(split => {
+      if (isNegativeTransaction) {
+        return split.amount >= 0; // Negative transaction splits should be negative
+      } else {
+        return split.amount <= 0; // Positive transaction splits should be positive
+      }
+    });
+    
+    if (invalidSplits.length > 0) {
+      setError(isNegativeTransaction 
+        ? 'All split amounts must be negative for expense transactions' 
+        : 'All split amounts must be positive for income transactions'
+      );
       return false;
     }
     

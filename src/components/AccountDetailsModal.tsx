@@ -510,15 +510,21 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
 
   // Quick tag editor functions
   const handleQuickTag = (transactionId: string) => {
+    console.log('🏷️ Quick tag clicked for transaction:', transactionId);
     const transactionElement = transactionRefs.current[transactionId];
-    if (!transactionElement) return;
+    if (!transactionElement) {
+      console.log('❌ Transaction element not found');
+      return;
+    }
 
     const rect = transactionElement.getBoundingClientRect();
-    setTagEditorPosition({
+    const position = {
       top: rect.bottom + window.scrollY,
       left: rect.left + window.scrollX,
       width: rect.width,
-    });
+    };
+    console.log('🏷️ Setting tag editor position:', position);
+    setTagEditorPosition(position);
     setActiveTagEditor(transactionId);
   };
 

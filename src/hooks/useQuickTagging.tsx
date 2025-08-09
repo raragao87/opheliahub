@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getTags, getDefaultTags, updateTransaction } from '../firebase/config';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '../firebase/config';
+import { getTags, getDefaultTags, updateTransaction, auth } from '../firebase/config';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 
 interface Tag {
   id: string;
@@ -21,32 +20,48 @@ interface UseQuickTaggingProps {
 }
 
 export const useQuickTagging = ({ transaction, onTagsUpdate }: UseQuickTaggingProps) => {
-  const [user] = useAuthState(auth);
+  const [user, setUser] = useState<User | null>(null);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Set up auth listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+    });
+    return unsubscribe;
+  }, []);
+
   // Load all available tags
   useEffect(() => {
     const loadTags = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log('🏷️ No user found, skipping tag loading');
+        return;
+      }
       
       try {
+        console.log('🏷️ Loading tags for user:', user.uid);
         setIsLoading(true);
         const [userTags, defaultTags] = await Promise.all([
           getTags(user.uid),
           Promise.resolve(getDefaultTags())
         ]);
         
+        console.log('🏷️ Loaded tags:', { userTags: userTags.length, defaultTags: defaultTags.length });
+        
         // Combine and deduplicate tags
         const tagMap = new Map();
         defaultTags.forEach(tag => tagMap.set(tag.id, tag));
         userTags.forEach(tag => tagMap.set(tag.id, tag));
         
-        setAllTags(Array.from(tagMap.values()));
+        const allTagsArray = Array.from(tagMap.values());
+        console.log('🏷️ Total combined tags:', allTagsArray.length);
+        setAllTags(allTagsArray);
       } catch (error) {
-        console.error('Error loading tags:', error);
+        console.error('❌ Error loading tags:', error);
       } finally {
         setIsLoading(false);
       }
@@ -120,16 +135,21 @@ export const useQuickTagging = ({ transaction, onTagsUpdate }: UseQuickTaggingPr
 
   // Add tag to transaction
   const addTag = async (tagId: string) => {
-    if (!user || isUpdating) return;
+    if (!user || isUpdating) {
+      console.log('🏷️ Cannot add tag:', { user: !!user, isUpdating });
+      return;
+    }
     
     try {
+      console.log('🏷️ Adding tag:', tagId, 'to transaction:', transaction.id);
       setIsUpdating(true);
       const newTagIds = [...(transaction.tagIds || []), tagId];
       await updateTransaction(transaction.id, { tagIds: newTagIds }, user.uid);
       
+      console.log('🏷️ Tag added successfully, updating UI');
       onTagsUpdate(transaction.id, newTagIds);
     } catch (error) {
-      console.error('Error adding tag:', error);
+      console.error('❌ Error adding tag:', error);
     } finally {
       setIsUpdating(false);
     }
