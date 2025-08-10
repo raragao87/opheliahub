@@ -130,25 +130,25 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         : 'bg-blue-50 border-l-4 border-blue-400'
     }`}>
       {/* Date */}
-      <td className="px-6 py-4 whitespace-nowrap text-sm">
+      <td className="px-4 py-2 whitespace-nowrap text-sm">
         <input
           type="date"
           value={formData.date}
           onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-          className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           disabled={saving}
         />
       </td>
 
       {/* Description */}
-      <td className="px-6 py-4 text-sm">
+      <td className="px-4 py-2 text-sm">
         <input
           type="text"
           placeholder="Enter description..."
           value={formData.description}
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           onKeyDown={(e) => handleKeyPress(e, 'description')}
-          className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           autoFocus
           data-field="description"
           disabled={saving}
@@ -156,11 +156,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       </td>
 
       {/* Tags */}
-      <td className="px-6 py-4 text-sm relative">
+      <td className="px-4 py-2 text-sm relative">
         <div className="relative tag-selector-container">
           <button
             onClick={() => setShowTagSelector(!showTagSelector)}
-            className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-left min-h-[28px] flex items-center justify-between"
+            className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-left min-h-[24px] flex items-center justify-between"
             disabled={saving}
           >
             <span className="flex flex-wrap gap-1">
@@ -207,7 +207,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       </td>
 
       {/* Amount */}
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+      <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
         <input
           type="number"
           step="0.01"
@@ -215,14 +215,14 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           value={formData.amount}
           onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
           onKeyDown={(e) => handleKeyPress(e, 'amount')}
-          className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-right bg-white"
+          className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-right bg-white"
           data-field="amount"
           disabled={saving}
         />
       </td>
 
       {/* Actions */}
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+      <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-medium">
         <div className="flex items-center justify-end space-x-2">
           <button
             onClick={handleSubmit}

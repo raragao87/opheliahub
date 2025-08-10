@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { createAccount, getDefaultAccountTypes, type Account, type AccountType } from '../firebase/config';
+import { createAccount, getDefaultAccountTypes, type AccountType } from '../firebase/config';
 
 interface CreateAccountModalProps {
   isOpen: boolean;

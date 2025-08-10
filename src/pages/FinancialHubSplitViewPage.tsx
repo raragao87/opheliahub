@@ -14,13 +14,15 @@ import {
 } from '../firebase/config';
 import CreateAccountModal from '../components/CreateAccountModal';
 import EditAccountModal from '../components/EditAccountModal';
-import TagSelector from '../components/TagSelector';
+
+import InlineTagInput from '../components/InlineTagInput';
 import SharingModal from '../components/SharingModal';
 import EnhancedLinkTransactionsModal from '../components/EnhancedLinkTransactionsModal';
 import ImportModal from '../components/ImportModal';
 import InlineTransactionRow from '../components/InlineTransactionRow';
 import InlineAddTransactionButton from '../components/InlineAddTransactionButton';
 import UpdateAssetBalanceModal from '../components/UpdateAssetBalanceModal';
+import SplitTransactionModal from '../components/SplitTransactionModal';
 
 
 // AccountListItem Component
@@ -191,18 +193,18 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({ value, onSave
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyPress}
-        className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         autoFocus
       />
     );
   }
 
   return (
-    <span
-      onClick={() => setIsEditing(true)}
-      className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-1 rounded ${className}`}
-      title="Click to edit"
-    >
+          <span
+        onClick={() => setIsEditing(true)}
+        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-0.5 rounded ${className}`}
+        title="Click to edit"
+      >
       {value}
     </span>
   );
@@ -243,7 +245,7 @@ const InlineEditableDate: React.FC<InlineEditableDateProps> = ({ value, onSave, 
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyPress}
-        className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         autoFocus
       />
     );
@@ -253,7 +255,7 @@ const InlineEditableDate: React.FC<InlineEditableDateProps> = ({ value, onSave, 
     <div className="group">
       <span
         onClick={() => setIsEditing(true)}
-        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-1 rounded group-hover:bg-gray-50 transition-colors ${className}`}
+        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-0.5 rounded group-hover:bg-gray-50 transition-colors ${className}`}
         title="Click to edit date"
       >
         {new Date(value).toLocaleDateString()}
@@ -299,7 +301,7 @@ const InlineEditableAmount: React.FC<InlineEditableAmountProps> = ({ value, onSa
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyPress}
-        className="w-full px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+        className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
         autoFocus
       />
     );
@@ -309,7 +311,7 @@ const InlineEditableAmount: React.FC<InlineEditableAmountProps> = ({ value, onSa
     <div className="group">
       <span
         onClick={() => setIsEditing(true)}
-        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-1 rounded font-medium group-hover:bg-gray-50 transition-colors ${
+        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-0.5 rounded font-medium group-hover:bg-gray-50 transition-colors ${
           value >= 0 ? 'text-green-600' : 'text-red-600'
         } ${className}`}
         title="Click to edit amount"
@@ -351,8 +353,8 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
 }) => {
   return (
     <tr className={`transaction-row ${isSplit ? 'split-row opacity-60 bg-gray-25' : ''} hover:bg-gray-50 transition-colors`}>
-      <td className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${
-        isSplit ? 'pl-12' : ''
+      <td className={`px-4 py-2 whitespace-nowrap text-sm text-gray-900 ${
+        isSplit ? 'pl-8' : ''
       }`}>
         {isSplit && <span className="mr-2 text-gray-400">↳</span>}
         <InlineEditableDate
@@ -361,28 +363,37 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         />
       </td>
       
-      <td className="px-6 py-4 text-sm text-gray-900">
+      <td className={`px-4 py-2 text-sm text-gray-900 ${
+        isSplit ? 'pl-8' : ''
+      }`}>
         <InlineEditableField
           value={transaction.description}
           onSave={(value) => onDescriptionUpdate(transaction.id, value)}
         />
       </td>
       
-      <td className="px-6 py-4 text-sm">
-        <TagSelector
-          selectedTagIds={tags.map(tag => tag.id)}
-          onTagChange={(tagIds: string[]) => onTagsUpdate(transaction.id, tagIds)}
+      <td className={`px-4 py-2 text-sm ${
+        isSplit ? 'pl-8' : ''
+      }`}>
+        <InlineTagInput
+          transactionId={transaction.id}
+          selectedTags={tags}
+          onTagsUpdate={onTagsUpdate}
         />
       </td>
       
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+      <td className={`px-4 py-2 whitespace-nowrap text-sm text-right ${
+        isSplit ? 'pr-8' : ''
+      }`}>
         <InlineEditableAmount
           value={transaction.amount}
           onSave={(value) => onAmountUpdate(transaction.id, value)}
         />
       </td>
       
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+      <td className={`px-4 py-2 whitespace-nowrap text-right text-sm font-medium ${
+        isSplit ? 'pr-8' : ''
+      }`}>
         <div className="flex items-center justify-end space-x-2">
           {isMain && (
             <>
@@ -395,9 +406,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
                 className="p-1 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
                 title="Split Transaction"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7.85 18.25a9 9 0 009.638-9.948l3.827-3.827a2.25 2.25 0 00-3.182-3.182l-3.827 3.827A9 9 0 007.85 18.25zM6.75 7.5l3-3m-3 3l-3-3m3 3l3 3m-3-3l-3 3" />
-                </svg>
+                ✂️
               </button>
 
               {/* Link button */}
@@ -443,6 +452,9 @@ interface TransactionTableProps {
   selectedAccount: Account;
   onTransactionUpdate: () => void;
   onLinkTransaction: (transaction: Transaction & { id: string }) => void;
+  splittingTransaction: Transaction & { id: string } | null;
+  setSplittingTransaction: (transaction: Transaction & { id: string } | null) => void;
+  setShowSplitModal: (show: boolean) => void;
 }
 
 const TransactionTable: React.FC<TransactionTableProps> = ({ 
@@ -451,7 +463,10 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   transactionSplits,
   selectedAccount,
   onTransactionUpdate,
-  onLinkTransaction
+  onLinkTransaction,
+
+  setSplittingTransaction,
+  setShowSplitModal
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [showInlineAdd, setShowInlineAdd] = useState(false);
@@ -504,8 +519,11 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   };
 
   const handleSplitTransaction = (transactionId: string) => {
-    // This would open the split modal - placeholder for now
-    console.log('Split transaction:', transactionId);
+    const transaction = transactions.find(t => t.id === transactionId);
+    if (transaction) {
+      setSplittingTransaction(transaction);
+      setShowSplitModal(true);
+    }
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
@@ -535,19 +553,19 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Date
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Description
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Tags
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Amount
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -555,14 +573,14 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
           <tbody className="bg-white divide-y divide-gray-200">
             <InlineAddTransactionButton onClick={() => setShowInlineAdd(true)} />
             <tr>
-              <td colSpan={5} className="px-6 py-12 text-center">
+              <td colSpan={5} className="px-4 py-8 text-center">
                 <div className="text-gray-500">
-                  <div className="text-4xl mb-4">📊</div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No transactions yet</h3>
-                  <p className="text-gray-500 mb-4">Get started by adding your first transaction</p>
+                  <div className="text-3xl mb-3">📊</div>
+                  <h3 className="text-base font-medium text-gray-900 mb-2">No transactions yet</h3>
+                  <p className="text-gray-500 mb-3">Get started by adding your first transaction</p>
                   <button
                     onClick={() => setShowInlineAdd(true)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
                   >
                     Add First Transaction
                   </button>
@@ -581,19 +599,19 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Date
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Description
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Tags
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Amount
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -615,19 +633,19 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Date
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Description
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Tags
             </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
               Amount
             </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
               Actions
             </th>
           </tr>
@@ -718,6 +736,8 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [selectedAccountForAssetUpdate, setSelectedAccountForAssetUpdate] = useState<Account | null>(null);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [selectedAccountForEdit, setSelectedAccountForEdit] = useState<Account | null>(null);
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splittingTransaction, setSplittingTransaction] = useState<(Transaction & { id: string }) | null>(null);
 
 
   useEffect(() => {
@@ -1169,6 +1189,9 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 selectedAccount={selectedAccount}
                 onTransactionUpdate={handleTransactionUpdate}
                 onLinkTransaction={handleLinkTransaction}
+                splittingTransaction={splittingTransaction}
+                setSplittingTransaction={setSplittingTransaction}
+                setShowSplitModal={setShowSplitModal}
               />
               )}
             </div>
@@ -1267,6 +1290,25 @@ const FinancialHubSplitViewPage: React.FC = () => {
             setSelectedAccountForEdit(null);
             if (user) {
               loadAccounts(user.uid);
+            }
+          }}
+        />
+      )}
+
+      {/* Split Transaction Modal */}
+      {showSplitModal && splittingTransaction && (
+        <SplitTransactionModal
+          isOpen={showSplitModal}
+          onClose={() => {
+            setShowSplitModal(false);
+            setSplittingTransaction(null);
+          }}
+          transaction={splittingTransaction}
+          onSuccess={() => {
+            setShowSplitModal(false);
+            setSplittingTransaction(null);
+            if (user && selectedAccount) {
+              loadTransactions(user.uid, selectedAccount.id);
             }
           }}
         />
