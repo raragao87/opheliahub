@@ -320,7 +320,7 @@ const FinancialHubPage: React.FC = () => {
         <CreateAccountModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
-          onAccountCreated={handleAccountCreated}
+          onSuccess={handleAccountCreated}
         />
       )}
 

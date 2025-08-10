@@ -249,7 +249,7 @@ export interface Transaction {
   description: string;
   date: string;
   isManual: boolean;
-  source: 'manual' | 'csv' | 'excel' | 'asset-valuation';
+  source: 'manual' | 'csv' | 'excel' | 'asset-valuation' | 'initial-balance';
   tagIds?: string[]; // Array of tag IDs assigned to this transaction
   isSplit?: boolean; // Whether this transaction has been split
   splitIds?: string[]; // References to TransactionSplit records
@@ -935,9 +935,28 @@ export const createAccount = async (userId: string, accountData: Omit<Account, '
     };
     
     const docRef = await addDoc(collection(db, 'users', userId, 'accounts'), accountWithTimestamps);
-    console.log('✅ Account created successfully with ID:', docRef.id);
+    const accountId = docRef.id;
     
-    return docRef.id;
+    // CREATE INITIAL BALANCE TRANSACTION
+    if (accountData.initialBalance !== 0) {
+      const initialTransaction: Omit<Transaction, 'id'> = {
+        accountId: accountId,
+        amount: accountData.initialBalance,
+        description: `Initial balance - ${accountData.name}`,
+        date: new Date().toISOString().split('T')[0], // Today's date
+        isManual: false,
+        source: 'initial-balance', // NEW source type
+        tagIds: [], // No tags for initial balance
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      
+      await createTransaction(userId, initialTransaction);
+      console.log('✅ Initial balance transaction created');
+    }
+    
+    console.log('✅ Account created successfully with ID:', accountId);
+    return accountId;
   } catch (error) {
     console.error('❌ Error creating account:', error);
     throw error;

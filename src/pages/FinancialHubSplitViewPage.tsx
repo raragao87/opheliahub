@@ -352,29 +352,34 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
   onDeleteTransaction
 }) => {
   return (
-    <tr className={`transaction-row ${isSplit ? 'split-row opacity-60 bg-gray-25' : ''} hover:bg-gray-50 transition-colors`}>
-      <td className={`px-4 py-2 whitespace-nowrap text-sm text-gray-900 ${
-        isSplit ? 'pl-8' : ''
-      }`}>
-        {isSplit && <span className="mr-2 text-gray-400">↳</span>}
+    <tr className={`transaction-row ${
+      isSplit 
+        ? 'split-row bg-blue-50 border-l-4 border-blue-300' 
+        : ''
+    } hover:bg-gray-50 transition-colors`}>
+      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
         <InlineEditableDate
           value={transaction.date}
           onSave={(value) => onDateUpdate(transaction.id, value)}
         />
       </td>
       
-      <td className={`px-4 py-2 text-sm text-gray-900 ${
-        isSplit ? 'pl-8' : ''
-      }`}>
+      <td className="px-4 py-2 text-sm text-gray-900">
+        {isSplit && (
+          <div className="flex items-center mb-1">
+            <svg className="w-4 h-4 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span className="text-blue-800 font-medium text-xs">Split:</span>
+          </div>
+        )}
         <InlineEditableField
           value={transaction.description}
           onSave={(value) => onDescriptionUpdate(transaction.id, value)}
         />
       </td>
       
-      <td className={`px-4 py-2 text-sm ${
-        isSplit ? 'pl-8' : ''
-      }`}>
+      <td className="px-4 py-2 text-sm">
         <InlineTagInput
           transactionId={transaction.id}
           selectedTags={tags}
@@ -382,18 +387,14 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         />
       </td>
       
-      <td className={`px-4 py-2 whitespace-nowrap text-sm text-right ${
-        isSplit ? 'pr-8' : ''
-      }`}>
+      <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
         <InlineEditableAmount
           value={transaction.amount}
           onSave={(value) => onAmountUpdate(transaction.id, value)}
         />
       </td>
       
-      <td className={`px-4 py-2 whitespace-nowrap text-right text-sm font-medium ${
-        isSplit ? 'pr-8' : ''
-      }`}>
+      <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-medium">
         <div className="flex items-center justify-end space-x-2">
           {isMain && (
             <>
