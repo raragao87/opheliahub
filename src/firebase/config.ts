@@ -216,6 +216,8 @@ export interface Account {
   ownerId: string;
   isReal: boolean;
   category: 'family' | 'personal';
+  accountType: 'bank' | 'pseudo' | 'asset'; // NEW FIELD
+  lastValueUpdate?: number; // Track when balance was last manually updated for asset accounts
   createdAt: number;
   updatedAt: number;
 }
@@ -247,7 +249,7 @@ export interface Transaction {
   description: string;
   date: string;
   isManual: boolean;
-  source: 'manual' | 'csv' | 'excel';
+  source: 'manual' | 'csv' | 'excel' | 'asset-valuation';
   tagIds?: string[]; // Array of tag IDs assigned to this transaction
   isSplit?: boolean; // Whether this transaction has been split
   splitIds?: string[]; // References to TransactionSplit records
@@ -1041,6 +1043,56 @@ export const updateAccount = async (accountId: string, accountData: Partial<Acco
     console.log('✅ Account updated successfully');
   } catch (error) {
     console.error('❌ Error updating account:', error);
+    throw error;
+  }
+};
+
+// Asset Balance Update Function
+export const updateAssetAccountBalance = async (
+  userId: string, 
+  accountId: string, 
+  newBalance: number,
+  notes?: string
+): Promise<void> => {
+  try {
+    console.log('🏠 Updating asset account balance:', { userId, accountId, newBalance, notes });
+    
+    const accountRef = doc(db, 'users', userId, 'accounts', accountId);
+    const accountSnap = await getDoc(accountRef);
+    
+    if (!accountSnap.exists()) {
+      throw new Error('Account not found');
+    }
+    
+    const currentAccount = accountSnap.data() as Account;
+    const difference = newBalance - currentAccount.balance;
+    
+    // Update account balance and lastValueUpdate timestamp
+    await updateDoc(accountRef, {
+      balance: newBalance,
+      lastValueUpdate: Date.now(),
+      updatedAt: Date.now(),
+    });
+    
+    // Create an auto-transaction for the difference
+    if (difference !== 0) {
+      const transactionData: Omit<Transaction, 'id'> = {
+        accountId: accountId,
+        amount: Math.abs(difference),
+        description: notes || (difference > 0 ? 'Asset value increased' : 'Asset value decreased'),
+        date: new Date().toISOString().split('T')[0], // Current date
+        isManual: false,
+        source: 'asset-valuation',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      
+      await addDoc(collection(db, 'users', userId, 'transactions'), transactionData);
+    }
+    
+    console.log('✅ Asset account balance updated and auto-transaction created successfully');
+  } catch (error) {
+    console.error('❌ Error updating asset account balance:', error);
     throw error;
   }
 };

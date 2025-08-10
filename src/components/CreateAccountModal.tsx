@@ -1,182 +1,140 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { createAccount, getAccountTypes, type AccountType } from '../firebase/config';
-import AccountTypeSelector from './AccountTypeSelector';
+import { createAccount, getDefaultAccountTypes, type Account, type AccountType } from '../firebase/config';
 
 interface CreateAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAccountCreated: () => void;
+  onSuccess: () => void;
 }
 
 const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   isOpen,
   onClose,
-  onAccountCreated
+  onSuccess,
 }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Form fields
-  const [accountName, setAccountName] = useState('');
-  const [accountType, setAccountType] = useState('');
-  const [initialBalance, setInitialBalance] = useState('');
-  const [isRealAccount, setIsRealAccount] = useState(true);
-  const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
-  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
+  const [name, setName] = useState('');
+  const [accountType, setAccountType] = useState<'bank' | 'pseudo' | 'asset'>('bank');
   const [category, setCategory] = useState<'family' | 'personal'>('personal');
+  const [balance, setBalance] = useState('');
+  const [notes, setNotes] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('');
+  const [customType, setCustomType] = useState('');
+  const [showCustomTypeInput, setShowCustomTypeInput] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [availableTypes, setAvailableTypes] = useState<AccountType[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
-      if (user) {
-        loadAccountTypes(user.uid);
+      if (user && isOpen) {
+        loadAccountTypes();
       }
     });
 
     return unsubscribe;
-  }, []);
+  }, [isOpen]);
 
-  const loadAccountTypes = async (userId: string) => {
+  const loadAccountTypes = async () => {
     try {
-      const types = await getAccountTypes(userId);
-      setAccountTypes(types);
+      const types = await getDefaultAccountTypes();
+      setAvailableTypes(types);
     } catch (error) {
       console.error('Error loading account types:', error);
     }
   };
 
-  useEffect(() => {
-    if (!isOpen) {
-      // Reset form when modal closes
-      setAccountName('');
-      setAccountType('');
-      setInitialBalance('');
-      setIsRealAccount(true);
-      setSelectedAccountType(null);
-      setCategory('personal');
-      setError(null);
-    }
-  }, [isOpen]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!user) {
-      setError('You must be signed in to create an account');
+    if (!user) return;
+
+    if (!name.trim()) {
+      setError('Account name is required');
       return;
     }
 
-    if (!accountName.trim()) {
-      setError('Please enter an account name');
+    if (!selectedType && !customType.trim()) {
+      setError('Please select an account type or enter a custom type');
       return;
     }
 
-    if (!accountType) {
-      setError('Please select an account type');
-      return;
-    }
-
-    if (!initialBalance.trim()) {
-      setError('Please enter an initial balance');
-      return;
-    }
-
-    const balance = parseFloat(initialBalance);
-    if (isNaN(balance)) {
-      setError('Please enter a valid balance amount');
-      return;
-    }
+    setIsLoading(true);
+    setError('');
 
     try {
-      setLoading(true);
-      setError(null);
-
-      const accountData = {
-        name: accountName.trim(),
-        type: accountType,
-        defaultSign: selectedAccountType?.defaultSign || 'positive',
-        initialBalance: balance,
-        balance: balance,
+      const finalType = customType.trim() || selectedType;
+      const isReal = accountType === 'bank';
+      
+      await createAccount(user.uid, {
+        name: name.trim(),
+        type: finalType,
+        category,
+        balance: parseFloat(balance) || 0,
+        initialBalance: parseFloat(balance) || 0,
+        isReal,
+        accountType,
+        defaultSign: 'positive',
         currency: 'EUR',
         sharedWith: [],
         ownerId: user.uid,
-        isReal: isRealAccount,
-        category: category
-      };
+      });
 
-      await createAccount(user.uid, accountData);
-      
-      // Success - close modal and notify parent
-      onAccountCreated();
+      onSuccess();
+      handleClose();
     } catch (error) {
-      console.error('Error creating account:', error);
       setError('Failed to create account. Please try again.');
+      console.error('Error creating account:', error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleAccountTypeChange = (typeId: string) => {
-    console.log('🔄 Account type changed to:', typeId);
-    setAccountType(typeId);
-    
-    // Find the selected account type for default sign
-    const selectedType = accountTypes.find(t => t.id === typeId);
-    if (selectedType) {
-      setSelectedAccountType(selectedType);
-      console.log('✅ Selected account type:', selectedType);
-    }
+  const handleClose = () => {
+    setName('');
+    setAccountType('bank');
+    setCategory('personal');
+    setBalance('');
+    setNotes('');
+    setSelectedType('');
+    setCustomType('');
+    setShowCustomTypeInput(false);
+    setError('');
+    onClose();
   };
 
-  const handleAccountTypeCreated = (newType: AccountType) => {
-    setSelectedAccountType(newType);
+  const handleTypeChange = (type: string) => {
+    if (type === 'custom') {
+      setShowCustomTypeInput(true);
+      setSelectedType('');
+    } else {
+      setShowCustomTypeInput(false);
+      setSelectedType(type);
+      setCustomType('');
+    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center">
-            <div className="text-2xl mr-3">💰</div>
-            <h2 className="text-xl font-semibold text-gray-800">Create New Account</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
-
+      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4">Create New Account</h2>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Account Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Account Name *
             </label>
             <input
               type="text"
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-              placeholder="e.g., Chase Checking, Emergency Fund"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g., Main Checking, Savings, etc."
             />
           </div>
 
@@ -185,114 +143,170 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Account Type *
             </label>
-            <AccountTypeSelector
-              value={accountType}
-              onChange={handleAccountTypeChange}
-              onAccountTypeCreated={handleAccountTypeCreated}
-              disabled={loading}
-            />
-          </div>
-
-          {/* Initial Balance */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Initial Balance *
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                $
-              </span>
-              <input
-                type="number"
-                value={initialBalance}
-                onChange={(e) => setInitialBalance(e.target.value)}
-                placeholder="0.00"
-                step="0.01"
-                min="0"
-                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="bank"
+                  checked={accountType === 'bank'}
+                  onChange={(e) => setAccountType(e.target.value as 'bank' | 'pseudo' | 'asset')}
+                  className="mr-2"
+                />
+                <span>🏦 Bank Account</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="pseudo"
+                  checked={accountType === 'pseudo'}
+                  onChange={(e) => setAccountType(e.target.value as 'bank' | 'pseudo' | 'asset')}
+                  className="mr-2"
+                />
+                <span>💳 Pseudo Account</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="asset"
+                  checked={accountType === 'asset'}
+                  onChange={(e) => setAccountType(e.target.value as 'bank' | 'pseudo' | 'asset')}
+                  className="mr-2"
+                />
+                <span>🏠 Asset Account</span>
+              </label>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Enter the current balance of this account
+            <p className="text-sm text-gray-600 mt-1">
+              Choose the type of account you want to create. Bank accounts are real accounts with actual balances, pseudo accounts are for tracking purposes, and asset accounts are for tracking valuable items like houses, cars, or investments.
             </p>
           </div>
 
-          {/* Category Selection */}
+          {/* Family/Personal Category */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Category *
+              Family/Personal Category
             </label>
             <div className="space-y-2">
               <label className="flex items-center">
                 <input
                   type="radio"
-                  name="category"
                   value="personal"
                   checked={category === 'personal'}
                   onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
+                  className="mr-2"
                 />
-                <span className="text-sm text-gray-700">Personal</span>
+                <span>👤 Personal</span>
               </label>
               <label className="flex items-center">
                 <input
                   type="radio"
-                  name="category"
                   value="family"
                   checked={category === 'family'}
                   onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
+                  className="mr-2"
                 />
-                <span className="text-sm text-gray-700">Family</span>
+                <span>👨‍👩‍👧‍👦 Family</span>
               </label>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Choose whether this account is for personal or family use
+            <p className="text-sm text-gray-600 mt-1">
+              Choose whether this account is for personal or family use.
             </p>
           </div>
 
-          {/* Account Category Toggle */}
+          {/* Account Type Selection */}
           <div>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={isRealAccount}
-                onChange={(e) => setIsRealAccount(e.target.checked)}
-                className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700">
-                This is a bank account
-              </span>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Type *
             </label>
-            <p className="text-xs text-gray-500 mt-1">
-              Uncheck if this is a pseudo account for budgeting/organization
-            </p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {availableTypes
+                .filter(type => type.category === accountType)
+                .map((type) => (
+                  <label key={type.id} className="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="accountType"
+                      value={type.id}
+                      checked={selectedType === type.id}
+                      onChange={() => handleTypeChange(type.id)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">{type.name}</span>
+                  </label>
+                ))}
+            </div>
+            
+            <label className="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50">
+              <input
+                type="radio"
+                name="accountType"
+                value="custom"
+                checked={showCustomTypeInput}
+                onChange={() => handleTypeChange('custom')}
+                className="mr-2"
+              />
+              <span className="text-sm">Custom Type</span>
+            </label>
+
+            {showCustomTypeInput && (
+              <input
+                type="text"
+                value={customType}
+                onChange={(e) => setCustomType(e.target.value)}
+                className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter custom account type"
+              />
+            )}
           </div>
+
+          {/* Initial Balance */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Initial Balance
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={balance}
+              onChange={(e) => setBalance(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.00"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes (Optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Any additional notes about this account..."
+            />
+          </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="text-red-600 text-sm">{error}</div>
+          )}
 
           {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4">
+          <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleClose}
+              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              disabled={isLoading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Creating...
-                </>
-              ) : (
-                'Create Account'
-              )}
+              {isLoading ? 'Creating...' : 'Create Account'}
             </button>
           </div>
         </form>

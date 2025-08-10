@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { updateAccount, deleteAccount, getAccountTypes, type Account, type AccountType } from '../firebase/config';
+import UpdateAssetBalanceModal from './UpdateAssetBalanceModal';
 
 interface EditAccountModalProps {
   isOpen: boolean;
@@ -29,6 +30,8 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   const [currency, setCurrency] = useState('EUR');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [category, setCategory] = useState<'family' | 'personal'>('personal');
+  const [accountType, setAccountType] = useState<'bank' | 'pseudo' | 'asset'>('bank');
+  const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -47,6 +50,15 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       setSelectedAccountTypeId(account.type);
       setCurrency(account.currency || 'EUR');
       setCategory(account.category || 'personal');
+      
+      // Initialize accountType based on existing account data
+      if (account.accountType) {
+        setAccountType(account.accountType);
+      } else {
+        // Backward compatibility: map isReal to accountType
+        setAccountType(account.isReal ? 'bank' : 'pseudo');
+      }
+      
       setError(null);
       
       // Load account types
@@ -125,8 +137,9 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
         initialBalance: newInitialBalance,
         balance: newBalance,
         currency: currency,
-        isReal: isRealAccount,
+        isReal: accountType === 'bank', // Map accountType to isReal for backward compatibility
         category: category,
+        accountType: accountType, // Add new accountType field
         updatedAt: Date.now(),
         ownerId: account.ownerId
       });
@@ -254,14 +267,14 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Account Category
             </label>
-            <div className="flex items-center space-x-4">
+            <div className="space-y-2">
               <label className="flex items-center">
                 <input
                   type="radio"
-                  name="accountCategory"
+                  name="accountType"
                   value="bank"
-                  checked={isRealAccount}
-                  onChange={() => setIsRealAccount(true)}
+                  checked={accountType === 'bank'}
+                  onChange={() => setAccountType('bank')}
                   className="mr-2 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700">Bank Account</span>
@@ -269,17 +282,28 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
               <label className="flex items-center">
                 <input
                   type="radio"
-                  name="accountCategory"
+                  name="accountType"
                   value="pseudo"
-                  checked={!isRealAccount}
-                  onChange={() => setIsRealAccount(false)}
+                  checked={accountType === 'pseudo'}
+                  onChange={() => setAccountType('pseudo')}
                   className="mr-2 text-orange-600 focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700">Pseudo Account</span>
               </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="accountType"
+                  value="asset"
+                  checked={accountType === 'asset'}
+                  onChange={() => setAccountType('asset')}
+                  className="mr-2 text-green-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">🏠 Asset Account</span>
+              </label>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Bank accounts are tied to real financial institutions, pseudo accounts are for budgeting
+              Bank accounts are real institutions, pseudo accounts are for budgeting, asset accounts track property/investment values
             </p>
           </div>
 
@@ -373,6 +397,32 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             </div>
           </div>
 
+          {/* Update Asset Value Button */}
+          {accountType === 'asset' && (
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                  </svg>
+                  <span className="text-sm text-blue-800">
+                    Asset accounts can have their values updated directly
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowUpdateAssetBalanceModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                  </svg>
+                  Update Value
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex space-x-3 pt-4">
             <button
@@ -441,6 +491,17 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Update Asset Balance Modal */}
+      <UpdateAssetBalanceModal
+        isOpen={showUpdateAssetBalanceModal}
+        onClose={() => setShowUpdateAssetBalanceModal(false)}
+        account={account}
+        onSuccess={() => {
+          onAccountUpdated();
+          setShowUpdateAssetBalanceModal(false);
+        }}
+      />
     </div>
   );
 };

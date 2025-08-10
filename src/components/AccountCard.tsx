@@ -3,6 +3,7 @@ import { type Account } from '../firebase/config';
 import AccountDetailsModal from './AccountDetailsModal';
 import EditAccountModal from './EditAccountModal';
 import SharingModal from './SharingModal';
+import UpdateAssetBalanceModal from './UpdateAssetBalanceModal';
 
 interface AccountCardProps {
   account: Account;
@@ -13,6 +14,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
   const [showAccountDetailsModal, setShowAccountDetailsModal] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [showSharingModal, setShowSharingModal] = useState(false);
+  const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
   const getAccountTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case 'checking':
@@ -162,6 +164,14 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
         {/* Action Buttons */}
         <div className="mt-6 pt-4 border-t border-gray-200">
           <div className="flex space-x-3">
+            {account.accountType === 'asset' && (
+              <button
+                onClick={() => setShowUpdateAssetBalanceModal(true)}
+                className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Update Value
+              </button>
+            )}
             <button
               onClick={() => setShowAccountDetailsModal(true)}
               className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -206,6 +216,19 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onUpdate }) => {
           itemId={account.id}
           itemName={account.name}
           itemType="account"
+        />
+      )}
+
+      {/* Update Asset Balance Modal */}
+      {showUpdateAssetBalanceModal && (
+        <UpdateAssetBalanceModal
+          isOpen={showUpdateAssetBalanceModal}
+          onClose={() => setShowUpdateAssetBalanceModal(false)}
+          account={account}
+          onSuccess={() => {
+            setShowUpdateAssetBalanceModal(false);
+            onUpdate(); // Refresh accounts after updating asset balance
+          }}
         />
       )}
     </div>

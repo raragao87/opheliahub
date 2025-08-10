@@ -19,6 +19,7 @@ import EnhancedLinkTransactionsModal from '../components/EnhancedLinkTransaction
 import ImportModal from '../components/ImportModal';
 import InlineTransactionRow from '../components/InlineTransactionRow';
 import InlineAddTransactionButton from '../components/InlineAddTransactionButton';
+import UpdateAssetBalanceModal from '../components/UpdateAssetBalanceModal';
 
 
 // AccountListItem Component
@@ -27,9 +28,10 @@ interface AccountListItemProps {
   isSelected: boolean;
   onClick: () => void;
   onShare: (account: Account) => void;
+  onUpdateValue?: (account: Account) => void;
 }
 
-const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, onClick, onShare }) => {
+const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, onClick, onShare, onUpdateValue }) => {
   const getCurrencySymbol = (currency: string) => {
     switch (currency) {
       case 'EUR': return '€';
@@ -116,6 +118,22 @@ const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
             </svg>
           </button>
+
+          {/* Update Value button */}
+          {account.accountType === 'asset' && onUpdateValue && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdateValue(account);
+              }}
+              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+              title="Update Account Value"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -680,6 +698,9 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [selectedAccountForSharing, setSelectedAccountForSharing] = useState<Account | null>(null);
   const [showLinkTransactionsModal, setShowLinkTransactionsModal] = useState(false);
   const [selectedTransactionForLinking, setSelectedTransactionForLinking] = useState<(Transaction & { id: string }) | null>(null);
+  const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
+  const [selectedAccountForAssetUpdate, setSelectedAccountForAssetUpdate] = useState<Account | null>(null);
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -775,6 +796,19 @@ const FinancialHubSplitViewPage: React.FC = () => {
     setShowImportModal(false);
   };
 
+  const handleUpdateAssetBalance = async () => {
+    if (!user) return;
+    try {
+      // The actual update is handled by the UpdateAssetBalanceModal
+      // This function is called after the modal completes successfully
+      setShowUpdateAssetBalanceModal(false);
+      setSelectedAccountForAssetUpdate(null);
+      // Refresh accounts to show updated balances
+      loadAccounts(user.uid);
+    } catch (error) {
+      console.error('Error updating asset balance:', error);
+    }
+  };
 
 
   // Calculate financial summary
@@ -940,6 +974,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                         isSelected={selectedAccountId === account.id}
                         onClick={() => setSelectedAccountId(account.id)}
                         onShare={handleShareAccount}
+                        onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
                       />
                     ))}
                   </div>
@@ -960,23 +995,22 @@ const FinancialHubSplitViewPage: React.FC = () => {
                         isSelected={selectedAccountId === account.id}
                         onClick={() => setSelectedAccountId(account.id)}
                         onShare={handleShareAccount}
+                        onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
                       />
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Other Accounts (no specific category) */}
-              {accounts.filter(account => 
-                account.category !== 'family' && account.category !== 'personal'
-              ).length > 0 && (
+              {/* Assets Accounts Section */}
+              {accounts.filter(account => account.accountType === 'asset').length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    💼 Other Accounts
+                    🏠 Assets Accounts
                   </h4>
                   <div className="space-y-1">
                     {accounts
-                      .filter(account => account.category !== 'family' && account.category !== 'personal')
+                      .filter(account => account.accountType === 'asset')
                       .map(account => (
                         <AccountListItem 
                           key={account.id}
@@ -984,6 +1018,32 @@ const FinancialHubSplitViewPage: React.FC = () => {
                           isSelected={selectedAccountId === account.id}
                           onClick={() => setSelectedAccountId(account.id)}
                           onShare={handleShareAccount}
+                          onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
+                        />
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Other Accounts (no specific category) */}
+              {accounts.filter(account => 
+                account.category !== 'family' && account.category !== 'personal' && account.accountType !== 'asset'
+              ).length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    💼 Other Accounts
+                  </h4>
+                  <div className="space-y-1">
+                    {accounts
+                      .filter(account => account.category !== 'family' && account.category !== 'personal' && account.accountType !== 'asset')
+                      .map(account => (
+                        <AccountListItem 
+                          key={account.id}
+                          account={account}
+                          isSelected={selectedAccountId === account.id}
+                          onClick={() => setSelectedAccountId(account.id)}
+                          onShare={handleShareAccount}
+                          onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
                         />
                       ))}
                   </div>
@@ -1080,7 +1140,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
         <CreateAccountModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
-          onAccountCreated={handleAccountCreated}
+          onSuccess={handleAccountCreated}
         />
       )}
 
@@ -1128,6 +1188,19 @@ const FinancialHubSplitViewPage: React.FC = () => {
             setShowLinkTransactionsModal(false);
             setSelectedTransactionForLinking(null);
           }}
+        />
+      )}
+
+      {/* Update Asset Balance Modal */}
+      {showUpdateAssetBalanceModal && selectedAccountForAssetUpdate && (
+        <UpdateAssetBalanceModal
+          isOpen={showUpdateAssetBalanceModal}
+          onClose={() => {
+            setShowUpdateAssetBalanceModal(false);
+            setSelectedAccountForAssetUpdate(null);
+          }}
+          account={selectedAccountForAssetUpdate}
+          onSuccess={handleUpdateAssetBalance}
         />
       )}
     </div>
