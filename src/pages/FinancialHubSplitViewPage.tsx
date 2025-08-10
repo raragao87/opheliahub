@@ -396,7 +396,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
                 title="Split Transaction"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7.85 18.25a9 9 0 009.638-9.948l3.827-3.827a2.25 2.25 0 00-3.182-3.182l-3.827 3.827A9 9 0 007.85 18.25zM6.75 7.5l3-3m-3 3l-3-3m3 3l3 3m-3-3l-3 3" />
                 </svg>
               </button>
 
