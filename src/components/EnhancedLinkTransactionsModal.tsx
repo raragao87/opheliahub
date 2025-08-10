@@ -112,7 +112,10 @@ const EnhancedLinkTransactionsModal: React.FC<EnhancedLinkTransactionsModalProps
           amount: duplicatedAmount,
           description: transaction.description,
           date: transaction.date,
-          isRecurring: false
+          isManual: true,
+          source: 'manual',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
         });
 
         onTransactionLinked();
@@ -149,7 +152,7 @@ const EnhancedLinkTransactionsModal: React.FC<EnhancedLinkTransactionsModalProps
               <div>
                 <p className="font-medium">{transaction.description}</p>
                 <p className="text-sm text-gray-600">
-                  {currentAccount.name} • {new Date(transaction.date).toLocaleDateString()}
+                  {currentAccount.name} • {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'Atemporal'}
                 </p>
               </div>
               <div className={`text-lg font-semibold ${
@@ -219,7 +222,7 @@ const EnhancedLinkTransactionsModal: React.FC<EnhancedLinkTransactionsModalProps
                               <div>
                                 <p className="font-medium">{match.transaction.description}</p>
                                 <p className="text-sm text-gray-600">
-                                  {new Date(match.transaction.date).toLocaleDateString()}
+                                  {match.transaction.date ? new Date(match.transaction.date).toLocaleDateString() : 'Atemporal'}
                                 </p>
                               </div>
                             </div>
@@ -310,7 +313,7 @@ const EnhancedLinkTransactionsModal: React.FC<EnhancedLinkTransactionsModalProps
                           <div>
                             <p className="font-medium">{txn.description}</p>
                             <p className="text-sm text-gray-600">
-                              {new Date(txn.date).toLocaleDateString()}
+                              {txn.date ? new Date(txn.date).toLocaleDateString() : 'Atemporal'}
                             </p>
                           </div>
                           <div className={`text-lg font-semibold ${

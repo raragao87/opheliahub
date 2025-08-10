@@ -329,7 +329,24 @@ export interface BudgetItem {
 }
 
 export interface DashboardPreferences {
-  visibleCards: string[];
+  visibleCards: {
+    familyAccounts: boolean;
+    familyBudget: boolean;
+    familyInvestments: boolean;
+    familyCommitments: boolean;
+    personalAccounts: boolean;
+    personalBudget: boolean;
+    personalInvestments: boolean;
+    personalCommitments: boolean;
+    taskManager: boolean;
+    shoppingLists: boolean;
+    homeMaintenance: boolean;
+    familyCalendar: boolean;
+    growthTracker: boolean;
+    cloudStorage: boolean;
+    medicalRecords: boolean;
+    schoolActivities: boolean;
+  };
   cardOrder: string[];
   theme: 'light' | 'dark';
 }
@@ -2978,7 +2995,24 @@ export const getDashboardPreferences = async (userId: string): Promise<Dashboard
     } else {
       // Return default preferences
       const defaultPreferences: DashboardPreferences = {
-        visibleCards: ['familyAccounts', 'familyBudget', 'familyInvestments', 'familyCommitments', 'personalAccounts', 'personalBudget', 'personalInvestments', 'personalCommitments', 'taskManager', 'shoppingLists', 'homeMaintenance', 'familyCalendar', 'growthTracker', 'cloudStorage', 'medicalRecords', 'schoolActivities'],
+        visibleCards: {
+          familyAccounts: true,
+          familyBudget: true,
+          familyInvestments: true,
+          familyCommitments: true,
+          personalAccounts: true,
+          personalBudget: true,
+          personalInvestments: true,
+          personalCommitments: true,
+          taskManager: true,
+          shoppingLists: true,
+          homeMaintenance: true,
+          familyCalendar: true,
+          growthTracker: true,
+          cloudStorage: true,
+          medicalRecords: true,
+          schoolActivities: true
+        },
         cardOrder: ['familyAccounts', 'familyBudget', 'familyInvestments', 'familyCommitments', 'personalAccounts', 'personalBudget', 'personalInvestments', 'personalCommitments', 'taskManager', 'shoppingLists', 'homeMaintenance', 'familyCalendar', 'growthTracker', 'cloudStorage', 'medicalRecords', 'schoolActivities'],
         theme: 'light'
       };
@@ -3018,20 +3052,52 @@ export const updateCardVisibility = async (userId: string, cardId: string, visib
     
     // Get current preferences
     const currentPrefs = await getDoc(preferencesRef);
-    let visibleCards: string[] = [];
+    let visibleCards: DashboardPreferences['visibleCards'];
     
     if (currentPrefs.exists()) {
       const data = currentPrefs.data() as DashboardPreferences;
-      visibleCards = data.visibleCards || [];
+      visibleCards = data.visibleCards || {
+        familyAccounts: true,
+        familyBudget: true,
+        familyInvestments: true,
+        familyCommitments: true,
+        personalAccounts: true,
+        personalBudget: true,
+        personalInvestments: true,
+        personalCommitments: true,
+        taskManager: true,
+        shoppingLists: true,
+        homeMaintenance: true,
+        familyCalendar: true,
+        growthTracker: true,
+        cloudStorage: true,
+        medicalRecords: true,
+        schoolActivities: true
+      };
+    } else {
+      visibleCards = {
+        familyAccounts: true,
+        familyBudget: true,
+        familyInvestments: true,
+        familyCommitments: true,
+        personalAccounts: true,
+        personalBudget: true,
+        personalInvestments: true,
+        personalCommitments: true,
+        taskManager: true,
+        shoppingLists: true,
+        homeMaintenance: true,
+        familyCalendar: true,
+        growthTracker: true,
+        cloudStorage: true,
+        medicalRecords: true,
+        schoolActivities: true
+      };
     }
     
-    // Update the visible cards array
-    if (visible) {
-      if (!visibleCards.includes(cardId)) {
-        visibleCards.push(cardId);
-      }
-    } else {
-      visibleCards = visibleCards.filter(id => id !== cardId);
+    // Update the specific card visibility
+    if (cardId in visibleCards) {
+      (visibleCards as any)[cardId] = visible;
     }
     
     await setDoc(preferencesRef, {
@@ -3203,7 +3269,7 @@ const parseCSVLine = (line: string): string[] => {
   return result;
 };
 
-const parseExcelFile = async (file: File): Promise<any[]> => {
+const parseExcelFile = async (_file: File): Promise<any[]> => {
   // For now, we'll use a simple approach
   // In production, you might want to use a library like 'xlsx' or 'exceljs'
   throw new Error('Excel file parsing not yet implemented. Please use CSV files for now.');
@@ -3213,7 +3279,7 @@ export const processImportData = async (
   data: any[], 
   mappings: ImportMapping, 
   accountId: string,
-  userId: string
+  _userId: string
 ): Promise<Omit<Transaction, 'id'>[]> => {
   try {
     console.log('🔄 Processing import data:', data.length, 'rows');

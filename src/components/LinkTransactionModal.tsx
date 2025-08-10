@@ -283,7 +283,7 @@ const LinkTransactionModal: React.FC<LinkTransactionModalProps> = ({
                             <div>
                               <p className="font-medium text-gray-800">{transaction.description}</p>
                               <p className="text-sm text-gray-500">
-                                {account?.name} • {formatDate(transaction.date)}
+                                {account?.name} • {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
                               </p>
                             </div>
                             <div className="text-right">
@@ -366,7 +366,7 @@ const LinkTransactionModal: React.FC<LinkTransactionModalProps> = ({
                             <div>
                               <p className="font-medium text-gray-800">{transaction.description}</p>
                               <p className="text-sm text-gray-500">
-                                {account?.name} • {formatDate(transaction.date)}
+                                {account?.name} • {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
                               </p>
                               {link.description && (
                                 <p className="text-xs text-gray-400">{link.description}</p>
@@ -416,7 +416,7 @@ const LinkTransactionModal: React.FC<LinkTransactionModalProps> = ({
                             <div>
                               <p className="font-medium text-gray-800">{transaction.description}</p>
                               <p className="text-sm text-gray-500">
-                                {account?.name} • {formatDate(transaction.date)}
+                                {account?.name} • {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
                               </p>
                             </div>
                             <div className="text-right">

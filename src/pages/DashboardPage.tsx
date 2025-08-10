@@ -71,7 +71,7 @@ const DashboardPage: React.FC = () => {
           
           // Set default preferences as fallback
           const defaultPreferences: DashboardPreferences = {
-            userId: user.uid,
+
             visibleCards: {
               familyAccounts: true,
               familyBudget: true,
@@ -90,8 +90,8 @@ const DashboardPage: React.FC = () => {
               medicalRecords: false,
               schoolActivities: false,
             },
-            createdAt: Date.now(),
-            updatedAt: Date.now()
+            cardOrder: [],
+            theme: 'light'
           };
           setPreferences(defaultPreferences);
         } finally {

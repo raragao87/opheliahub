@@ -71,7 +71,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           amount,
           description: formData.description.trim(),
           date: formData.date,
-          isRecurring: false
+          isManual: true,
+          source: 'manual',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
         });
 
         // Show success feedback

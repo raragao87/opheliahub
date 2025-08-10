@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   parseImportFile, 
   processImportData, 
@@ -27,7 +27,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
   userId 
 }) => {
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview' | 'importing'>('upload');
-  const [file, setFile] = useState<File | null>(null);
+
   const [importData, setImportData] = useState<any[]>([]);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mappings, setMappings] = useState<ImportMapping>({
@@ -48,7 +48,6 @@ const ImportModal: React.FC<ImportModalProps> = ({
 
   const resetModal = () => {
     setStep('upload');
-    setFile(null);
     setImportData([]);
     setPreview(null);
     setMappings({
@@ -75,7 +74,6 @@ const ImportModal: React.FC<ImportModalProps> = ({
     const selectedFile = event.target.files?.[0];
     if (!selectedFile) return;
 
-    setFile(selectedFile);
     setIsLoading(true);
     setError('');
 
@@ -481,7 +479,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
                     {processedTransactions.slice(0, 10).map((transaction, index) => (
                       <tr key={index}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(transaction.date)}
+                          {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {transaction.description}

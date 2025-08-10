@@ -7,7 +7,6 @@ import {
   getTransactionsByAccountWithData,
   updateTransaction,
   deleteTransaction,
-  migrateExistingAccountsToInitialBalance,
   type Account, 
   type Transaction,
   type Tag,
@@ -213,14 +212,14 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({ value, onSave
 
 // InlineEditableDate Component
 interface InlineEditableDateProps {
-  value: string;
+  value?: string;
   onSave: (value: string) => void;
   className?: string;
 }
 
 const InlineEditableDate: React.FC<InlineEditableDateProps> = ({ value, onSave, className = "" }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(value);
+  const [editValue, setEditValue] = useState(value || '');
 
   const handleSave = () => {
     if (editValue !== value) {
@@ -233,7 +232,7 @@ const InlineEditableDate: React.FC<InlineEditableDateProps> = ({ value, onSave, 
     if (e.key === 'Enter') {
       handleSave();
     } else if (e.key === 'Escape') {
-      setEditValue(value);
+      setEditValue(value || '');
       setIsEditing(false);
     }
   };
@@ -259,7 +258,7 @@ const InlineEditableDate: React.FC<InlineEditableDateProps> = ({ value, onSave, 
         className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-0.5 rounded group-hover:bg-gray-50 transition-colors ${className}`}
         title="Click to edit date"
       >
-        {new Date(value).toLocaleDateString()}
+        {value ? new Date(value).toLocaleDateString() : 'No Date'}
       </span>
     </div>
   );
@@ -864,23 +863,24 @@ const FinancialHubSplitViewPage: React.FC = () => {
     }
   };
 
-  const handleMigrateInitialBalances = async () => {
-    if (!user) return;
-    try {
-      console.log('🔄 Starting migration of initial balances...');
-      await migrateExistingAccountsToInitialBalance(user.uid);
-      console.log('✅ Migration completed successfully');
-      
-      // Refresh accounts to show any updated data
-      await loadAccounts(user.uid);
-      
-      // Show success message
-      alert('Migration completed! Initial balance transactions have been created for existing accounts.');
-    } catch (error) {
-      console.error('❌ Error during migration:', error);
-      alert(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
+  // Migration function - no longer needed as it's a one-time operation
+  // const handleMigrateInitialBalances = async () => {
+  //   if (!user) return;
+  //   try {
+  //     console.log('🔄 Starting migration of initial balances...');
+  //     await migrateExistingAccountsToInitialBalance(user.uid);
+  //     console.log('✅ Migration completed successfully');
+  //     
+  //     // Refresh accounts to show any updated data
+  //     await loadAccounts(user.uid);
+  //     
+  //     // Show success message
+  //     alert('Migration completed! Initial balance transactions have been created for existing accounts.');
+  //   } catch (error) {
+  //     console.error('❌ Error during migration:', error);
+  //     alert(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  //   }
+  // };
 
 
   // Calculate financial summary

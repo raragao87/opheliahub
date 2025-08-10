@@ -106,7 +106,6 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({
     if (!user) return;
     
     const defaultPreferences: DashboardPreferences = {
-      userId: user.uid,
       visibleCards: {
         // Financial Hub - Family
         familyAccounts: true,
@@ -129,8 +128,8 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({
         medicalRecords: false,
         schoolActivities: false,
       },
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      cardOrder: [],
+      theme: 'light'
     };
     
     setPreferences(defaultPreferences);

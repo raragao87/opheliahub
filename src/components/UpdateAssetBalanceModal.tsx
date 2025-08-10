@@ -46,7 +46,7 @@ const UpdateAssetBalanceModal: React.FC<UpdateAssetBalanceModalProps> = ({
 
   const difference = newBalance - account.balance;
   const isIncrease = difference > 0;
-  const isDecrease = difference < 0;
+
 
   if (!isOpen) return null;
 

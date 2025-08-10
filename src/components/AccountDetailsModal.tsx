@@ -344,6 +344,9 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
   };
 
   const getDateRangeFilter = (transaction: Transaction) => {
+    // Skip date filtering for transactions without dates (like initial balance)
+    if (!transaction.date) return true;
+    
     const transactionDate = new Date(transaction.date);
     const now = new Date();
     
@@ -858,7 +861,7 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                           )}
                         </div>
                         <p className="text-sm text-gray-500">
-                          {formatDate(transaction.date)} • {transaction.isManual ? 'Manual' : 'Imported'}
+                          {transaction.date ? formatDate(transaction.date) : 'Atemporal'} • {transaction.isManual ? 'Manual' : 'Imported'}
                         </p>
                         
                         {/* Inline Tag Pills and Quick Tag Button - Hide for split transactions */}
