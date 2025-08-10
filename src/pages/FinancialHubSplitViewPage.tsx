@@ -7,6 +7,7 @@ import {
   getTransactionsByAccountWithData,
   updateTransaction,
   deleteTransaction,
+  emergencyFixAccountBalances,
   type Account, 
   type Transaction,
   type Tag,
@@ -745,7 +746,29 @@ const FinancialHubSplitViewPage: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       if (user) {
-        loadAccounts(user.uid);
+        const initializeData = async () => {
+          try {
+            setLoading(true);
+            
+            // Run emergency fix automatically on first load (only once)
+            const hasRunFix = localStorage.getItem(`emergency_fix_run_${user.uid}`);
+            if (!hasRunFix) {
+              console.log('🚨 Running automatic emergency fix...');
+              await emergencyFixAccountBalances(user.uid);
+              localStorage.setItem(`emergency_fix_run_${user.uid}`, 'true');
+              console.log('✅ Emergency fix completed automatically');
+            }
+            
+            // Load accounts after fix
+            await loadAccounts(user.uid);
+          } catch (error) {
+            console.error('❌ Error during initialization:', error);
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        initializeData();
       } else {
         setLoading(false);
       }

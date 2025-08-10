@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter, deleteField } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { config, getCurrentDomain, isDomainAllowed, getSecurityInfo } from '../config/environment';
 
@@ -1320,6 +1320,67 @@ export const recalculateAccountBalance = async (userId: string, accountId: strin
     return newBalance;
   } catch (error) {
     console.error('❌ Error recalculating account balance:', error);
+    throw error;
+  }
+};
+
+// Emergency fix function to run once
+export const emergencyFixAccountBalances = async (userId: string): Promise<void> => {
+  try {
+    console.log('🚨 Starting emergency fix for account balances...');
+    
+    const accounts = await getAccountsByUser(userId);
+    
+    for (const account of accounts) {
+      console.log(`🔍 Fixing account: ${account.name}`);
+      
+      // Get all transactions
+      const transactions = await getTransactionsByAccount(userId, account.id);
+      
+      // Remove duplicate initial balance transactions
+      const initialBalanceTransactions = transactions.filter(t => t.source === 'initial-balance');
+      if (initialBalanceTransactions.length > 1) {
+        console.log(`🔧 Removing ${initialBalanceTransactions.length - 1} duplicate initial balance transactions`);
+        for (let i = 1; i < initialBalanceTransactions.length; i++) {
+          await deleteDoc(doc(db, 'users', userId, 'transactions', initialBalanceTransactions[i].id));
+        }
+      }
+      
+      // Fix initial balance transaction format if needed
+      if (initialBalanceTransactions.length > 0) {
+        const initialTransaction = initialBalanceTransactions[0];
+        const correctDescription = `${account.name}: Initial balance`;
+        
+        if (initialTransaction.description !== correctDescription || initialTransaction.date) {
+          await updateDoc(doc(db, 'users', userId, 'transactions', initialTransaction.id), {
+            description: correctDescription,
+            date: deleteField(), // Remove date field to make atemporal
+            updatedAt: Date.now()
+          });
+          console.log(`✅ Fixed initial balance transaction format for ${account.name}`);
+        }
+      }
+      
+      // Recalculate correct balance using fixed method
+      const correctBalance = await recalculateAccountBalance(userId, account.id);
+      
+      console.log(`Account ${account.name}:`);
+      console.log(`  Current balance: ${account.balance}`);
+      console.log(`  Correct balance: ${correctBalance}`);
+      
+      if (Math.abs(account.balance - correctBalance) > 0.01) {
+        // Update the account balance
+        await updateDoc(doc(db, 'users', userId, 'accounts', account.id), {
+          balance: correctBalance,
+          updatedAt: Date.now()
+        });
+        console.log(`✅ Fixed balance for ${account.name}: ${account.balance} → ${correctBalance}`);
+      }
+    }
+    
+    console.log('🎉 Emergency fix completed!');
+  } catch (error) {
+    console.error('❌ Error during emergency fix:', error);
     throw error;
   }
 };
