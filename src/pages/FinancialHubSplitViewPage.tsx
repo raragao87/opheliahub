@@ -13,6 +13,7 @@ import {
   type TransactionSplit 
 } from '../firebase/config';
 import CreateAccountModal from '../components/CreateAccountModal';
+import EditAccountModal from '../components/EditAccountModal';
 import TagSelector from '../components/TagSelector';
 import SharingModal from '../components/SharingModal';
 import EnhancedLinkTransactionsModal from '../components/EnhancedLinkTransactionsModal';
@@ -28,10 +29,11 @@ interface AccountListItemProps {
   isSelected: boolean;
   onClick: () => void;
   onShare: (account: Account) => void;
+  onEdit: (account: Account) => void;
   onUpdateValue?: (account: Account) => void;
 }
 
-const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, onClick, onShare, onUpdateValue }) => {
+const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, onClick, onShare, onEdit, onUpdateValue }) => {
   const getCurrencySymbol = (currency: string) => {
     switch (currency) {
       case 'EUR': return '€';
@@ -134,6 +136,20 @@ const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, 
               </svg>
             </button>
           )}
+
+          {/* Edit button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(account);
+            }}
+            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            title="Edit Account"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -700,6 +716,8 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [selectedTransactionForLinking, setSelectedTransactionForLinking] = useState<(Transaction & { id: string }) | null>(null);
   const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
   const [selectedAccountForAssetUpdate, setSelectedAccountForAssetUpdate] = useState<Account | null>(null);
+  const [showEditAccountModal, setShowEditAccountModal] = useState(false);
+  const [selectedAccountForEdit, setSelectedAccountForEdit] = useState<Account | null>(null);
 
 
   useEffect(() => {
@@ -781,6 +799,11 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const handleShareAccount = (account: Account) => {
     setSelectedAccountForSharing(account);
     setShowSharingModal(true);
+  };
+
+  const handleEditAccount = (account: Account) => {
+    setSelectedAccountForEdit(account);
+    setShowEditAccountModal(true);
   };
 
   const handleLinkTransaction = (transaction: Transaction & { id: string }) => {
@@ -996,6 +1019,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                         isSelected={selectedAccountId === account.id}
                         onClick={() => setSelectedAccountId(account.id)}
                         onShare={handleShareAccount}
+                        onEdit={handleEditAccount}
                         onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
                       />
                     ))}
@@ -1017,6 +1041,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                         isSelected={selectedAccountId === account.id}
                         onClick={() => setSelectedAccountId(account.id)}
                         onShare={handleShareAccount}
+                        onEdit={handleEditAccount}
                         onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
                       />
                     ))}
@@ -1040,6 +1065,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                           isSelected={selectedAccountId === account.id}
                           onClick={() => setSelectedAccountId(account.id)}
                           onShare={handleShareAccount}
+                          onEdit={handleEditAccount}
                           onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
                         />
                       ))}
@@ -1065,6 +1091,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                           isSelected={selectedAccountId === account.id}
                           onClick={() => setSelectedAccountId(account.id)}
                           onShare={handleShareAccount}
+                          onEdit={handleEditAccount}
                           onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
                         />
                       ))}
@@ -1223,6 +1250,25 @@ const FinancialHubSplitViewPage: React.FC = () => {
           }}
           account={selectedAccountForAssetUpdate}
           onSuccess={handleUpdateAssetBalance}
+        />
+      )}
+
+      {/* Edit Account Modal */}
+      {showEditAccountModal && selectedAccountForEdit && (
+        <EditAccountModal
+          isOpen={showEditAccountModal}
+          onClose={() => {
+            setShowEditAccountModal(false);
+            setSelectedAccountForEdit(null);
+          }}
+          account={selectedAccountForEdit}
+          onAccountUpdated={() => {
+            setShowEditAccountModal(false);
+            setSelectedAccountForEdit(null);
+            if (user) {
+              loadAccounts(user.uid);
+            }
+          }}
         />
       )}
     </div>
