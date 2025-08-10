@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { updateAccount, deleteAccount, getAccountTypes, getTransactionsByAccount, updateTransaction, type Account, type AccountType } from '../firebase/config';
+import { updateAccount, deleteAccount, getAccountTypes, getTransactionsByAccount, updateTransaction, createTransaction, type Account, type AccountType, type Transaction } from '../firebase/config';
 import UpdateAssetBalanceModal from './UpdateAssetBalanceModal';
 
 interface EditAccountModalProps {
@@ -84,16 +84,32 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       const initialBalanceTransaction = transactions.find(t => t.source === 'initial-balance');
       
       if (initialBalanceTransaction) {
-        // Update the initial balance transaction amount
+        // Update the initial balance transaction amount with CORRECT format
         await updateTransaction(initialBalanceTransaction.id, {
           amount: newInitialBalance,
-          description: `Initial balance: ${newInitialBalance.toFixed(2)}`,
+          description: `${accountName.trim()}: Initial balance`, // FIXED FORMAT
           updatedAt: Date.now()
+          // Don't update date - keep it atemporal
         }, user.uid);
         
         console.log('✅ Updated initial balance transaction:', initialBalanceTransaction.id);
-      } else {
-        console.log('⚠️ No initial balance transaction found for account:', account.id);
+      } else if (newInitialBalance !== 0) {
+        // Create initial balance transaction if it doesn't exist and amount is not zero
+        console.log('⚠️ No initial balance transaction found, creating one');
+        const transactionData: Omit<Transaction, 'id'> = {
+          accountId: account.id,
+          amount: newInitialBalance,
+          description: `${accountName.trim()}: Initial balance`,
+          // No date field - atemporal
+          isManual: false,
+          source: 'initial-balance',
+          tagIds: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        
+        await createTransaction(user.uid, transactionData);
+        console.log('✅ Created missing initial balance transaction');
       }
     } catch (error) {
       console.error('❌ Error updating initial balance transaction:', error);

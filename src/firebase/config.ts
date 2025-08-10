@@ -2607,6 +2607,15 @@ export const createTransactionLink = async (
       throw new Error('Target transaction not found');
     }
     
+    // Get transaction data
+    const sourceData = sourceTransaction.data() as Transaction;
+    const targetData = targetTransaction.data() as Transaction;
+
+    // Prevent linking initial balance transactions
+    if (isInitialBalanceTransaction(sourceData) || isInitialBalanceTransaction(targetData)) {
+      throw new Error('Initial balance transactions cannot be linked');
+    }
+    
     // Check if link already exists
     const existingLinkQuery = query(
       collection(db, 'users', userId, 'transactionLinks'),
@@ -3786,31 +3795,48 @@ export const migrateExistingAccountsToInitialBalance = async (userId: string): P
   try {
     console.log('🔄 Starting migration: Creating initial balance transactions for existing accounts');
     
-    // Get all user accounts
     const accounts = await getAccountsByUser(userId);
     let migratedCount = 0;
     let skippedCount = 0;
+    let updatedCount = 0;
     
     for (const account of accounts) {
-      // Check if account already has initial balance transaction
       const transactions = await getTransactionsByAccount(userId, account.id);
-      const hasInitialBalance = transactions.some(t => t.source === 'initial-balance');
+      const initialBalanceTransactions = transactions.filter(t => t.source === 'initial-balance');
       
-      if (hasInitialBalance) {
-        console.log(`⏭️  Account ${account.name} already has initial balance transaction, skipping`);
+      // Remove duplicates
+      if (initialBalanceTransactions.length > 1) {
+        console.log(`🔧 Removing ${initialBalanceTransactions.length - 1} duplicate initial balance transactions for ${account.name}`);
+        for (let i = 1; i < initialBalanceTransactions.length; i++) {
+          await deleteDoc(doc(db, 'users', userId, 'transactions', initialBalanceTransactions[i].id));
+        }
+      }
+      
+      if (initialBalanceTransactions.length > 0) {
+        // Update existing to correct format
+        const initialTransaction = initialBalanceTransactions[0];
+        const correctDescription = `${account.name}: Initial balance`;
+        
+        if (initialTransaction.description !== correctDescription || initialTransaction.date) {
+          await updateDoc(doc(db, 'users', userId, 'transactions', initialTransaction.id), {
+            description: correctDescription,
+            date: deleteField(), // Remove date field
+            updatedAt: Date.now()
+          });
+          updatedCount++;
+          console.log(`✅ Updated initial balance transaction format for ${account.name}`);
+        }
         skippedCount++;
         continue;
       }
       
-      // Check if account has initial balance that needs a transaction
+      // Create new if missing
       if (account.initialBalance !== 0) {
-        console.log(`📝 Creating initial balance transaction for account: ${account.name}`);
-        
         const transactionData: Omit<Transaction, 'id'> = {
           accountId: account.id,
           amount: account.initialBalance,
-          description: `Initial balance: ${account.initialBalance.toFixed(2)}`,
-          date: new Date(account.createdAt).toISOString().split('T')[0],
+          description: `${account.name}: Initial balance`, // CORRECT FORMAT
+          // No date field - atemporal
           isManual: false,
           source: 'initial-balance',
           tagIds: [],
@@ -3820,15 +3846,13 @@ export const migrateExistingAccountsToInitialBalance = async (userId: string): P
         
         await createTransaction(userId, transactionData);
         migratedCount++;
-        
         console.log(`✅ Created initial balance transaction for ${account.name}: ${account.initialBalance}`);
       } else {
-        console.log(`⏭️  Account ${account.name} has no initial balance, skipping`);
         skippedCount++;
       }
     }
     
-    console.log(`🎉 Migration completed! Migrated: ${migratedCount}, Skipped: ${skippedCount}`);
+    console.log(`🎉 Migration completed! Created: ${migratedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);
   } catch (error) {
     console.error('❌ Error during migration:', error);
     throw error;
