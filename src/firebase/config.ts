@@ -247,7 +247,7 @@ export interface Transaction {
   accountId: string;
   amount: number;
   description: string;
-  date: string;
+  date?: string; // Optional for atemporal transactions like initial balance
   isManual: boolean;
   source: 'manual' | 'csv' | 'excel' | 'asset-valuation' | 'initial-balance';
   tagIds?: string[]; // Array of tag IDs assigned to this transaction
@@ -256,6 +256,17 @@ export interface Transaction {
   createdAt: number;
   updatedAt: number;
 }
+
+// Helper type for initial balance transactions
+export interface InitialBalanceTransaction extends Omit<Transaction, 'date'> {
+  source: 'initial-balance';
+  date?: never; // Initial balance transactions are atemporal
+}
+
+// Helper function to check if a transaction is an initial balance transaction
+export const isInitialBalanceTransaction = (transaction: Transaction): boolean => {
+  return transaction.source === 'initial-balance';
+};
 
 export interface AccountType {
   id: string;
@@ -942,10 +953,10 @@ export const createAccount = async (userId: string, accountData: Omit<Account, '
       const initialTransaction: Omit<Transaction, 'id'> = {
         accountId: accountId,
         amount: accountData.initialBalance,
-        description: `Initial balance - ${accountData.name}`,
-        date: new Date().toISOString().split('T')[0], // Today's date
+        description: `${accountData.name}: Initial balance`,
+        // No date field for atemporal initial balance transactions
         isManual: false,
-        source: 'initial-balance', // NEW source type
+        source: 'initial-balance',
         tagIds: [], // No tags for initial balance
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -1374,22 +1385,26 @@ export const deleteTransaction = async (transactionId: string, userId: string): 
   try {
     console.log('💰 Deleting transaction:', transactionId);
     
-    // Get the account ID before deleting the transaction
+    // Get the transaction before deleting it
     const transactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
-    let accountId: string | null = null;
-    
-    if (transactionDoc.exists()) {
-      const transaction = transactionDoc.data() as Transaction;
-      accountId = transaction.accountId;
+    if (!transactionDoc.exists()) {
+      throw new Error('Transaction not found');
     }
+    
+    const transaction = transactionDoc.data() as Transaction;
+    
+    // Prevent deletion of initial balance transactions
+    if (isInitialBalanceTransaction(transaction)) {
+      throw new Error('Initial balance transactions cannot be deleted');
+    }
+    
+    const accountId = transaction.accountId;
     
     await deleteDoc(doc(db, 'users', userId, 'transactions', transactionId));
     console.log('✅ Transaction deleted successfully');
     
     // Force update account balance after deleting transaction
-    if (accountId) {
-      await forceUpdateAccountBalance(userId, accountId);
-    }
+    await forceUpdateAccountBalance(userId, accountId);
   } catch (error) {
     console.error('❌ Error deleting transaction:', error);
     throw error;
@@ -2405,13 +2420,20 @@ export const splitTransaction = async (
   try {
     console.log('🔧 Splitting transaction:', transactionId, 'into', splits.length, 'parts');
     
-    // Validate that splits sum to original transaction amount
+    // Get the original transaction
     const originalTransaction = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
     if (!originalTransaction.exists()) {
       throw new Error('Original transaction not found');
     }
     
-    const originalAmount = originalTransaction.data().amount;
+    const transaction = originalTransaction.data() as Transaction;
+    
+    // Prevent splitting of initial balance transactions
+    if (isInitialBalanceTransaction(transaction)) {
+      throw new Error('Initial balance transactions cannot be split');
+    }
+    
+    const originalAmount = transaction.amount;
     const splitSum = splits.reduce((sum, split) => sum + split.amount, 0);
     
     if (Math.abs(splitSum - originalAmount) > 0.01) {
@@ -2662,18 +2684,22 @@ export const suggestTransactionLinks = async (
         score += 30; // Good score for very close amounts
       }
       
-      // Date proximity (within 3 days)
-      const sourceDate = new Date(sourceTransaction.date);
-      const targetDate = new Date(transaction.date);
-      const daysDiff = Math.abs(sourceDate.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24);
-      
-      if (daysDiff <= 1) {
-        score += 40; // High score for same day
-      } else if (daysDiff <= 3) {
-        score += 20; // Medium score for within 3 days
-      } else if (daysDiff <= 7) {
-        score += 10; // Low score for within a week
+      // Date proximity (within 3 days) - only for transactions with dates
+      if (sourceTransaction.date && transaction.date) {
+        const sourceDate = new Date(sourceTransaction.date);
+        const targetDate = new Date(transaction.date);
+        const daysDiff = Math.abs(sourceDate.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (daysDiff <= 1) {
+          score += 40; // High score for same day
+        } else if (daysDiff <= 3) {
+          score += 20; // Medium score for within 3 days
+        } else if (daysDiff <= 7) {
+          score += 10; // Low score for within a week
+        }
       }
+      
+
       
       // Description similarity
       const sourceDesc = sourceTransaction.description.toLowerCase();
