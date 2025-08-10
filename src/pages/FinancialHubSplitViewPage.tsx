@@ -8,6 +8,7 @@ import {
   updateTransaction,
   deleteTransaction,
   emergencyFixAccountBalances,
+  migrateExistingAccountsToInitialBalance,
   isInitialBalanceTransaction,
   type Account, 
   type Transaction,
@@ -800,7 +801,16 @@ const FinancialHubSplitViewPage: React.FC = () => {
               console.log('✅ Emergency fix completed automatically');
             }
             
-            // Load accounts after fix
+            // Run initial balance migration automatically on first load (only once)
+            const hasRunMigration = localStorage.getItem(`initial_balance_migration_run_${user.uid}`);
+            if (!hasRunMigration) {
+              console.log('🔄 Running automatic initial balance migration...');
+              await migrateExistingAccountsToInitialBalance(user.uid);
+              localStorage.setItem(`initial_balance_migration_run_${user.uid}`, 'true');
+              console.log('✅ Initial balance migration completed automatically');
+            }
+            
+            // Load accounts after fixes and migration
             await loadAccounts(user.uid);
           } catch (error) {
             console.error('❌ Error during initialization:', error);
@@ -927,24 +937,37 @@ const FinancialHubSplitViewPage: React.FC = () => {
     }
   };
 
-  // Migration function - no longer needed as it's a one-time operation
-  // const handleMigrateInitialBalances = async () => {
-  //   if (!user) return;
-  //   try {
-  //     console.log('🔄 Starting migration of initial balances...');
-  //     await migrateExistingAccountsToInitialBalance(user.uid);
-  //     console.log('✅ Migration completed successfully');
-  //     
-  //     // Refresh accounts to show any updated data
-  //     await loadAccounts(user.uid);
-  //     
-  //     // Show success message
-  //     alert('Migration completed! Initial balance transactions have been created for existing accounts.');
-  //   } catch (error) {
-  //     console.error('❌ Error during migration:', error);
-  //     alert(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  //   }
-  // };
+  // Migration function - temporarily enabled for testing
+  const handleMigrateInitialBalances = async () => {
+    if (!user) return;
+    try {
+      console.log('🔄 Starting manual migration of initial balances...');
+      await migrateExistingAccountsToInitialBalance(user.uid);
+      console.log('✅ Migration completed successfully');
+      
+      // Refresh accounts to show any updated data
+      await loadAccounts(user.uid);
+      
+      // If we have a selected account, reload its transactions
+      if (selectedAccount) {
+        await loadTransactions(user.uid, selectedAccount.id);
+      }
+      
+      // Show success message
+      alert('Migration completed! Initial balance transactions have been created for existing accounts.');
+    } catch (error) {
+      console.error('❌ Error during migration:', error);
+      alert(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Debug function to reset migration flags
+  const handleResetMigrationFlags = () => {
+    if (!user) return;
+    localStorage.removeItem(`initial_balance_migration_run_${user.uid}`);
+    localStorage.removeItem(`emergency_fix_run_${user.uid}`);
+    alert('Migration flags reset! Refresh the page to run automatic migrations again.');
+  };
 
 
   // Calculate financial summary
@@ -1109,8 +1132,8 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Migration Button - Hidden as no longer needed */}
-              {/* <div className="mb-4">
+              {/* Migration Button - Temporarily enabled for testing */}
+              <div className="mb-4 space-y-2">
                 <button 
                   onClick={handleMigrateInitialBalances}
                   className="w-full px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center justify-center text-sm font-medium"
@@ -1119,9 +1142,16 @@ const FinancialHubSplitViewPage: React.FC = () => {
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Migrate Initial Balances
+                  🔄 Run Migration (TEST)
                 </button>
-              </div> */}
+                <button 
+                  onClick={handleResetMigrationFlags}
+                  className="w-full px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center text-xs font-medium"
+                  title="Reset migration flags to allow auto-migration to run again"
+                >
+                  🔄 Reset Migration Flags
+                </button>
+              </div>
 
               {/* Family Accounts Section */}
               {familyAccounts.length > 0 && (

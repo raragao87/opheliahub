@@ -965,23 +965,21 @@ export const createAccount = async (userId: string, accountData: Omit<Account, '
     const docRef = await addDoc(collection(db, 'users', userId, 'accounts'), accountWithTimestamps);
     const accountId = docRef.id;
     
-    // CREATE INITIAL BALANCE TRANSACTION
-    if (accountData.initialBalance !== 0) {
-      const initialTransaction: Omit<Transaction, 'id'> = {
-        accountId: accountId,
-        amount: accountData.initialBalance,
-        description: `${accountData.name}: Initial balance`,
-        // No date field for atemporal initial balance transactions
-        isManual: false,
-        source: 'initial-balance',
-        tagIds: [], // No tags for initial balance
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-      
-      await createTransaction(userId, initialTransaction);
-      console.log('✅ Initial balance transaction created');
-    }
+    // CREATE INITIAL BALANCE TRANSACTION - ALWAYS create for every account
+    const initialTransaction: Omit<Transaction, 'id'> = {
+      accountId: accountId,
+      amount: accountData.initialBalance, // Use the actual initial balance amount (can be 0)
+      description: `${accountData.name}: Initial balance`,
+      // No date field for atemporal initial balance transactions
+      isManual: false,
+      source: 'initial-balance',
+      tagIds: [], // No tags for initial balance
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    
+    await createTransaction(userId, initialTransaction);
+    console.log('✅ Initial balance transaction created with amount:', accountData.initialBalance);
     
     console.log('✅ Account created successfully with ID:', accountId);
     return accountId;
@@ -1414,7 +1412,7 @@ export const getTransactionsByAccount = async (userId: string, accountId: string
     const q = query(
       collection(db, 'users', userId, 'transactions'),
       where('accountId', '==', accountId),
-      orderBy('date', 'desc')
+      orderBy('createdAt', 'desc')
     );
     
     const querySnapshot = await getDocs(q);
@@ -3533,10 +3531,11 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
     console.log('💰 Fetching transactions with related data for account:', accountId);
     
     // Get transactions with limit for performance
+    // Note: Using createdAt instead of date to include atemporal initial balance transactions
     const q = query(
       collection(db, 'users', userId, 'transactions'),
       where('accountId', '==', accountId),
-      orderBy('date', 'desc'),
+      orderBy('createdAt', 'desc'),
       limit(50) // Limit initial load to 50 transactions
     );
     
@@ -3622,7 +3621,7 @@ export const getTransactionsByAccountPaginated = async (
     let q = query(
       collection(db, 'users', userId, 'transactions'),
       where('accountId', '==', accountId),
-      orderBy('date', 'desc'),
+      orderBy('createdAt', 'desc'),
       limit(pageSize)
     );
     
@@ -3631,8 +3630,8 @@ export const getTransactionsByAccountPaginated = async (
       q = query(
         collection(db, 'users', userId, 'transactions'),
         where('accountId', '==', accountId),
-        orderBy('date', 'desc'),
-        startAfter(lastTransaction.date),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastTransaction.createdAt),
         limit(pageSize)
       );
     }
@@ -3830,26 +3829,22 @@ export const migrateExistingAccountsToInitialBalance = async (userId: string): P
         continue;
       }
       
-      // Create new if missing
-      if (account.initialBalance !== 0) {
-        const transactionData: Omit<Transaction, 'id'> = {
-          accountId: account.id,
-          amount: account.initialBalance,
-          description: `${account.name}: Initial balance`, // CORRECT FORMAT
-          // No date field - atemporal
-          isManual: false,
-          source: 'initial-balance',
-          tagIds: [],
-          createdAt: account.createdAt,
-          updatedAt: Date.now()
-        };
-        
-        await createTransaction(userId, transactionData);
-        migratedCount++;
-        console.log(`✅ Created initial balance transaction for ${account.name}: ${account.initialBalance}`);
-      } else {
-        skippedCount++;
-      }
+      // Create new if missing - ALWAYS create, even if initial balance is 0
+      const transactionData: Omit<Transaction, 'id'> = {
+        accountId: account.id,
+        amount: account.initialBalance, // Use actual initial balance (can be 0)
+        description: `${account.name}: Initial balance`, // CORRECT FORMAT
+        // No date field - atemporal
+        isManual: false,
+        source: 'initial-balance',
+        tagIds: [],
+        createdAt: account.createdAt,
+        updatedAt: Date.now()
+      };
+      
+      await createTransaction(userId, transactionData);
+      migratedCount++;
+      console.log(`✅ Created initial balance transaction for ${account.name}: ${account.initialBalance}`);
     }
     
     console.log(`🎉 Migration completed! Created: ${migratedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);

@@ -93,12 +93,12 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
         }, user.uid);
         
         console.log('✅ Updated initial balance transaction:', initialBalanceTransaction.id);
-      } else if (newInitialBalance !== 0) {
-        // Create initial balance transaction if it doesn't exist and amount is not zero
-        console.log('⚠️ No initial balance transaction found, creating one');
+      } else {
+        // Create initial balance transaction if it doesn't exist - ALWAYS create regardless of amount
+        console.log('⚠️ No initial balance transaction found, creating one with amount:', newInitialBalance);
         const transactionData: Omit<Transaction, 'id'> = {
           accountId: account.id,
-          amount: newInitialBalance,
+          amount: newInitialBalance, // Use actual amount (can be 0)
           description: `${accountName.trim()}: Initial balance`,
           // No date field - atemporal
           isManual: false,
@@ -109,7 +109,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
         };
         
         await createTransaction(user.uid, transactionData);
-        console.log('✅ Created missing initial balance transaction');
+        console.log('✅ Created missing initial balance transaction with amount:', newInitialBalance);
       }
     } catch (error) {
       console.error('❌ Error updating initial balance transaction:', error);
@@ -169,10 +169,8 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       // Find the selected account type to get its properties
       const selectedType = accountTypes.find(t => t.name === selectedAccountTypeId);
       
-      // Update the initial balance transaction if it exists
-      if (newInitialBalance !== account.initialBalance) {
-        await findAndUpdateInitialBalanceTransaction(newInitialBalance);
-      }
+      // Ensure initial balance transaction exists and is in sync - ALWAYS check/update
+      await findAndUpdateInitialBalanceTransaction(newInitialBalance);
       
       // Update account
       await updateAccount(account.id, {
