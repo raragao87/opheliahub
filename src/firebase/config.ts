@@ -1074,8 +1074,9 @@ export const updateAssetAccountBalance = async (
   notes?: string
 ): Promise<void> => {
   try {
-    console.log('🏠 Updating asset account balance:', { userId, accountId, newBalance, notes });
+    console.log('🏠 Updating asset account balance:', { accountId, newBalance, notes });
     
+    // Get current account
     const accountRef = doc(db, 'users', userId, 'accounts', accountId);
     const accountSnap = await getDoc(accountRef);
     
@@ -1086,32 +1087,36 @@ export const updateAssetAccountBalance = async (
     const currentAccount = accountSnap.data() as Account;
     const difference = newBalance - currentAccount.balance;
     
-    // Update account balance and lastValueUpdate timestamp
+    if (difference === 0) {
+      console.log('💰 No balance change detected');
+      return;
+    }
+    
+    // Update account balance and timestamp
     await updateDoc(accountRef, {
       balance: newBalance,
       lastValueUpdate: Date.now(),
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     });
     
-    // Create an auto-transaction for the difference
-    if (difference !== 0) {
-      const transactionData: Omit<Transaction, 'id'> = {
-        accountId: accountId,
-        amount: Math.abs(difference),
-        description: notes || (difference > 0 ? 'Asset value increased' : 'Asset value decreased'),
-        date: new Date().toISOString().split('T')[0], // Current date
-        isManual: false,
-        source: 'asset-valuation',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      
-      await addDoc(collection(db, 'users', userId, 'transactions'), transactionData);
-    }
+    // Create auto-transaction for the difference
+    const transactionData: Omit<Transaction, 'id'> = {
+      accountId,
+      amount: difference,
+      description: notes || `Asset value update: ${difference > 0 ? '+' : ''}${difference.toFixed(2)}`,
+      date: new Date().toISOString().split('T')[0],
+      isManual: false,
+      source: 'asset-valuation',
+      tagIds: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
     
-    console.log('✅ Asset account balance updated and auto-transaction created successfully');
+    await createTransaction(userId, transactionData);
+    
+    console.log('✅ Asset balance updated successfully with auto-transaction');
   } catch (error) {
-    console.error('❌ Error updating asset account balance:', error);
+    console.error('❌ Error updating asset balance:', error);
     throw error;
   }
 };
@@ -3622,6 +3627,60 @@ export const linkTransactions = async (userId: string, transactionId1: string, t
     console.log('✅ Transactions linked successfully');
   } catch (error) {
     console.error('❌ Error linking transactions:', error);
+    throw error;
+  }
+};
+
+// Migration function to create initial balance transactions for existing accounts
+export const migrateExistingAccountsToInitialBalance = async (userId: string): Promise<void> => {
+  try {
+    console.log('🔄 Starting migration: Creating initial balance transactions for existing accounts');
+    
+    // Get all user accounts
+    const accounts = await getAccountsByUser(userId);
+    let migratedCount = 0;
+    let skippedCount = 0;
+    
+    for (const account of accounts) {
+      // Check if account already has initial balance transaction
+      const transactions = await getTransactionsByAccount(userId, account.id);
+      const hasInitialBalance = transactions.some(t => t.source === 'initial-balance');
+      
+      if (hasInitialBalance) {
+        console.log(`⏭️  Account ${account.name} already has initial balance transaction, skipping`);
+        skippedCount++;
+        continue;
+      }
+      
+      // Check if account has initial balance that needs a transaction
+      if (account.initialBalance !== 0) {
+        console.log(`📝 Creating initial balance transaction for account: ${account.name}`);
+        
+        const transactionData: Omit<Transaction, 'id'> = {
+          accountId: account.id,
+          amount: account.initialBalance,
+          description: `Initial balance: ${account.initialBalance.toFixed(2)}`,
+          date: new Date(account.createdAt).toISOString().split('T')[0],
+          isManual: false,
+          source: 'initial-balance',
+          tagIds: [],
+          createdAt: account.createdAt,
+          updatedAt: Date.now()
+        };
+        
+        await createTransaction(userId, transactionData);
+        migratedCount++;
+        
+        console.log(`✅ Created initial balance transaction for ${account.name}: ${account.initialBalance}`);
+      } else {
+        console.log(`⏭️  Account ${account.name} has no initial balance, skipping`);
+        skippedCount++;
+      }
+    }
+    
+    console.log(`🎉 Migration completed! Migrated: ${migratedCount}, Skipped: ${skippedCount}`);
+  } catch (error) {
+    console.error('❌ Error during migration:', error);
     throw error;
   }
 };
