@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { updateAccount, deleteAccount, getAccountTypes, type Account, type AccountType } from '../firebase/config';
+import { updateAccount, deleteAccount, getAccountTypes, getTransactionsByAccount, updateTransaction, type Account, type AccountType } from '../firebase/config';
 import UpdateAssetBalanceModal from './UpdateAssetBalanceModal';
 
 interface EditAccountModalProps {
@@ -26,7 +26,6 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   const [initialBalance, setInitialBalance] = useState('');
   const [selectedAccountTypeId, setSelectedAccountTypeId] = useState('');
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
-  const [isRealAccount, setIsRealAccount] = useState(false);
   const [currency, setCurrency] = useState('EUR');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [category, setCategory] = useState<'family' | 'personal'>('personal');
@@ -46,7 +45,6 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       // Initialize form with current account data
       setAccountName(account.name);
       setInitialBalance(account.initialBalance.toString());
-      setIsRealAccount(account.isReal);
       setSelectedAccountTypeId(account.type);
       setCurrency(account.currency || 'EUR');
       setCategory(account.category || 'personal');
@@ -74,6 +72,32 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       setAccountTypes(types);
     } catch (error) {
       console.error('Error loading account types:', error);
+    }
+  };
+
+  const findAndUpdateInitialBalanceTransaction = async (newInitialBalance: number) => {
+    if (!user) return;
+    
+    try {
+      // Find the initial balance transaction for this account
+      const transactions = await getTransactionsByAccount(user.uid, account.id);
+      const initialBalanceTransaction = transactions.find(t => t.source === 'initial-balance');
+      
+      if (initialBalanceTransaction) {
+        // Update the initial balance transaction amount
+        await updateTransaction(initialBalanceTransaction.id, {
+          amount: newInitialBalance,
+          description: `Initial balance: ${newInitialBalance.toFixed(2)}`,
+          updatedAt: Date.now()
+        }, user.uid);
+        
+        console.log('✅ Updated initial balance transaction:', initialBalanceTransaction.id);
+      } else {
+        console.log('⚠️ No initial balance transaction found for account:', account.id);
+      }
+    } catch (error) {
+      console.error('❌ Error updating initial balance transaction:', error);
+      throw error;
     }
   };
 
@@ -128,6 +152,11 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       
       // Find the selected account type to get its properties
       const selectedType = accountTypes.find(t => t.name === selectedAccountTypeId);
+      
+      // Update the initial balance transaction if it exists
+      if (newInitialBalance !== account.initialBalance) {
+        await findAndUpdateInitialBalanceTransaction(newInitialBalance);
+      }
       
       // Update account
       await updateAccount(account.id, {

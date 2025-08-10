@@ -1045,8 +1045,8 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Migration Button */}
-              <div className="mb-4">
+              {/* Migration Button - Hidden as no longer needed */}
+              {/* <div className="mb-4">
                 <button 
                   onClick={handleMigrateInitialBalances}
                   className="w-full px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center justify-center text-sm font-medium"
@@ -1057,7 +1057,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                   </svg>
                   Migrate Initial Balances
                 </button>
-              </div>
+              </div> */}
 
               {/* Family Accounts Section */}
               {familyAccounts.length > 0 && (
