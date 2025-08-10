@@ -722,24 +722,32 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [transactionTags, setTransactionTags] = useState<Record<string, Tag[]>>({});
-  const [transactionSplits, setTransactionSplits] = useState<Record<string, TransactionSplit[]>>({});
+  const [transactions, setTransactions] = useState<(Transaction & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingTransactions, setLoadingTransactions] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedAccountForAssetUpdate, setSelectedAccountForAssetUpdate] = useState<Account | null>(null);
+  const [splittingTransaction, setSplittingTransaction] = useState<(Transaction & { id: string }) | null>(null);
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [transactionTags, setTransactionTags] = useState<Record<string, Tag[]>>({});
+  const [transactionSplits, setTransactionSplits] = useState<Record<string, TransactionSplit[]>>({});
+  
+  // Collapse/expand state for account sections
+  const [familyAccountsCollapsed, setFamilyAccountsCollapsed] = useState(false);
+  const [personalAccountsCollapsed, setPersonalAccountsCollapsed] = useState(false);
+  const [assetsAccountsCollapsed, setAssetsAccountsCollapsed] = useState(false);
+  const [otherAccountsCollapsed, setOtherAccountsCollapsed] = useState(false);
+  
+  // Additional state variables that were removed
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showSharingModal, setShowSharingModal] = useState(false);
   const [selectedAccountForSharing, setSelectedAccountForSharing] = useState<Account | null>(null);
   const [showLinkTransactionsModal, setShowLinkTransactionsModal] = useState(false);
   const [selectedTransactionForLinking, setSelectedTransactionForLinking] = useState<(Transaction & { id: string }) | null>(null);
   const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
-  const [selectedAccountForAssetUpdate, setSelectedAccountForAssetUpdate] = useState<Account | null>(null);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [selectedAccountForEdit, setSelectedAccountForEdit] = useState<Account | null>(null);
-  const [showSplitModal, setShowSplitModal] = useState(false);
-  const [splittingTransaction, setSplittingTransaction] = useState<(Transaction & { id: string }) | null>(null);
 
 
   useEffect(() => {
@@ -1085,94 +1093,154 @@ const FinancialHubSplitViewPage: React.FC = () => {
               {/* Family Accounts Section */}
               {familyAccounts.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    👨‍👩‍👧‍👦 Family Accounts
-                  </h4>
-                  <div className="space-y-1">
-                    {familyAccounts.map(account => (
-                      <AccountListItem 
-                        key={account.id}
-                        account={account}
-                        isSelected={selectedAccountId === account.id}
-                        onClick={() => setSelectedAccountId(account.id)}
-                        onShare={handleShareAccount}
-                        onEdit={handleEditAccount}
-                        onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
-                      />
-                    ))}
+                  <div 
+                    className="flex items-center justify-between cursor-pointer mb-2"
+                    onClick={() => setFamilyAccountsCollapsed(!familyAccountsCollapsed)}
+                  >
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      👨‍👩‍👧‍👦 Family Accounts
+                    </h4>
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${familyAccountsCollapsed ? 'rotate-90' : '-rotate-90'}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
+                  {!familyAccountsCollapsed && (
+                    <div className="space-y-1">
+                      {familyAccounts.map(account => (
+                        <AccountListItem 
+                          key={account.id}
+                          account={account}
+                          isSelected={selectedAccountId === account.id}
+                          onClick={() => setSelectedAccountId(account.id)}
+                          onShare={handleShareAccount}
+                          onEdit={handleEditAccount}
+                          onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Personal Accounts Section */}
               {personalAccounts.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    👤 Personal Accounts
-                  </h4>
-                  <div className="space-y-1">
-                    {personalAccounts.map(account => (
-                      <AccountListItem 
-                        key={account.id}
-                        account={account}
-                        isSelected={selectedAccountId === account.id}
-                        onClick={() => setSelectedAccountId(account.id)}
-                        onShare={handleShareAccount}
-                        onEdit={handleEditAccount}
-                        onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
-                      />
-                    ))}
+                  <div 
+                    className="flex items-center justify-between cursor-pointer mb-2"
+                    onClick={() => setPersonalAccountsCollapsed(!personalAccountsCollapsed)}
+                  >
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      👤 Personal Accounts
+                    </h4>
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${personalAccountsCollapsed ? 'rotate-90' : '-rotate-90'}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
+                  {!personalAccountsCollapsed && (
+                    <div className="space-y-1">
+                      {personalAccounts.map(account => (
+                        <AccountListItem 
+                          key={account.id}
+                          account={account}
+                          isSelected={selectedAccountId === account.id}
+                          onClick={() => setSelectedAccountId(account.id)}
+                          onShare={handleShareAccount}
+                          onEdit={handleEditAccount}
+                          onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Assets Accounts Section */}
               {accounts.filter(account => account.accountType === 'asset').length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    🏠 Assets Accounts
-                  </h4>
-                  <div className="space-y-1">
-                    {accounts
-                      .filter(account => account.accountType === 'asset')
-                      .map(account => (
-                        <AccountListItem 
-                          key={account.id}
-                          account={account}
-                          isSelected={selectedAccountId === account.id}
-                          onClick={() => setSelectedAccountId(account.id)}
-                          onShare={handleShareAccount}
-                          onEdit={handleEditAccount}
-                          onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
-                        />
-                      ))}
+                  <div 
+                    className="flex items-center justify-between cursor-pointer mb-2"
+                    onClick={() => setAssetsAccountsCollapsed(!assetsAccountsCollapsed)}
+                  >
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      🏠 Assets Accounts
+                    </h4>
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${assetsAccountsCollapsed ? 'rotate-90' : '-rotate-90'}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
+                  {!assetsAccountsCollapsed && (
+                    <div className="space-y-1">
+                      {accounts
+                        .filter(account => account.accountType === 'asset')
+                        .map(account => (
+                          <AccountListItem 
+                            key={account.id}
+                            account={account}
+                            isSelected={selectedAccountId === account.id}
+                            onClick={() => setSelectedAccountId(account.id)}
+                            onShare={handleShareAccount}
+                            onEdit={handleEditAccount}
+                            onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
+                          />
+                        ))}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Other Accounts (no specific category) */}
               {accounts.filter(account => 
-                account.category !== 'family' && account.category !== 'personal' && account.accountType !== 'asset'
+                account.category !== 'family' && account.category !== 'personal' && account.category !== 'assets' && account.accountType !== 'asset'
               ).length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    💼 Other Accounts
-                  </h4>
-                  <div className="space-y-1">
-                    {accounts
-                      .filter(account => account.category !== 'family' && account.category !== 'personal' && account.accountType !== 'asset')
-                      .map(account => (
-                        <AccountListItem 
-                          key={account.id}
-                          account={account}
-                          isSelected={selectedAccountId === account.id}
-                          onClick={() => setSelectedAccountId(account.id)}
-                          onShare={handleShareAccount}
-                          onEdit={handleEditAccount}
-                          onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
-                        />
-                      ))}
+                  <div 
+                    className="flex items-center justify-between cursor-pointer mb-2"
+                    onClick={() => setOtherAccountsCollapsed(!otherAccountsCollapsed)}
+                  >
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      💼 Other Accounts
+                    </h4>
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${otherAccountsCollapsed ? 'rotate-90' : '-rotate-90'}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
+                  {!otherAccountsCollapsed && (
+                    <div className="space-y-1">
+                      {accounts
+                        .filter(account => account.category !== 'family' && account.category !== 'personal' && account.category !== 'assets' && account.accountType !== 'asset')
+                        .map(account => (
+                          <AccountListItem
+                            key={account.id}
+                            account={account}
+                            isSelected={selectedAccountId === account.id}
+                            onClick={() => setSelectedAccountId(account.id)}
+                            onShare={handleShareAccount}
+                            onEdit={handleEditAccount}
+                            onUpdateValue={() => setSelectedAccountForAssetUpdate(account)}
+                          />
+                        ))}
+                    </div>
+                  )}
                 </div>
               )}
 

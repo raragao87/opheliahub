@@ -24,7 +24,7 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [isActive, setIsActive] = useState(true);
-  const [category, setCategory] = useState<'family' | 'personal'>('personal');
+  const [category, setCategory] = useState<'family' | 'personal' | 'assets'>('personal');
   
   // Budget items state
   const [budgetItems, setBudgetItems] = useState<Array<{
@@ -281,7 +281,7 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
                     name="category"
                     value="personal"
                     checked={category === 'personal'}
-                    onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                    onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
                     className="mr-2 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="text-sm text-gray-700">Personal</span>
@@ -292,14 +292,25 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
                     name="category"
                     value="family"
                     checked={category === 'family'}
-                    onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                    onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
                     className="mr-2 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="text-sm text-gray-700">Family</span>
                 </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="category"
+                    value="assets"
+                    checked={category === 'assets'}
+                    onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
+                    className="mr-2 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">🏠 Assets</span>
+                </label>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Choose whether this budget is for personal or family use
+                Choose whether this budget is for personal, family, or assets use
               </p>
             </div>
 

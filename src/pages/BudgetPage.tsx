@@ -24,7 +24,7 @@ const BudgetPage: React.FC<BudgetPageProps> = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedBudget, setSelectedBudget] = useState<(Budget & { id: string }) | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [category, setCategory] = useState<'family' | 'personal'>('personal');
+  const [category, setCategory] = useState<'family' | 'personal' | 'assets'>('personal');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -187,10 +187,10 @@ const BudgetPage: React.FC<BudgetPageProps> = () => {
           </div>
           <div className="mt-4">
             <h1 className="text-3xl font-bold text-gray-900">
-              {category === 'family' ? 'Family Budgets' : 'Personal Budgets'}
+              {category === 'family' ? 'Family Budgets' : category === 'personal' ? 'Personal Budgets' : 'Assets Budgets'}
             </h1>
             <p className="mt-2 text-gray-600">
-              Create and manage {category} monthly budgets using tag-based categories
+              Create and manage {category === 'assets' ? 'assets' : category} monthly budgets using tag-based categories
             </p>
           </div>
         </div>

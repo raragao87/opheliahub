@@ -17,7 +17,7 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState('');
   const [accountType, setAccountType] = useState<'bank' | 'pseudo' | 'asset'>('bank');
-  const [category, setCategory] = useState<'family' | 'personal'>('personal');
+  const [category, setCategory] = useState<'family' | 'personal' | 'assets'>('personal');
   const [balance, setBalance] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedType, setSelectedType] = useState<string>('');
@@ -193,7 +193,7 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                   type="radio"
                   value="personal"
                   checked={category === 'personal'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
                   className="mr-2"
                 />
                 <span>👤 Personal</span>
@@ -203,14 +203,24 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                   type="radio"
                   value="family"
                   checked={category === 'family'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal')}
+                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
                   className="mr-2"
                 />
                 <span>👨‍👩‍👧‍👦 Family</span>
               </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="assets"
+                  checked={category === 'assets'}
+                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
+                  className="mr-2"
+                />
+                <span>🏠 Assets</span>
+              </label>
             </div>
             <p className="text-sm text-gray-600 mt-1">
-              Choose whether this account is for personal or family use.
+              Choose whether this account is for personal, family, or assets use.
             </p>
           </div>
 

@@ -215,7 +215,7 @@ export interface Account {
   sharedWith: string[];
   ownerId: string;
   isReal: boolean;
-  category: 'family' | 'personal';
+  category: 'family' | 'personal' | 'assets';
   accountType: 'bank' | 'pseudo' | 'asset'; // NEW FIELD
   lastValueUpdate?: number; // Track when balance was last manually updated for asset accounts
   createdAt: number;
@@ -313,7 +313,7 @@ export interface Budget {
   year: number;
   userId: string;
   isActive: boolean;
-  category: 'family' | 'personal';
+  category: 'family' | 'personal' | 'assets';
   createdAt: number;
   updatedAt: number;
 }
@@ -3171,7 +3171,7 @@ export const updateCardVisibility = async (userId: string, cardId: string, visib
 };
 
 // Get accounts by category
-export const getAccountsByCategory = async (userId: string, category: 'family' | 'personal'): Promise<Account[]> => {
+export const getAccountsByCategory = async (userId: string, category: 'family' | 'personal' | 'assets'): Promise<Account[]> => {
   try {
     console.log(`💰 Fetching ${category} accounts for user:`, userId);
     
@@ -3203,7 +3203,7 @@ export const getAccountsByCategory = async (userId: string, category: 'family' |
 };
 
 // Get budgets by category
-export const getBudgetsByCategory = async (userId: string, category: 'family' | 'personal'): Promise<(Budget & { id: string })[]> => {
+export const getBudgetsByCategory = async (userId: string, category: 'family' | 'personal' | 'assets'): Promise<(Budget & { id: string })[]> => {
   try {
     console.log(`💰 Loading ${category} budgets for user:`, userId);
     

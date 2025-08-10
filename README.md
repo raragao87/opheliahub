@@ -58,13 +58,14 @@ The application requires the following environment variables:
 - **Sharing**: Collaborate with family members and caregivers
 
 ### 💰 Financial Management
-- **Multi-Account Support**: Bank accounts, pseudo accounts, and asset accounts
-- **Transaction Management**: Track income, expenses, and transfers
-- **Asset Tracking**: Monitor real estate, investments, and other assets with auto-valuation
+- **Multi-Account Support**: Bank accounts, pseudo accounts, and specialized asset accounts
+- **Transaction Management**: Track income, expenses, and transfers with comprehensive categorization
+- **🏠 Asset Tracking**: Monitor real estate, investments, vehicles, and other valuable assets with auto-transaction generation
 - **Transaction Splitting**: Split complex transactions into multiple categories
 - **Tag System**: Organize transactions with customizable tags and categories
-- **Budget Planning**: Create and track family and personal budgets
+- **Budget Planning**: Create and track family, personal, and assets budgets
 - **Import/Export**: CSV and Excel file support for bulk transaction import
+- **💰 Initial Balance Management**: Atemporal initial balance transactions with standardized formatting
 
 ### 👥 Collaboration & Sharing
 - **Account Sharing**: Share financial accounts with family members
@@ -131,7 +132,16 @@ firebase deploy
 
 ## 🚀 Recent Updates
 
-### Latest Release - Transaction Management Improvements
+### Latest Release - Assets Account Category & Enhanced Financial Management
+- **🏠 Assets Account Category**: New specialized account type for tracking real estate, investments, vehicles, and other valuable assets
+- **🔄 Auto-Transaction Generation**: Automatically creates transactions when asset values are updated, maintaining complete audit trail
+- **📊 Collapsible Account Sections**: Added collapse/expand functionality to all account sections in the Financial Hub sidebar for better organization
+- **💰 Enhanced Initial Balance System**: Improved initial balance transactions with atemporal nature and standardized formatting
+- **🔧 Critical Balance Fix**: Resolved double-counting issue in account balance calculations for accurate financial tracking
+- **🚨 Emergency Data Cleanup**: Automated one-time fix for existing data inconsistencies and duplicate transactions
+- **📱 Improved UI/UX**: Better visual indicators and responsive design for asset account management
+
+### Previous Release - Transaction Management Improvements
 - **🔧 Split Transaction Alignment**: Fixed alignment issues between split transaction items and column headers
 - **📱 Compact Interface**: Reduced transaction row padding and improved overall table compactness
 - **✂️ Enhanced Split Functionality**: Improved split transaction button with scissors icon and better modal integration
@@ -139,12 +149,6 @@ firebase deploy
 - **📊 Asset Account Support**: Added comprehensive asset account management with auto-transaction generation
 - **✏️ Edit Account Integration**: Added edit buttons to account cards for quick modifications
 - **🔄 Improved Sidebar**: Moved account creation and refresh buttons to sidebar for better UX
-
-### Previous Features
-- **Account Management**: Full CRUD operations for financial accounts
-- **Transaction Tracking**: Comprehensive transaction management with tags and categories
-- **Growth Monitoring**: Child development tracking with visual charts
-- **Family Sharing**: Collaborative account and profile sharing system
 
 ---
 
