@@ -1,6 +1,6 @@
-# OpheliaHub - Family Growth Tracker
+# OpheliaHub - Family Growth Tracker & Financial Hub
 
-A React + TypeScript + Vite application for tracking child growth and family management.
+A comprehensive React + TypeScript + Vite application for tracking child growth, family management, and financial organization with advanced features like asset tracking, transaction management, and collaborative sharing.
 
 ## 🚀 Quick Start
 
@@ -49,11 +49,75 @@ The application requires the following environment variables:
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Messaging Sender ID | `123456789` |
 | `VITE_FIREBASE_APP_ID` | Firebase App ID | `1:123456789:web:abc123` |
 
-## 🔒 Security
+## ✨ Features
 
-- Environment variables are stored in `.env` (not committed to Git)
-- Firebase configuration is loaded from environment variables
-- Missing environment variables will cause the app to fail with clear error messages
+### 🌱 Growth Tracking
+- **Child Profile Management**: Create and manage multiple child profiles
+- **Growth Records**: Track height, weight, and other growth metrics over time
+- **Data Visualization**: Visual charts and progress tracking
+- **Sharing**: Collaborate with family members and caregivers
+
+### 💰 Financial Management
+- **Multi-Account Support**: Bank accounts, pseudo accounts, and asset accounts
+- **Transaction Management**: Track income, expenses, and transfers
+- **Asset Tracking**: Monitor real estate, investments, and other assets with auto-valuation
+- **Transaction Splitting**: Split complex transactions into multiple categories
+- **Tag System**: Organize transactions with customizable tags and categories
+- **Budget Planning**: Create and track family and personal budgets
+- **Import/Export**: CSV and Excel file support for bulk transaction import
+
+### 👥 Collaboration & Sharing
+- **Account Sharing**: Share financial accounts with family members
+- **Invitation System**: Send and manage sharing invitations
+- **Access Control**: Granular permissions for shared resources
+- **Real-time Updates**: Synchronized data across shared users
+
+### 🎨 User Experience
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Dark/Light Themes**: Customizable interface appearance
+- **Dashboard Customization**: Personalized card layout and visibility
+- **Inline Editing**: Quick transaction and account updates
+- **Compact Interface**: Optimized for efficient data entry and viewing
+
+## 🏗️ Technical Architecture
+
+### Frontend Framework
+- **React 18**: Modern React with hooks and functional components
+- **TypeScript**: Type-safe development with comprehensive interfaces
+- **Vite**: Fast build tool and development server
+- **Tailwind CSS**: Utility-first CSS framework for responsive design
+
+### State Management
+- **React Hooks**: useState, useEffect, useRef for local component state
+- **Firebase Real-time**: Direct Firestore subscriptions for live data updates
+- **Context API**: Authentication and user state management
+
+### Database & Backend
+- **Firebase Firestore**: NoSQL document database with real-time capabilities
+- **Firebase Authentication**: Secure user authentication and authorization
+- **Firebase Security Rules**: Row-level security and access control
+- **Firebase Hosting**: Production deployment and hosting
+
+### Key Components
+- **Account Management**: CRUD operations for financial accounts with category-based organization
+- **Transaction System**: Comprehensive transaction tracking with splitting and tagging
+- **Asset Tracking**: Specialized asset accounts with auto-transaction generation
+- **Growth Monitoring**: Child development tracking with data visualization
+- **Sharing System**: Collaborative features with invitation and permission management
+
+### Data Models
+- **Account**: Supports bank, pseudo, and asset account types with category classification
+- **Transaction**: Flexible transaction system with sources, tags, and splitting capabilities
+- **Tag System**: Customizable tagging with color coding and real-time suggestions
+- **User Management**: Multi-user support with sharing and collaboration features
+
+### Performance Optimizations
+- **Lazy Loading**: Component-based code splitting for better initial load times
+- **Real-time Updates**: Efficient Firestore subscriptions with minimal re-renders
+- **Inline Editing**: Optimized for quick data entry without modal overhead
+- **Compact UI**: Streamlined interface for efficient data management
+
+## 🔒 Security
 
 ## 📦 Build & Deploy
 
@@ -64,6 +128,23 @@ npm run build
 # Deploy to Firebase Hosting
 firebase deploy
 ```
+
+## 🚀 Recent Updates
+
+### Latest Release - Transaction Management Improvements
+- **🔧 Split Transaction Alignment**: Fixed alignment issues between split transaction items and column headers
+- **📱 Compact Interface**: Reduced transaction row padding and improved overall table compactness
+- **✂️ Enhanced Split Functionality**: Improved split transaction button with scissors icon and better modal integration
+- **🏷️ Inline Tag Input**: Replaced bulky tag selector with compact inline tag input system
+- **📊 Asset Account Support**: Added comprehensive asset account management with auto-transaction generation
+- **✏️ Edit Account Integration**: Added edit buttons to account cards for quick modifications
+- **🔄 Improved Sidebar**: Moved account creation and refresh buttons to sidebar for better UX
+
+### Previous Features
+- **Account Management**: Full CRUD operations for financial accounts
+- **Transaction Tracking**: Comprehensive transaction management with tags and categories
+- **Growth Monitoring**: Child development tracking with visual charts
+- **Family Sharing**: Collaborative account and profile sharing system
 
 ---
 
