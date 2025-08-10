@@ -1301,24 +1301,21 @@ export const recalculateAccountBalance = async (userId: string, accountId: strin
   try {
     console.log('🔄 Recalculating balance for account:', accountId);
     
-    // Get the account to get initial balance
-    const accountDoc = await getDoc(doc(db, 'users', userId, 'accounts', accountId));
-    if (!accountDoc.exists()) {
-      throw new Error('Account not found');
-    }
-    
-    const account = accountDoc.data() as Account;
-    const initialBalance = account.initialBalance;
-    
     // Get all transactions for this account
     const transactions = await getTransactionsByAccount(userId, accountId);
     
-    // Calculate new balance: initial balance + sum of all transactions
+    // FIXED: Pure transaction-based calculation (no double counting)
     const newBalance = transactions.reduce((balance, transaction) => {
       return balance + transaction.amount;
-    }, initialBalance);
+    }, 0); // FIXED: Start from 0, NOT initialBalance
     
-    console.log(`✅ Balance recalculated: Initial ${initialBalance} + Transactions ${transactions.reduce((sum, t) => sum + t.amount, 0)} = ${newBalance}`);
+    console.log(`✅ Balance recalculated: Sum of all transactions = ${newBalance}`);
+    console.log('Transaction breakdown:', transactions.map(t => ({
+      id: t.id,
+      amount: t.amount,
+      source: t.source,
+      description: t.description
+    })));
     
     return newBalance;
   } catch (error) {
