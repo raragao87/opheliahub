@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { 
   getAccessibleAccounts, 
+  getAccountsByCategory,
   getTransactionsByAccountWithData,
   updateTransaction,
+  updateAccount,
   deleteTransaction,
   emergencyFixAccountBalances,
-  migrateExistingAccountsToInitialBalance,
   isInitialBalanceTransaction,
   type Account, 
   type Transaction,
@@ -26,6 +27,8 @@ import InlineTransactionRow from '../components/InlineTransactionRow';
 import InlineAddTransactionButton from '../components/InlineAddTransactionButton';
 import UpdateAssetBalanceModal from '../components/UpdateAssetBalanceModal';
 import SplitTransactionModal from '../components/SplitTransactionModal';
+import AccountTypesModal from '../components/AccountTypesModal';
+import TagsModal from '../components/TagsModal';
 
 
 // AccountListItem Component
@@ -365,10 +368,10 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         : ''
     } hover:bg-gray-50 transition-colors`}>
       
-      {/* Date Cell - Show "Atemporal" for initial balance */}
+      {/* Date Cell - Empty for initial balance */}
       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
         {isInitialBalance ? (
-          <span className="text-gray-500 italic text-sm">Atemporal</span>
+          <span></span>
         ) : (
           <InlineEditableDate
             value={transaction.date}
@@ -397,10 +400,10 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         )}
       </td>
       
-      {/* Tags Cell - Disable for initial balance */}
+      {/* Tags Cell - Empty for initial balance */}
       <td className="px-4 py-2 text-sm">
         {isInitialBalance ? (
-          <span className="text-gray-400 text-xs">No tags</span>
+          <span></span>
         ) : (
           <InlineTagInput
             transactionId={transaction.id}
@@ -410,18 +413,12 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         )}
       </td>
       
-      {/* Amount Cell - Disable editing for initial balance */}
+      {/* Amount Cell - Enable editing for initial balance */}
       <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
-        {isInitialBalance ? (
-          <span className={`font-medium ${transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {transaction.amount >= 0 ? '+' : ''}${Math.abs(transaction.amount).toLocaleString()}
-          </span>
-        ) : (
-          <InlineEditableAmount
-            value={transaction.amount}
-            onSave={(value) => onAmountUpdate(transaction.id, value)}
-          />
-        )}
+        <InlineEditableAmount
+          value={transaction.amount}
+          onSave={(value) => onAmountUpdate(transaction.id, value)}
+        />
       </td>
       
       {/* Actions Cell - Hide actions for initial balance */}
@@ -525,9 +522,37 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   };
 
   const handleAmountUpdate = async (transactionId: string, amount: number) => {
-    if (!user) return;
+    if (!user || !selectedAccount) return;
     try {
+      // Find the transaction to check if it's an initial balance transaction
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) return;
+      
+      // Update the transaction
       await updateTransaction(transactionId, { amount }, user.uid);
+      
+      // If this is an initial balance transaction, also update the account's initialBalance
+      if (isInitialBalanceTransaction(transaction)) {
+        console.log('🔄 Updating account initial balance to sync with transaction:', amount);
+        
+        // Calculate the balance difference
+        const balanceDifference = amount - selectedAccount.initialBalance;
+        const newBalance = selectedAccount.balance + balanceDifference;
+        
+        // Update the account
+        await updateAccount(selectedAccount.id, {
+          initialBalance: amount,
+          balance: newBalance,
+          updatedAt: Date.now(),
+          ownerId: selectedAccount.ownerId
+        });
+        
+        console.log('✅ Account initial balance synced successfully');
+        
+        // Reload accounts to reflect the updated balance
+        await loadAccounts(user.uid);
+      }
+      
       onTransactionUpdate();
     } catch (error) {
       console.error('Error updating transaction amount:', error);
@@ -752,6 +777,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
 // Main FinancialHubSplitViewPage Component
 const FinancialHubSplitViewPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const accountType = searchParams.get('type'); // 'family', 'personal', or null
   const [user, setUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
@@ -782,6 +809,8 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [selectedAccountForEdit, setSelectedAccountForEdit] = useState<Account | null>(null);
+  const [showAccountTypesModal, setShowAccountTypesModal] = useState(false);
+  const [showTagsModal, setShowTagsModal] = useState(false);
 
 
   useEffect(() => {
@@ -801,16 +830,8 @@ const FinancialHubSplitViewPage: React.FC = () => {
               console.log('✅ Emergency fix completed automatically');
             }
             
-            // Run initial balance migration automatically on first load (only once)
-            const hasRunMigration = localStorage.getItem(`initial_balance_migration_run_${user.uid}`);
-            if (!hasRunMigration) {
-              console.log('🔄 Running automatic initial balance migration...');
-              await migrateExistingAccountsToInitialBalance(user.uid);
-              localStorage.setItem(`initial_balance_migration_run_${user.uid}`, 'true');
-              console.log('✅ Initial balance migration completed automatically');
-            }
             
-            // Load accounts after fixes and migration
+            // Load accounts after fixes
             await loadAccounts(user.uid);
           } catch (error) {
             console.error('❌ Error during initialization:', error);
@@ -826,6 +847,13 @@ const FinancialHubSplitViewPage: React.FC = () => {
     });
     return unsubscribe;
   }, []);
+
+  // Reload accounts when accountType parameter changes
+  useEffect(() => {
+    if (user) {
+      loadAccounts(user.uid);
+    }
+  }, [accountType, user]);
 
   useEffect(() => {
     if (selectedAccountId && user) {
@@ -844,7 +872,19 @@ const FinancialHubSplitViewPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const accessibleAccounts = await getAccessibleAccounts(userId);
+      
+      let accessibleAccounts: Account[];
+      
+      if (accountType === 'family' || accountType === 'personal') {
+        // Load accounts filtered by type
+        accessibleAccounts = await getAccountsByCategory(userId, accountType);
+        console.log(`🔍 Loaded ${accountType} accounts:`, accessibleAccounts.length);
+      } else {
+        // Load all accessible accounts (default behavior)
+        accessibleAccounts = await getAccessibleAccounts(userId);
+        console.log('🔍 Loaded all accessible accounts:', accessibleAccounts.length);
+      }
+      
       setAccounts(accessibleAccounts);
       
       // Auto-select first account if available
@@ -888,7 +928,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
   };
 
   const handleBackClick = () => {
-    navigate('/financial-hub');
+    navigate('/dashboard');
   };
 
   const handleShareAccount = (account: Account) => {
@@ -937,42 +977,19 @@ const FinancialHubSplitViewPage: React.FC = () => {
     }
   };
 
-  // Migration function - temporarily enabled for testing
-  const handleMigrateInitialBalances = async () => {
-    if (!user) return;
-    try {
-      console.log('🔄 Starting manual migration of initial balances...');
-      await migrateExistingAccountsToInitialBalance(user.uid);
-      console.log('✅ Migration completed successfully');
-      
-      // Refresh accounts to show any updated data
-      await loadAccounts(user.uid);
-      
-      // If we have a selected account, reload its transactions
-      if (selectedAccount) {
-        await loadTransactions(user.uid, selectedAccount.id);
-      }
-      
-      // Show success message
-      alert('Migration completed! Initial balance transactions have been created for existing accounts.');
-    } catch (error) {
-      console.error('❌ Error during migration:', error);
-      alert(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  // Debug function to reset migration flags
-  const handleResetMigrationFlags = () => {
-    if (!user) return;
-    localStorage.removeItem(`initial_balance_migration_run_${user.uid}`);
-    localStorage.removeItem(`emergency_fix_run_${user.uid}`);
-    alert('Migration flags reset! Refresh the page to run automatic migrations again.');
-  };
 
 
   // Calculate financial summary
-  const familyAccounts = accounts.filter(account => account.category === 'family');
-  const personalAccounts = accounts.filter(account => account.category === 'personal');
+  const familyAccounts = accounts.filter(account => account.category === 'family' && account.accountType !== 'asset');
+  const personalAccounts = accounts.filter(account => account.category === 'personal' && account.accountType !== 'asset');
+  
+  // Asset accounts - filter by category based on URL parameters
+  let assetAccounts = accounts.filter(account => account.category === 'assets' || account.accountType === 'asset');
+  if (accountType === 'family') {
+    assetAccounts = assetAccounts.filter(account => account.category === 'family');
+  } else if (accountType === 'personal') {
+    assetAccounts = assetAccounts.filter(account => account.category === 'personal');
+  }
   
   const totalAssets = accounts
     .filter(account => account.defaultSign === 'positive')
@@ -1058,7 +1075,6 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-800">
                     Financial Hub
-                    <span className="ml-2 text-lg font-medium text-purple-600">(Split View Test)</span>
                   </h1>
                 </div>
               </div>
@@ -1132,25 +1148,66 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Migration Button - Temporarily enabled for testing */}
+              {/* Management Buttons */}
               <div className="mb-4 space-y-2">
                 <button 
-                  onClick={handleMigrateInitialBalances}
-                  className="w-full px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center justify-center text-sm font-medium"
-                  title="Create initial balance transactions for existing accounts"
+                  onClick={() => setShowAccountTypesModal(true)}
+                  className="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center text-sm font-medium"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 00-2 2v2a2 2 0 002 2m0 0h14m-14 0v4a2 2 0 002 2h2a2 2 0 002-2v-4" />
                   </svg>
-                  🔄 Run Migration (TEST)
+                  Account Types
                 </button>
+
                 <button 
-                  onClick={handleResetMigrationFlags}
-                  className="w-full px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center text-xs font-medium"
-                  title="Reset migration flags to allow auto-migration to run again"
+                  onClick={() => setShowTagsModal(true)}
+                  className="w-full px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center text-sm font-medium"
                 >
-                  🔄 Reset Migration Flags
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  Manage Tags
                 </button>
+              </div>
+
+              {/* Account Type Filters */}
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Filter Accounts</h3>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => navigate('/financial-hub')}
+                    className={`w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      !accountType 
+                        ? 'bg-blue-100 text-blue-800 border border-blue-300' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All Accounts ({accounts.length})
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate('/financial-hub?type=personal')}
+                    className={`w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      accountType === 'personal' 
+                        ? 'bg-green-100 text-green-800 border border-green-300' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Personal ({accounts.filter(a => a.category === 'personal').length})
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate('/financial-hub?type=family')}
+                    className={`w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      accountType === 'family' 
+                        ? 'bg-purple-100 text-purple-800 border border-purple-300' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Family ({accounts.filter(a => a.category === 'family').length})
+                  </button>
+                </div>
               </div>
 
               {/* Family Accounts Section */}
@@ -1234,7 +1291,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
               )}
 
               {/* Assets Accounts Section */}
-              {accounts.filter(account => account.category === 'assets' || account.accountType === 'asset').length > 0 && (
+              {assetAccounts.length > 0 && (
                 <div>
                   <div 
                     className="flex items-center justify-between cursor-pointer mb-2"
@@ -1254,9 +1311,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                   </div>
                   {!assetsAccountsCollapsed && (
                     <div className="space-y-1">
-                      {accounts
-                        .filter(account => account.category === 'assets' || account.accountType === 'asset')
-                        .map(account => (
+                      {assetAccounts.map(account => (
                           <AccountListItem 
                             key={account.id}
                             account={account}
@@ -1511,6 +1566,22 @@ const FinancialHubSplitViewPage: React.FC = () => {
               loadTransactions(user.uid, selectedAccount.id);
             }
           }}
+        />
+      )}
+
+      {/* Account Types Management Modal */}
+      {showAccountTypesModal && (
+        <AccountTypesModal
+          isOpen={showAccountTypesModal}
+          onClose={() => setShowAccountTypesModal(false)}
+        />
+      )}
+
+      {/* Tags Management Modal */}
+      {showTagsModal && (
+        <TagsModal
+          isOpen={showTagsModal}
+          onClose={() => setShowTagsModal(false)}
         />
       )}
     </div>

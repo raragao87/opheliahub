@@ -32,15 +32,15 @@ function App() {
           path="/financial-hub" 
           element={
             <ProtectedRoute>
-              <FinancialHubPage />
+              <FinancialHubSplitViewPage />
             </ProtectedRoute>
           } 
         />
         <Route 
-          path="/financial-hub-split-test" 
+          path="/financial-hub-legacy" 
           element={
             <ProtectedRoute>
-              <FinancialHubSplitViewPage />
+              <FinancialHubPage />
             </ProtectedRoute>
           } 
         />

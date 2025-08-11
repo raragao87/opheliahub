@@ -281,7 +281,29 @@ export interface Tag {
   id: string;
   name: string;
   color: string;
-  category?: string; // Optional grouping for display only
+  category?: string; // Optional grouping for display only (legacy)
+  subcategoryId?: string; // Reference to subcategory (new approach)
+  userId: string;
+  isDefault: boolean; // System vs user-created
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TagCategory {
+  id: string;
+  name: string;
+  color: string;
+  userId: string;
+  isDefault: boolean; // System vs user-created
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TagSubcategory {
+  id: string;
+  name: string;
+  categoryId: string;
+  color: string;
   userId: string;
   isDefault: boolean; // System vs user-created
   createdAt: number;
@@ -1421,6 +1443,19 @@ export const getTransactionsByAccount = async (userId: string, accountId: string
       ...doc.data(),
     })) as Transaction[];
     
+    // Sort transactions: initial balance first, then by createdAt desc
+    transactions.sort((a, b) => {
+      const aIsInitialBalance = isInitialBalanceTransaction(a);
+      const bIsInitialBalance = isInitialBalanceTransaction(b);
+      
+      // Initial balance transactions always come first
+      if (aIsInitialBalance && !bIsInitialBalance) return -1;
+      if (!aIsInitialBalance && bIsInitialBalance) return 1;
+      
+      // Both are initial balance or both are regular - sort by createdAt desc
+      return b.createdAt - a.createdAt;
+    });
+    
     console.log(`✅ Found ${transactions.length} transactions for account`);
     return transactions;
   } catch (error) {
@@ -1776,6 +1811,197 @@ export const deleteCategory = async (categoryName: string, userId: string): Prom
     console.log(`✅ Category "${categoryName}" marked for deletion`);
   } catch (error) {
     console.error('❌ Error deleting category:', error);
+    throw error;
+  }
+};
+
+// Enhanced Category CRUD Functions
+export const createCategory = async (userId: string, categoryData: Omit<TagCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    console.log('📂 Creating category:', categoryData.name, 'for user:', userId);
+    
+    const categoryWithTimestamps = {
+      ...categoryData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'categories'), categoryWithTimestamps);
+    console.log('✅ Category created successfully with ID:', docRef.id);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating category:', error);
+    throw error;
+  }
+};
+
+export const getCategories = async (userId: string): Promise<TagCategory[]> => {
+  try {
+    console.log('📂 Fetching categories for user:', userId);
+    
+    // Get user-created categories
+    let userCategories: TagCategory[] = [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'categories'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      userCategories = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as TagCategory[];
+      
+      console.log(`✅ Found ${userCategories.length} user-created categories`);
+    } catch (error) {
+      console.log('⚠️ No user-created categories found (this is normal for new users)');
+    }
+    
+    return userCategories;
+  } catch (error) {
+    console.error('❌ Error fetching categories:', error);
+    return [];
+  }
+};
+
+export const updateCategory = async (categoryId: string, updates: Partial<TagCategory>, userId: string): Promise<void> => {
+  try {
+    console.log('🔄 Updating category:', categoryId, updates);
+    
+    await updateDoc(doc(db, 'users', userId, 'categories', categoryId), {
+      ...updates,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Category updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating category:', error);
+    throw error;
+  }
+};
+
+export const deleteCategoryById = async (categoryId: string, userId: string): Promise<void> => {
+  try {
+    console.log('🗑️ Deleting category:', categoryId, 'for user:', userId);
+    
+    // Check if category is in use by tags
+    const tagsQuery = query(
+      collection(db, 'users', userId, 'tags'),
+      where('category', '==', categoryId)
+    );
+    const tagsSnapshot = await getDocs(tagsQuery);
+    
+    if (!tagsSnapshot.empty) {
+      throw new Error(`Cannot delete category that is in use by ${tagsSnapshot.size} tags`);
+    }
+    
+    // Check if category has subcategories
+    const subcategoriesQuery = query(
+      collection(db, 'users', userId, 'subcategories'),
+      where('categoryId', '==', categoryId)
+    );
+    const subcategoriesSnapshot = await getDocs(subcategoriesQuery);
+    
+    if (!subcategoriesSnapshot.empty) {
+      throw new Error(`Cannot delete category that has ${subcategoriesSnapshot.size} subcategories`);
+    }
+    
+    await deleteDoc(doc(db, 'users', userId, 'categories', categoryId));
+    console.log('✅ Category deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting category:', error);
+    throw error;
+  }
+};
+
+// Subcategory CRUD Functions
+export const createSubcategory = async (userId: string, subcategoryData: Omit<TagSubcategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    console.log('📁 Creating subcategory:', subcategoryData.name, 'for user:', userId);
+    
+    const subcategoryWithTimestamps = {
+      ...subcategoryData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    const docRef = await addDoc(collection(db, 'users', userId, 'subcategories'), subcategoryWithTimestamps);
+    console.log('✅ Subcategory created successfully with ID:', docRef.id);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating subcategory:', error);
+    throw error;
+  }
+};
+
+export const getSubcategories = async (userId: string): Promise<TagSubcategory[]> => {
+  try {
+    console.log('📁 Fetching subcategories for user:', userId);
+    
+    // Get user-created subcategories
+    let userSubcategories: TagSubcategory[] = [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'subcategories'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      userSubcategories = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as TagSubcategory[];
+      
+      console.log(`✅ Found ${userSubcategories.length} user-created subcategories`);
+    } catch (error) {
+      console.log('⚠️ No user-created subcategories found (this is normal for new users)');
+    }
+    
+    return userSubcategories;
+  } catch (error) {
+    console.error('❌ Error fetching subcategories:', error);
+    return [];
+  }
+};
+
+export const updateSubcategory = async (subcategoryId: string, updates: Partial<TagSubcategory>, userId: string): Promise<void> => {
+  try {
+    console.log('🔄 Updating subcategory:', subcategoryId, updates);
+    
+    await updateDoc(doc(db, 'users', userId, 'subcategories', subcategoryId), {
+      ...updates,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Subcategory updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating subcategory:', error);
+    throw error;
+  }
+};
+
+export const deleteSubcategory = async (subcategoryId: string, userId: string): Promise<void> => {
+  try {
+    console.log('🗑️ Deleting subcategory:', subcategoryId, 'for user:', userId);
+    
+    // Check if subcategory is in use by tags
+    const tagsQuery = query(
+      collection(db, 'users', userId, 'tags'),
+      where('subcategoryId', '==', subcategoryId)
+    );
+    const tagsSnapshot = await getDocs(tagsQuery);
+    
+    if (!tagsSnapshot.empty) {
+      throw new Error(`Cannot delete subcategory that is in use by ${tagsSnapshot.size} tags`);
+    }
+    
+    await deleteDoc(doc(db, 'users', userId, 'subcategories', subcategoryId));
+    console.log('✅ Subcategory deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting subcategory:', error);
     throw error;
   }
 };
@@ -3544,6 +3770,19 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       id: doc.id,
       ...doc.data(),
     })) as Transaction[];
+    
+    // Sort transactions: initial balance first, then by createdAt desc
+    transactions.sort((a, b) => {
+      const aIsInitialBalance = isInitialBalanceTransaction(a);
+      const bIsInitialBalance = isInitialBalanceTransaction(b);
+      
+      // Initial balance transactions always come first
+      if (aIsInitialBalance && !bIsInitialBalance) return -1;
+      if (!aIsInitialBalance && bIsInitialBalance) return 1;
+      
+      // Both are initial balance or both are regular - sort by createdAt desc
+      return b.createdAt - a.createdAt;
+    });
     
     if (transactions.length === 0) {
       return {
