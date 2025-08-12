@@ -4304,6 +4304,77 @@ export const getTransactionsByAccountPaginated = async (
   }
 };
 
+export const getTransactionsByAccountPage = async (
+  userId: string, 
+  accountId: string, 
+  pageSize: number = 100,
+  pageNumber: number = 1
+): Promise<{
+  transactions: Transaction[];
+  tagsMap: Record<string, Tag[]>;
+  splitsMap: Record<string, TransactionSplit[]>;
+}> => {
+  try {
+    console.log(`📄 Fetching page ${pageNumber} with ${pageSize} transactions for account:`, accountId);
+    
+    // For page-based pagination, we need to fetch all transactions up to the desired page
+    // This is not ideal for large datasets, but Firebase doesn't support offset-based pagination
+    // In a production app, you'd implement cursor-based pagination with page tracking
+    
+    let q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('accountId', '==', accountId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize * pageNumber)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const allTransactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Transaction[];
+    
+    // Get the transactions for the specific page
+    const startIndex = (pageNumber - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageTransactions = allTransactions.slice(startIndex, endIndex);
+    
+    console.log(`📊 Page ${pageNumber}: ${pageTransactions.length} transactions (${startIndex + 1}-${endIndex} of ${allTransactions.length})`);
+    
+    // Get related data for the page transactions
+    const transactionIds = pageTransactions.map(t => t.id);
+    const [tags, splits] = await Promise.all([
+      getTransactionTagsBatch(transactionIds, userId),
+      getTransactionSplitsBatch(transactionIds, userId)
+    ]);
+    
+    // Build maps
+    const tagsMap: Record<string, Tag[]> = {};
+    const splitsMap: Record<string, TransactionSplit[]> = {};
+    
+    pageTransactions.forEach(transaction => {
+      // For tags, filter by the transaction's tagIds
+      if (transaction.tagIds && transaction.tagIds.length > 0) {
+        tagsMap[transaction.id] = tags.filter(tag => transaction.tagIds!.includes(tag.id));
+      } else {
+        tagsMap[transaction.id] = [];
+      }
+      
+      // For splits, filter by the transaction's ID
+      splitsMap[transaction.id] = splits.filter(split => split.transactionId === transaction.id);
+    });
+    
+    return {
+      transactions: pageTransactions,
+      tagsMap,
+      splitsMap
+    };
+  } catch (error) {
+    console.error('❌ Error getting transactions by page:', error);
+    throw error;
+  }
+};
+
 export const getTransactionCount = async (userId: string, accountId: string): Promise<number> => {
   try {
     console.log(`💰 Getting transaction count for account:`, accountId);
@@ -4325,6 +4396,56 @@ export const getTransactionCount = async (userId: string, accountId: string): Pr
   }
 };
 
+export const getTransactionTagsBatch = async (transactionIds: string[], userId: string): Promise<Tag[]> => {
+  try {
+    if (transactionIds.length === 0) return [];
+    
+    console.log(`💰 Batch loading tags for ${transactionIds.length} transactions`);
+    
+    // Get all transactions to extract tag IDs
+    const transactionBatches = [];
+    for (let i = 0; i < transactionIds.length; i += 10) {
+      const batch = transactionIds.slice(i, i + 10);
+      transactionBatches.push(
+        getDocs(query(
+          collection(db, 'users', userId, 'transactions'),
+          where('__name__', 'in', batch)
+        ))
+      );
+    }
+    
+    const transactionResults = await Promise.all(transactionBatches);
+    const allTagIds = new Set<string>();
+    
+    transactionResults.forEach(snapshot => {
+      snapshot.docs.forEach(doc => {
+        const transaction = doc.data() as Transaction;
+        if (transaction.tagIds) {
+          transaction.tagIds.forEach(tagId => allTagIds.add(tagId));
+        }
+      });
+    });
+    
+    // Get all tags (default + user tags)
+    const userTags = await getTags(userId);
+    const defaultTags = getDefaultTags();
+    
+    // Create a map to deduplicate tags by ID (user tags take precedence)
+    const tagMap = new Map();
+    defaultTags.forEach(tag => tagMap.set(tag.id, tag));
+    userTags.forEach(tag => tagMap.set(tag.id, tag));
+    
+    // Filter tags that are assigned to any of the transactions
+    const relevantTags = Array.from(allTagIds).map(tagId => tagMap.get(tagId)).filter(Boolean);
+    
+    console.log(`✅ Loaded ${relevantTags.length} relevant tags for ${transactionIds.length} transactions`);
+    return relevantTags;
+  } catch (error) {
+    console.error('❌ Error batch loading tags:', error);
+    return [];
+  }
+};
+
 export const getTransactionSplitsBatch = async (transactionIds: string[], userId: string): Promise<TransactionSplit[]> => {
   try {
     if (transactionIds.length === 0) return [];
@@ -4332,7 +4453,7 @@ export const getTransactionSplitsBatch = async (transactionIds: string[], userId
     console.log(`💰 Batch loading splits for ${transactionIds.length} transactions`);
     
     const splitsQuery = query(
-      collection(db, 'users', userId, 'transactionSplits'),
+      collection(db, 'users', userId, 'transactions'),
       where('transactionId', 'in', transactionIds)
     );
     
@@ -4357,24 +4478,42 @@ export const getLinkedTransactionsBatch = async (transactionIds: string[], userI
     console.log(`💰 Batch loading linked transactions for ${transactionIds.length} transactions`);
     
     // Get all links where these transactions are source or target
-    const [sourceLinks, targetLinks] = await Promise.all([
-      getDocs(query(
-        collection(db, 'users', userId, 'transactionLinks'),
-        where('sourceTransactionId', 'in', transactionIds)
-      )),
-      getDocs(query(
-        collection(db, 'users', userId, 'transactionLinks'),
-        where('targetTransactionId', 'in', transactionIds)
-      ))
+    // Firestore 'in' query has a limit of 10, so we need to batch
+    const sourceLinksBatches = [];
+    const targetLinksBatches = [];
+    
+    for (let i = 0; i < transactionIds.length; i += 10) {
+      const batch = transactionIds.slice(i, i + 10);
+      sourceLinksBatches.push(
+        getDocs(query(
+          collection(db, 'users', userId, 'transactionLinks'),
+          where('sourceTransactionId', 'in', batch)
+        ))
+      );
+      targetLinksBatches.push(
+        getDocs(query(
+          collection(db, 'users', userId, 'transactionLinks'),
+          where('targetTransactionId', 'in', batch)
+        ))
+      );
+    }
+    
+    const [sourceLinksResults, targetLinksResults] = await Promise.all([
+      Promise.all(sourceLinksBatches),
+      Promise.all(targetLinksBatches)
     ]);
+    
+    // Combine all source and target links
+    const sourceLinks = sourceLinksResults.flatMap(result => result.docs);
+    const targetLinks = targetLinksResults.flatMap(result => result.docs);
     
     // Collect all linked transaction IDs
     const linkedIds = new Set<string>();
-    sourceLinks.docs.forEach(doc => {
+    sourceLinks.forEach(doc => {
       const link = doc.data() as TransactionLink;
       linkedIds.add(link.targetTransactionId);
     });
-    targetLinks.docs.forEach(doc => {
+    targetLinks.forEach(doc => {
       const link = doc.data() as TransactionLink;
       linkedIds.add(link.sourceTransactionId);
     });
@@ -4409,7 +4548,7 @@ export const getLinkedTransactionsBatch = async (transactionIds: string[], userI
     const linkedMap: { link: TransactionLink; transaction: Transaction }[] = [];
     
     // Process source links
-    sourceLinks.docs.forEach(doc => {
+    sourceLinks.forEach(doc => {
       const link = { id: doc.id, ...doc.data() } as TransactionLink;
       const targetTransaction = linkedTransactions.find(t => t.id === link.targetTransactionId);
       if (targetTransaction) {
@@ -4418,7 +4557,7 @@ export const getLinkedTransactionsBatch = async (transactionIds: string[], userI
     });
     
     // Process target links
-    targetLinks.docs.forEach(doc => {
+    targetLinks.forEach(doc => {
       const link = { id: doc.id, ...doc.data() } as TransactionLink;
       const sourceTransaction = linkedTransactions.find(t => t.id === link.sourceTransactionId);
       if (sourceTransaction) {

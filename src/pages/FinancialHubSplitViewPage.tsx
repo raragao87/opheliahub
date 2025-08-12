@@ -7,6 +7,7 @@ import {
   getAccountsByCategory,
   getTransactionsByAccountWithData,
   getTransactionsByAccountPaginated,
+  getTransactionsByAccountPage,
   getTransactionCount,
   updateTransaction,
   updateAccount,
@@ -903,23 +904,14 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
       setLoadingTransactions(true);
       console.log(`📄 Loading page ${page} for account ${accountId}`);
       
-      // Calculate the offset for the page
-      const offset = (page - 1) * transactionsPerPage;
+      // Use the proper Firebase pagination function
+      const result = await getTransactionsByAccountPage(userId, accountId, transactionsPerPage, page);
       
-      // For now, we'll load all transactions and slice them
-      // In a production app, you'd implement proper server-side pagination
-      const result = await getTransactionsByAccountWithData(userId, accountId);
-      
-      // Slice the transactions for the current page
-      const startIndex = offset;
-      const endIndex = startIndex + transactionsPerPage;
-      const pageTransactions = result.transactions.slice(startIndex, endIndex);
-      
-      setPageTransactions(pageTransactions);
+      setPageTransactions(result.transactions);
       setPageTransactionTags(result.tagsMap);
       setPageTransactionSplits(result.splitsMap);
       
-      console.log(`✅ Loaded page ${page}: ${pageTransactions.length} transactions (${startIndex + 1}-${endIndex} of ${result.transactions.length})`);
+      console.log(`✅ Loaded page ${page}: ${result.transactions.length} transactions`);
     } catch (error) {
       console.error('Error loading transactions for page:', error);
     } finally {
