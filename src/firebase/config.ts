@@ -4375,26 +4375,78 @@ export const getTransactionsByAccountPage = async (
   }
 };
 
-export const getTransactionCount = async (userId: string, accountId: string): Promise<number> => {
+export const getTransactionsByAccountPageCursor = async (
+  userId: string, 
+  accountId: string, 
+  pageSize: number = 100,
+  pageNumber: number = 1
+): Promise<{
+  transactions: Transaction[];
+  tagsMap: Record<string, Tag[]>;
+  splitsMap: Record<string, TransactionSplit[]>;
+}> => {
   try {
-    console.log(`💰 Getting transaction count for account:`, accountId);
+    console.log(`📄 Fetching page ${pageNumber} with ${pageSize} transactions for account:`, accountId);
     
-    const q = query(
+    // For page-based pagination, we need to fetch all transactions up to the desired page
+    // This is not ideal for large datasets, but Firebase doesn't support offset-based pagination
+    // In a production app, you'd implement cursor-based pagination with page tracking
+    
+    let q = query(
       collection(db, 'users', userId, 'transactions'),
-      where('accountId', '==', accountId)
+      where('accountId', '==', accountId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize * pageNumber)
     );
     
     const querySnapshot = await getDocs(q);
-    const count = querySnapshot.size;
+    const allTransactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Transaction[];
     
-    console.log(`✅ Found ${count} total transactions for account`);
+    // Get the transactions for the specific page
+    const startIndex = (pageNumber - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageTransactions = allTransactions.slice(startIndex, endIndex);
     
-    return count;
+    console.log(`📊 Page ${pageNumber}: ${pageTransactions.length} transactions (${startIndex + 1}-${endIndex} of ${allTransactions.length})`);
+    
+    // Get related data for the page transactions
+    const transactionIds = pageTransactions.map(t => t.id);
+    const [tags, splits] = await Promise.all([
+      getTransactionTagsBatch(transactionIds, userId),
+      getTransactionSplitsBatch(transactionIds, userId)
+    ]);
+    
+    // Build maps
+    const tagsMap: Record<string, Tag[]> = {};
+    const splitsMap: Record<string, TransactionSplit[]> = {};
+    
+    pageTransactions.forEach(transaction => {
+      // For tags, filter by the transaction's tagIds
+      if (transaction.tagIds && transaction.tagIds.length > 0) {
+        tagsMap[transaction.id] = tags.filter(tag => transaction.tagIds!.includes(tag.id));
+      } else {
+        tagsMap[transaction.id] = [];
+      }
+      
+      // For splits, filter by the transaction's ID
+      splitsMap[transaction.id] = splits.filter(split => split.transactionId === transaction.id);
+    });
+    
+    return {
+      transactions: pageTransactions,
+      tagsMap,
+      splitsMap
+    };
   } catch (error) {
-    console.error('❌ Error getting transaction count:', error);
+    console.error('❌ Error getting transactions by page:', error);
     throw error;
   }
 };
+
+
 
 export const getTransactionTagsBatch = async (transactionIds: string[], userId: string): Promise<Tag[]> => {
   try {
@@ -5018,6 +5070,95 @@ export const moveHierarchyItemWithChildren = async (
     
   } catch (error) {
     console.error('❌ Error moving hierarchy item with children:', error);
+    throw error;
+  }
+};
+
+export const getTransactionsByAccountPageSimple = async (
+  userId: string, 
+  accountId: string, 
+  pageSize: number = 100,
+  pageNumber: number = 1
+): Promise<{
+  transactions: Transaction[];
+  tagsMap: Record<string, Tag[]>;
+  splitsMap: Record<string, TransactionSplit[]>;
+}> => {
+  try {
+    console.log(`📄 Fetching page ${pageNumber} with ${pageSize} transactions for account:`, accountId);
+    
+    // Simple approach: load all transactions and slice them
+    // This is not ideal for large datasets but will work for now
+    const q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('accountId', '==', accountId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const allTransactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Transaction[];
+    
+    // Get the transactions for the specific page
+    const startIndex = (pageNumber - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageTransactions = allTransactions.slice(startIndex, endIndex);
+    
+    console.log(`📊 Page ${pageNumber}: ${pageTransactions.length} transactions (${startIndex + 1}-${endIndex} of ${allTransactions.length})`);
+    
+    // Get related data for the page transactions
+    const transactionIds = pageTransactions.map(t => t.id);
+    const [tags, splits] = await Promise.all([
+      getTransactionTagsBatch(transactionIds, userId),
+      getTransactionSplitsBatch(transactionIds, userId)
+    ]);
+    
+    // Build maps
+    const tagsMap: Record<string, Tag[]> = {};
+    const splitsMap: Record<string, TransactionSplit[]> = {};
+    
+    pageTransactions.forEach(transaction => {
+      // For tags, filter by the transaction's tagIds
+      if (transaction.tagIds && transaction.tagIds.length > 0) {
+        tagsMap[transaction.id] = tags.filter(tag => transaction.tagIds!.includes(tag.id));
+      } else {
+        tagsMap[transaction.id] = [];
+      }
+      
+      // For splits, filter by the transaction's ID
+      splitsMap[transaction.id] = splits.filter(split => split.transactionId === transaction.id);
+    });
+    
+    return {
+      transactions: pageTransactions,
+      tagsMap,
+      splitsMap
+    };
+  } catch (error) {
+    console.error('❌ Error getting transactions by page:', error);
+    throw error;
+  }
+};
+
+export const getTransactionCount = async (userId: string, accountId: string): Promise<number> => {
+  try {
+    console.log(`💰 Getting transaction count for account:`, accountId);
+    
+    const q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('accountId', '==', accountId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const count = querySnapshot.size;
+    
+    console.log(`✅ Found ${count} total transactions for account`);
+    
+    return count;
+  } catch (error) {
+    console.error('❌ Error getting transaction count:', error);
     throw error;
   }
 };

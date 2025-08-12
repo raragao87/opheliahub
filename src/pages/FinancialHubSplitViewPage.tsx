@@ -7,7 +7,7 @@ import {
   getAccountsByCategory,
   getTransactionsByAccountWithData,
   getTransactionsByAccountPaginated,
-  getTransactionsByAccountPage,
+  getTransactionsByAccountPageSimple,
   getTransactionCount,
   updateTransaction,
   updateAccount,
@@ -905,7 +905,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
       console.log(`📄 Loading page ${page} for account ${accountId}`);
       
       // Use the proper Firebase pagination function
-      const result = await getTransactionsByAccountPage(userId, accountId, transactionsPerPage, page);
+      const result = await getTransactionsByAccountPageSimple(userId, accountId, transactionsPerPage, page);
       
       setPageTransactions(result.transactions);
       setPageTransactionTags(result.tagsMap);
