@@ -107,7 +107,15 @@ const BulkTagModal: React.FC<BulkTagModalProps> = ({
             <div className="max-h-40 overflow-y-auto space-y-2">
               {selectedTransactions.map((transaction) => (
                 <div key={transaction.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm text-gray-700">{transaction.description}</span>
+                                          <span 
+                          className="text-sm text-gray-700 cursor-help"
+                          title={transaction.description.length > 40 ? transaction.description : undefined}
+                        >
+                          {transaction.description.length > 40 
+                            ? transaction.description.substring(0, 40) + '...' 
+                            : transaction.description
+                          }
+                        </span>
                   <span className={`text-sm font-medium ${transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(transaction.amount)}
                   </span>

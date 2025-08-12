@@ -10,7 +10,7 @@ const InlineAddTransactionButton: React.FC<InlineAddTransactionButtonProps> = ({
       className="hover:bg-gray-50 cursor-pointer transition-colors group" 
       onClick={onClick}
     >
-      <td colSpan={5} className="px-4 py-2 text-center">
+      <td colSpan={6} className="px-4 py-2 text-center">
         <div className="border-2 border-dashed border-gray-300 rounded-lg py-3 group-hover:border-blue-300 transition-colors">
           <div className="flex items-center justify-center space-x-2 text-gray-500 group-hover:text-blue-600 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

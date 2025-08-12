@@ -848,7 +848,15 @@ const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
                       <div className="text-2xl">{getTransactionIcon(transaction.amount)}</div>
                       <div>
                         <div className="flex items-center space-x-2">
-                          <p className="font-medium text-gray-800">{transaction.description}</p>
+                          <p 
+                            className="font-medium text-gray-800 cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors"
+                            title={transaction.description.length > 50 ? transaction.description : undefined}
+                          >
+                            {transaction.description.length > 50 
+                              ? transaction.description.substring(0, 50) + '...' 
+                              : transaction.description
+                            }
+                          </p>
                           {transaction.isSplit && (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
                               ✂️ Split

@@ -281,7 +281,15 @@ const LinkTransactionModal: React.FC<LinkTransactionModalProps> = ({
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium text-gray-800">{transaction.description}</p>
+                              <p 
+                                className="font-medium text-gray-800 cursor-help"
+                                title={transaction.description.length > 40 ? transaction.description : undefined}
+                              >
+                                {transaction.description.length > 40 
+                                  ? transaction.description.substring(0, 40) + '...' 
+                                  : transaction.description
+                                }
+                              </p>
                               <p className="text-sm text-gray-500">
                                 {account?.name} • {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
                               </p>
@@ -364,7 +372,15 @@ const LinkTransactionModal: React.FC<LinkTransactionModalProps> = ({
                               {getLinkTypeIcon(link.linkType)} {link.linkType}
                             </span>
                             <div>
-                              <p className="font-medium text-gray-800">{transaction.description}</p>
+                              <p 
+                                className="font-medium text-gray-800 cursor-help"
+                                title={transaction.description.length > 40 ? transaction.description : undefined}
+                              >
+                                {transaction.description.length > 40 
+                                  ? transaction.description.substring(0, 40) + '...' 
+                                  : transaction.description
+                                }
+                              </p>
                               <p className="text-sm text-gray-500">
                                 {account?.name} • {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
                               </p>
@@ -414,7 +430,15 @@ const LinkTransactionModal: React.FC<LinkTransactionModalProps> = ({
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium text-gray-800">{transaction.description}</p>
+                              <p 
+                                className="font-medium text-gray-800 cursor-help"
+                                title={transaction.description.length > 40 ? transaction.description : undefined}
+                              >
+                                {transaction.description.length > 40 
+                                  ? transaction.description.substring(0, 40) + '...' 
+                                  : transaction.description
+                                }
+                              </p>
                               <p className="text-sm text-gray-500">
                                 {account?.name} • {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
                               </p>

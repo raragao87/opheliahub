@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -6,6 +6,8 @@ import {
   getAccessibleAccounts, 
   getAccountsByCategory,
   getTransactionsByAccountWithData,
+  getTransactionsByAccountPaginated,
+  getTransactionCount,
   updateTransaction,
   updateAccount,
   deleteTransaction,
@@ -29,6 +31,8 @@ import UpdateAssetBalanceModal from '../components/UpdateAssetBalanceModal';
 import SplitTransactionModal from '../components/SplitTransactionModal';
 import AccountTypesModal from '../components/AccountTypesModal';
 import TagsModal from '../components/TagsModal';
+import BulkTagModal from '../components/BulkTagModal';
+import TagSelector from '../components/TagSelector';
 
 
 // AccountListItem Component
@@ -169,9 +173,10 @@ interface InlineEditableFieldProps {
   value: string;
   onSave: (value: string) => void;
   className?: string;
+  maxLength?: number;
 }
 
-const InlineEditableField: React.FC<InlineEditableFieldProps> = ({ value, onSave, className = "" }) => {
+const InlineEditableField: React.FC<InlineEditableFieldProps> = ({ value, onSave, className = "", maxLength = 50 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
 
@@ -205,13 +210,17 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({ value, onSave
     );
   }
 
+  // Truncate description if it's too long
+  const shouldTruncate = value.length > maxLength;
+  const displayText = shouldTruncate ? value.substring(0, maxLength) + '...' : value;
+
   return (
-          <span
-        onClick={() => setIsEditing(true)}
-        className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-0.5 rounded ${className}`}
-        title="Click to edit"
-      >
-      {value}
+    <span
+      onClick={() => setIsEditing(true)}
+      className={`inline-editable cursor-pointer hover:bg-gray-100 px-2 py-0.5 rounded ${className}`}
+      title={shouldTruncate ? `${value}\n\nClick to edit` : "Click to edit"}
+    >
+      {displayText}
     </span>
   );
 };
@@ -335,6 +344,8 @@ interface TransactionRowProps {
   isSplit?: boolean;
   splits?: TransactionSplit[];
   tags?: Tag[];
+  isSelected?: boolean;
+  onSelect?: (id: string, checked: boolean) => void;
   onDateUpdate: (id: string, date: string) => void;
   onAmountUpdate: (id: string, amount: number) => void;
   onDescriptionUpdate: (id: string, description: string) => void;
@@ -349,6 +360,8 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
   isMain, 
   isSplit, 
   tags = [],
+  isSelected = false,
+  onSelect,
   onDateUpdate,
   onAmountUpdate,
   onDescriptionUpdate,
@@ -367,6 +380,18 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         ? 'bg-blue-50 border-l-4 border-l-blue-400'  // Special styling for initial balance
         : ''
     } hover:bg-gray-50 transition-colors`}>
+      
+      {/* Checkbox Cell */}
+      <td className="px-4 py-2 text-sm">
+        {!isInitialBalance && onSelect && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onSelect(transaction.id, e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+        )}
+      </td>
       
       {/* Date Cell - Empty for initial balance */}
       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -396,6 +421,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
           <InlineEditableField
             value={transaction.description}
             onSave={(value) => onDescriptionUpdate(transaction.id, value)}
+            maxLength={40}
           />
         )}
       </td>
@@ -483,6 +509,7 @@ interface TransactionTableProps {
   transactionTags: Record<string, Tag[]>;
   transactionSplits: Record<string, TransactionSplit[]>;
   selectedAccount: Account;
+  totalTransactionCount: number;
   onTransactionUpdate: () => void;
   onLinkTransaction: (transaction: Transaction & { id: string }) => void;
   splittingTransaction: Transaction & { id: string } | null;
@@ -495,6 +522,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   transactionTags,
   transactionSplits,
   selectedAccount,
+  totalTransactionCount,
   onTransactionUpdate,
   onLinkTransaction,
 
@@ -503,6 +531,38 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [showInlineAdd, setShowInlineAdd] = useState(false);
+  const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [pageTransactions, setPageTransactions] = useState<(Transaction & { id: string })[]>([]);
+  const [pageTransactionTags, setPageTransactionTags] = useState<Record<string, Tag[]>>({});
+  const [pageTransactionSplits, setPageTransactionSplits] = useState<Record<string, TransactionSplit[]>>({});
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    description: '',
+    descriptionMode: 'contains' as 'contains' | 'starts' | 'ends',
+    tags: [] as string[],
+    amountMin: '',
+    amountMax: '',
+    amountExact: ''
+  });
+  
+  // Sort state
+  const [sortConfig, setSortConfig] = useState({
+    key: 'date' as keyof Transaction,
+    direction: 'desc' as 'asc' | 'desc'
+  });
+
+  // Column filter visibility
+  const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [transactionsPerPage] = useState(100);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -599,6 +659,274 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     }
   };
 
+  // Bulk selection handlers
+  const handleSelectTransaction = (transactionId: string, checked: boolean) => {
+    const newSelected = new Set(selectedTransactions);
+    if (checked) {
+      newSelected.add(transactionId);
+    } else {
+      newSelected.delete(transactionId);
+    }
+    setSelectedTransactions(newSelected);
+    setShowBulkActions(newSelected.size > 0);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      // Select all transactions on current page
+      const currentPageIds = new Set(currentTransactions.map(t => t.id));
+      setSelectedTransactions(currentPageIds);
+      setShowBulkActions(true);
+    } else {
+      setSelectedTransactions(new Set());
+      setShowBulkActions(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!user) return;
+    if (window.confirm(`Are you sure you want to delete ${selectedTransactions.size} transactions?`)) {
+      try {
+        for (const transactionId of selectedTransactions) {
+          await deleteTransaction(transactionId, user.uid);
+        }
+        setSelectedTransactions(new Set());
+        setShowBulkActions(false);
+        onTransactionUpdate();
+      } catch (error) {
+        console.error('Error deleting transactions:', error);
+      }
+    }
+  };
+
+  const handleBulkTag = () => {
+    setShowBulkTagModal(true);
+  };
+
+  const handleBulkTagSuccess = () => {
+    setShowBulkTagModal(false);
+    setSelectedTransactions(new Set());
+    setShowBulkActions(false);
+    onTransactionUpdate();
+  };
+
+  // Use page-specific data if available, otherwise fall back to props
+  const displayTransactions = pageTransactions.length > 0 ? pageTransactions : transactions;
+  const displayTransactionTags = Object.keys(pageTransactionTags).length > 0 ? pageTransactionTags : transactionTags;
+  const displayTransactionSplits = Object.keys(pageTransactionSplits).length > 0 ? pageTransactionSplits : transactionSplits;
+
+  // Filter and sort transactions
+  const filteredAndSortedTransactions = useMemo(() => {
+    let filtered = [...displayTransactions];
+    
+    // Apply filters
+    if (filters.dateFrom || filters.dateTo) {
+      filtered = filtered.filter(transaction => {
+        const transactionDate = new Date(transaction.date);
+        if (filters.dateFrom && filters.dateFrom.trim()) {
+          const fromDate = new Date(filters.dateFrom);
+          if (transactionDate < fromDate) return false;
+        }
+        if (filters.dateTo && filters.dateTo.trim()) {
+          const toDate = new Date(filters.dateTo);
+          if (transactionDate > toDate) return false;
+        }
+        return true;
+      });
+    }
+    
+    if (filters.description) {
+      filtered = filtered.filter(transaction => {
+        const desc = transaction.description.toLowerCase();
+        const searchTerm = filters.description.toLowerCase();
+        
+        switch (filters.descriptionMode) {
+          case 'contains':
+            return desc.includes(searchTerm);
+          case 'starts':
+            return desc.startsWith(searchTerm);
+          case 'ends':
+            return desc.endsWith(searchTerm);
+          default:
+            return desc.includes(searchTerm);
+        }
+      });
+    }
+    
+    if (filters.tags.length > 0) {
+      filtered = filtered.filter(transaction => 
+        transaction.tagIds && filters.tags.some(tagId => transaction.tagIds!.includes(tagId))
+      );
+    }
+    
+    if (filters.amountExact) {
+      const amount = parseFloat(filters.amountExact);
+      if (!isNaN(amount)) {
+        filtered = filtered.filter(transaction => Math.abs(transaction.amount - amount) < 0.01);
+      }
+    } else {
+      if (filters.amountMin) {
+        const min = parseFloat(filters.amountMin);
+        if (!isNaN(min)) {
+          filtered = filtered.filter(transaction => transaction.amount >= min);
+        }
+      }
+      if (filters.amountMax) {
+        const max = parseFloat(filters.amountMax);
+        if (!isNaN(max)) {
+          filtered = filtered.filter(transaction => transaction.amount <= max);
+        }
+      }
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: any = a[sortConfig.key];
+      let bValue: any = b[sortConfig.key];
+      
+      // Handle date sorting
+      if (sortConfig.key === 'date') {
+        aValue = new Date(a.date).getTime();
+        bValue = new Date(b.date).getTime();
+      }
+      
+      // Handle amount sorting
+      if (sortConfig.key === 'amount') {
+        aValue = Math.abs(a.amount);
+        bValue = Math.abs(b.amount);
+      }
+      
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    return filtered;
+  }, [displayTransactions, filters, sortConfig]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(totalTransactionCount / transactionsPerPage);
+  const startIndex = (currentPage - 1) * transactionsPerPage;
+  const endIndex = startIndex + transactionsPerPage;
+  const currentTransactions = filteredAndSortedTransactions.slice(startIndex, endIndex);
+
+  // Debug logging
+  console.log('🔍 Pagination Debug:', {
+    totalTransactions: totalTransactionCount,
+    filteredTransactions: filteredAndSortedTransactions.length,
+    transactionsPerPage,
+    totalPages,
+    currentPage,
+    startIndex,
+    endIndex,
+    currentTransactionsLength: currentTransactions.length
+  });
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, sortConfig]);
+
+  // Pagination functions
+  const goToPage = async (page: number) => {
+    const targetPage = Math.max(1, Math.min(page, totalPages));
+    if (targetPage === currentPage) return;
+    
+    setCurrentPage(targetPage);
+    
+    // Load transactions for the new page if it's not the first page
+    if (targetPage > 1 && user && selectedAccount) {
+      await loadTransactionsForPage(user.uid, selectedAccount.id, targetPage);
+    }
+  };
+
+  const goToNextPage = async () => {
+    if (currentPage < totalPages) {
+      await goToPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = async () => {
+    if (currentPage > 1) {
+      await goToPage(currentPage - 1);
+    }
+  };
+
+  const handleSort = (key: keyof Transaction) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      dateFrom: '',
+      dateTo: '',
+      description: '',
+      descriptionMode: 'contains',
+      tags: [],
+      amountMin: '',
+      amountMax: '',
+      amountExact: ''
+    });
+  };
+
+  const toggleColumnFilter = (column: string) => {
+    if (activeFilterColumn === column) {
+      setActiveFilterColumn(null);
+    } else {
+      setActiveFilterColumn(column);
+    }
+  };
+
+  const closeAllFilters = () => {
+    setActiveFilterColumn(null);
+  };
+
+  // Close filters when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (activeFilterColumn && !(event.target as Element).closest('th')) {
+        setActiveFilterColumn(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeFilterColumn]);
+
+  const loadTransactionsForPage = async (userId: string, accountId: string, page: number) => {
+    try {
+      setLoadingTransactions(true);
+      console.log(`📄 Loading page ${page} for account ${accountId}`);
+      
+      // Calculate the offset for the page
+      const offset = (page - 1) * transactionsPerPage;
+      
+      // For now, we'll load all transactions and slice them
+      // In a production app, you'd implement proper server-side pagination
+      const result = await getTransactionsByAccountWithData(userId, accountId);
+      
+      // Slice the transactions for the current page
+      const startIndex = offset;
+      const endIndex = startIndex + transactionsPerPage;
+      const pageTransactions = result.transactions.slice(startIndex, endIndex);
+      
+      setPageTransactions(pageTransactions);
+      setPageTransactionTags(result.tagsMap);
+      setPageTransactionSplits(result.splitsMap);
+      
+      console.log(`✅ Loaded page ${page}: ${pageTransactions.length} transactions (${startIndex + 1}-${endIndex} of ${result.transactions.length})`);
+    } catch (error) {
+      console.error('Error loading transactions for page:', error);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
   const handleInlineTransactionCreated = () => {
     setShowInlineAdd(false);
     onTransactionUpdate();
@@ -614,6 +942,9 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                
+              </th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Date
               </th>
@@ -634,7 +965,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
           <tbody className="bg-white divide-y divide-gray-200">
             <InlineAddTransactionButton onClick={() => setShowInlineAdd(true)} />
             <tr>
-              <td colSpan={5} className="px-4 py-8 text-center">
+              <td colSpan={6} className="px-4 py-8 text-center">
                 <div className="text-gray-500">
                   <div className="text-3xl mb-3">📊</div>
                   <h3 className="text-base font-medium text-gray-900 mb-2">No transactions yet</h3>
@@ -660,6 +991,9 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                
+              </th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Date
               </th>
@@ -691,20 +1025,313 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Loading Indicator */}
+      {loadingTransactions && (
+        <div className="flex items-center justify-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-gray-600">Loading transactions...</span>
+        </div>
+      )}
+      {/* Filter Status Bar */}
+      {(filters.dateFrom || filters.dateTo || filters.description || filters.tags.length > 0 || filters.amountMin || filters.amountMax || filters.amountExact) && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-blue-800">
+              Filters active: {filteredAndSortedTransactions.length} of {transactions.length} transactions
+              {totalPages > 1 && ` • Page ${currentPage} of ${totalPages}`}
+            </div>
+            <button
+              onClick={clearFilters}
+              className="text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              Clear all filters
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Actions Bar */}
+      {showBulkActions && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-medium text-blue-800">
+                {selectedTransactions.size} transaction{selectedTransactions.size !== 1 ? 's' : ''} selected
+              </span>
+              <button
+                onClick={() => setSelectedTransactions(new Set())}
+                className="text-sm text-blue-600 hover:text-blue-800 underline"
+              >
+                Clear selection
+              </button>
+              {totalPages > 1 && (
+                <button
+                  onClick={() => {
+                    const allIds = new Set(filteredAndSortedTransactions.map(t => t.id));
+                    setSelectedTransactions(allIds);
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Select all {filteredAndSortedTransactions.length} filtered transactions
+                </button>
+              )}
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleBulkTag}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+              >
+                Add Tags
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
+              >
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Date
+              <input
+                type="checkbox"
+                checked={currentTransactions.length > 0 && currentTransactions.every(t => selectedTransactions.has(t.id))}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Description
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+              <div className="flex items-center justify-between">
+                <div 
+                  className="flex items-center space-x-1 cursor-pointer hover:bg-gray-100 px-1 py-1 rounded"
+                  onClick={() => handleSort('date')}
+                >
+                  <span>Date</span>
+                  {sortConfig.key === 'date' && (
+                    <span className="text-blue-600">
+                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => toggleColumnFilter('date')}
+                  className={`p-1 rounded ${filters.dateFrom || filters.dateTo ? 'text-blue-600 bg-blue-100' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="Filter date"
+                >
+                  🔍
+                </button>
+              </div>
+              
+              {/* Date Filter Dropdown */}
+              {activeFilterColumn === 'date' && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 z-10 min-w-64">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Date Range</span>
+                      <button
+                        onClick={() => setActiveFilterColumn(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        type="date"
+                        value={filters.dateFrom}
+                        onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="From"
+                      />
+                      <input
+                        type="date"
+                        value={filters.dateTo}
+                        onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="To"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Tags
+            
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+              <div className="flex items-center justify-between">
+                <div 
+                  className="flex items-center space-x-1 cursor-pointer hover:bg-gray-100 px-1 py-1 rounded"
+                  onClick={() => handleSort('description')}
+                >
+                  <span>Description</span>
+                  {sortConfig.key === 'description' && (
+                    <span className="text-blue-600">
+                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => toggleColumnFilter('description')}
+                  className={`p-1 rounded ${filters.description ? 'text-blue-600 bg-blue-100' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="Filter description"
+                >
+                  🔍
+                </button>
+              </div>
+              
+              {/* Description Filter Dropdown */}
+              {activeFilterColumn === 'description' && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 z-10 min-w-64">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Description Search</span>
+                      <button
+                        onClick={() => setActiveFilterColumn(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <select
+                      value={filters.descriptionMode}
+                      onChange={(e) => setFilters(prev => ({ 
+                        ...prev, 
+                        descriptionMode: e.target.value as 'contains' | 'starts' | 'ends' 
+                      }))}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="contains">Contains</option>
+                      <option value="starts">Starts with</option>
+                      <option value="ends">Ends with</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={filters.description}
+                      onChange={(e) => setFilters(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                      placeholder="Search description..."
+                    />
+                  </div>
+                </div>
+              )}
             </th>
-            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Amount
+            
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+              <div className="flex items-center justify-between">
+                <span>Tags</span>
+                <button
+                  onClick={() => toggleColumnFilter('tags')}
+                  className={`p-1 rounded ${filters.tags.length > 0 ? 'text-blue-600 bg-blue-100' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="Filter tags"
+                >
+                  🔍
+                </button>
+              </div>
+              
+              {/* Tags Filter Dropdown */}
+              {activeFilterColumn === 'tags' && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 z-10 min-w-64">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Filter by Tags</span>
+                      <button
+                        onClick={() => setActiveFilterColumn(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <TagSelector
+                      selectedTagIds={filters.tags}
+                      onTagChange={(tagIds: string[]) => setFilters(prev => ({ ...prev, tags: tagIds }))}
+                      placeholder="Select tags..."
+                    />
+                  </div>
+                </div>
+              )}
+            </th>
+            
+            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+              <div className="flex items-center justify-end justify-between">
+                <div 
+                  className="flex items-center space-x-1 cursor-pointer hover:bg-gray-100 px-1 py-1 rounded"
+                  onClick={() => handleSort('amount')}
+                >
+                  <span>Amount</span>
+                  {sortConfig.key === 'amount' && (
+                    <span className="text-blue-600">
+                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => toggleColumnFilter('amount')}
+                  className={`p-1 rounded ml-2 ${filters.amountMin || filters.amountMax || filters.amountExact ? 'text-blue-600 bg-blue-100' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="Filter amount"
+                >
+                  🔍
+                </button>
+              </div>
+              
+              {/* Amount Filter Dropdown */}
+              {activeFilterColumn === 'amount' && (
+                <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 z-10 min-w-64">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Amount Filter</span>
+                      <button
+                        onClick={() => setActiveFilterColumn(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <input
+                      type="number"
+                      value={filters.amountExact}
+                      onChange={(e) => setFilters(prev => ({ 
+                        ...prev, 
+                        amountExact: e.target.value,
+                        amountMin: '',
+                        amountMax: ''
+                      }))}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                      placeholder="Exact amount"
+                      step="0.01"
+                    />
+                    <div className="flex space-x-2">
+                      <input
+                        type="number"
+                        value={filters.amountMin}
+                        onChange={(e) => setFilters(prev => ({ 
+                          ...prev, 
+                          amountMin: e.target.value,
+                          amountExact: ''
+                        }))}
+                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="Min"
+                        step="0.01"
+                      />
+                      <input
+                        type="number"
+                        value={filters.amountMax}
+                        onChange={(e) => setFilters(prev => ({ 
+                          ...prev, 
+                          amountMax: e.target.value,
+                          amountExact: ''
+                        }))}
+                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="Max"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </th>
             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
               Actions
@@ -724,13 +1351,15 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
           )}
 
           {/* Existing Transactions */}
-          {transactions.map((transaction) => (
+          {currentTransactions.map((transaction) => (
             <React.Fragment key={transaction.id}>
               {/* Main Transaction Row */}
               <TransactionRow
                 transaction={transaction}
                 isMain={true}
                 tags={transactionTags[transaction.id] || []}
+                isSelected={selectedTransactions.has(transaction.id)}
+                onSelect={handleSelectTransaction}
                 onDateUpdate={handleDateUpdate}
                 onAmountUpdate={handleAmountUpdate}
                 onDescriptionUpdate={handleDescriptionUpdate}
@@ -757,6 +1386,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                   isMain={false}
                   isSplit={true}
                   tags={[]} // Split tags would need separate handling
+                  isSelected={selectedTransactions.has(`${transaction.id}-split-${index}`)}
+                  onSelect={handleSelectTransaction}
                   onDateUpdate={handleDateUpdate}
                   onAmountUpdate={handleAmountUpdate}
                   onDescriptionUpdate={handleDescriptionUpdate}
@@ -770,6 +1401,96 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
           ))}
         </tbody>
       </table>
+
+      {/* Pagination Controls */}
+      {(
+        <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center text-sm text-gray-700">
+            <span>
+              Showing {startIndex + 1} to {Math.min(endIndex, filteredAndSortedTransactions.length)} of{' '}
+              {filteredAndSortedTransactions.length} transactions
+              {totalTransactionCount > filteredAndSortedTransactions.length && (
+                <span className="text-gray-500">
+                  {' '}({totalTransactionCount} total in account)
+                </span>
+              )}
+            </span>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {totalPages > 1 ? (
+              <>
+                {/* Previous Page Button */}
+                <button
+                  onClick={goToPreviousPage}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-500"
+                >
+                  ← Previous
+                </button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => goToPage(pageNum)}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white border border-blue-600'
+                            : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50 hover:text-gray-700'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Next Page Button */}
+                <button
+                  onClick={goToNextPage}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-500"
+                >
+                  Next →
+                </button>
+              </>
+            ) : (
+              <span className="text-sm text-gray-500">
+                {totalTransactionCount > 100 
+                  ? `Showing first 100 of ${totalTransactionCount} total transactions`
+                  : `All ${totalTransactionCount} transactions shown on this page`
+                }
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Tag Modal */}
+      <BulkTagModal
+        isOpen={showBulkTagModal}
+        onClose={() => setShowBulkTagModal(false)}
+        onSuccess={handleBulkTagSuccess}
+        selectedTransactions={Array.from(selectedTransactions).map(id => {
+          const transaction = transactions.find(t => t.id === id);
+          if (!transaction) return null;
+          return transaction;
+        }).filter(Boolean) as (Transaction & { id: string })[]}
+      />
     </div>
   );
 };
@@ -784,6 +1505,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<(Transaction & { id: string })[]>([]);
+  const [totalTransactionCount, setTotalTransactionCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -902,10 +1624,21 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const loadTransactions = async (userId: string, accountId: string) => {
     try {
       setLoadingTransactions(true);
-      const result = await getTransactionsByAccountWithData(userId, accountId);
+      
+      // Get total transaction count first
+      const totalCount = await getTransactionCount(userId, accountId);
+      setTotalTransactionCount(totalCount);
+      
+      // Load first page of transactions
+      const result = await getTransactionsByAccountPaginated(userId, accountId, 100);
       setTransactions(result.transactions);
-      setTransactionTags(result.tagsMap);
-      setTransactionSplits(result.splitsMap);
+      
+      // Load related data for the transactions
+      const fullResult = await getTransactionsByAccountWithData(userId, accountId);
+      setTransactionTags(fullResult.tagsMap);
+      setTransactionSplits(fullResult.splitsMap);
+      
+      console.log(`📊 Loaded ${result.transactions.length} of ${totalCount} total transactions`);
     } catch (error) {
       console.error('Error loading transactions:', error);
     } finally {
@@ -1442,6 +2175,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 transactionTags={transactionTags}
                 transactionSplits={transactionSplits}
                 selectedAccount={selectedAccount}
+                totalTransactionCount={totalTransactionCount}
                 onTransactionUpdate={handleTransactionUpdate}
                 onLinkTransaction={handleLinkTransaction}
                 splittingTransaction={splittingTransaction}

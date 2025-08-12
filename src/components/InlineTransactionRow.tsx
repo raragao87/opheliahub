@@ -132,6 +132,15 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
         ? 'bg-green-50 border-l-4 border-green-400' 
         : 'bg-blue-50 border-l-4 border-blue-400'
     }`}>
+      {/* Checkbox - Disabled for inline add */}
+      <td className="px-4 py-2 text-sm">
+        <input
+          type="checkbox"
+          disabled
+          className="rounded border-gray-300 text-gray-400 cursor-not-allowed"
+        />
+      </td>
+
       {/* Date */}
       <td className="px-4 py-2 whitespace-nowrap text-sm">
         <input

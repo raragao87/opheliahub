@@ -147,21 +147,29 @@ const EnhancedLinkTransactionsModal: React.FC<EnhancedLinkTransactionsModalProps
           </div>
           
           {/* Transaction Details */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">{transaction.description}</p>
-                <p className="text-sm text-gray-600">
-                  {currentAccount.name} • {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'Atemporal'}
-                </p>
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p 
+                      className="font-medium cursor-help"
+                      title={transaction.description.length > 40 ? transaction.description : undefined}
+                    >
+                      {transaction.description.length > 40 
+                        ? transaction.description.substring(0, 40) + '...' 
+                        : transaction.description
+                      }
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {currentAccount.name} • {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'Atemporal'}
+                    </p>
+                  </div>
+                  <div className={`text-lg font-semibold ${
+                    transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {transaction.amount >= 0 ? '+' : ''}${transaction.amount.toLocaleString()}
+                  </div>
+                </div>
               </div>
-              <div className={`text-lg font-semibold ${
-                transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {transaction.amount >= 0 ? '+' : ''}${transaction.amount.toLocaleString()}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Content */}
@@ -311,7 +319,15 @@ const EnhancedLinkTransactionsModal: React.FC<EnhancedLinkTransactionsModalProps
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-medium">{txn.description}</p>
+                            <p 
+                              className="font-medium cursor-help"
+                              title={txn.description.length > 40 ? txn.description : undefined}
+                            >
+                              {txn.description.length > 40 
+                                ? txn.description.substring(0, 40) + '...' 
+                                : txn.description
+                              }
+                            </p>
                             <p className="text-sm text-gray-600">
                               {txn.date ? new Date(txn.date).toLocaleDateString() : 'Atemporal'}
                             </p>

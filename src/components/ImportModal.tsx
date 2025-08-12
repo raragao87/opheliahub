@@ -4,11 +4,13 @@ import {
   processImportData, 
   bulkCreateTransactions, 
   suggestTagsForImport,
+  detectDateFormat,
   type ImportMapping, 
   type ImportPreview,
   type Transaction,
   type Account,
-  type Tag
+  type Tag,
+  type DateFormatInfo
 } from '../firebase/config';
 
 interface ImportModalProps {
@@ -43,6 +45,10 @@ const ImportModal: React.FC<ImportModalProps> = ({
   const [importProgress, setImportProgress] = useState(0);
   const [processedTransactions, setProcessedTransactions] = useState<Omit<Transaction, 'id'>[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<{ [key: string]: Tag[] }>({});
+  const [detectedDateFormats, setDetectedDateFormats] = useState<DateFormatInfo[]>([]);
+  const [selectedDateFormat, setSelectedDateFormat] = useState<string>('');
+  const [dateFormatTestResult, setDateFormatTestResult] = useState<string>('');
+  const [showDateFormatModal, setShowDateFormatModal] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -63,6 +69,10 @@ const ImportModal: React.FC<ImportModalProps> = ({
     setImportProgress(0);
     setProcessedTransactions([]);
     setSuggestedTags({});
+    setDetectedDateFormats([]);
+    setSelectedDateFormat('');
+    setDateFormatTestResult('');
+    setShowDateFormatModal(false);
   };
 
   const handleClose = () => {
@@ -104,6 +114,18 @@ const ImportModal: React.FC<ImportModalProps> = ({
         }
       };
 
+      // Detect date formats if we have a date column
+      if (previewData.mappings.dateColumn) {
+        const dateValues = data.slice(0, 100).map(row => row[previewData.mappings.dateColumn]).filter(Boolean);
+        const formats = detectDateFormat(dateValues);
+        setDetectedDateFormats(formats);
+        
+        // Auto-select the most confident format
+        if (formats.length > 0) {
+          setSelectedDateFormat(formats[0].format);
+        }
+      }
+
       setPreview(previewData);
       setMappings(previewData.mappings);
       setStep('mapping');
@@ -119,6 +141,47 @@ const ImportModal: React.FC<ImportModalProps> = ({
       ...prev,
       [field]: value
     }));
+    
+    // If date column changed, re-detect formats and reset selection
+    if (field === 'dateColumn') {
+      if (value && importData.length > 0) {
+        const dateValues = importData.slice(0, 100).map(row => row[value]).filter(Boolean);
+        const formats = detectDateFormat(dateValues);
+        setDetectedDateFormats(formats);
+        
+        // Auto-select the most confident format
+        if (formats.length > 0) {
+          setSelectedDateFormat(formats[0].format);
+        } else {
+          setSelectedDateFormat('');
+        }
+      } else {
+        setDetectedDateFormats([]);
+        setSelectedDateFormat('');
+      }
+      setDateFormatTestResult('');
+    }
+  };
+
+  const testDateFormat = () => {
+    if (!selectedDateFormat || !mappings.dateColumn || importData.length === 0) return;
+    
+    // Get a sample date value
+    const sampleDate = importData[0]?.[mappings.dateColumn];
+    if (!sampleDate) {
+      setDateFormatTestResult('No sample date found to test');
+      return;
+    }
+    
+    // Import the parseDateString function to test
+    import('../firebase/config').then(({ parseDateString }) => {
+      const parsed = parseDateString(sampleDate);
+      if (parsed) {
+        setDateFormatTestResult(`✅ Parsed successfully: ${sampleDate} → ${parsed}`);
+      } else {
+        setDateFormatTestResult(`❌ Failed to parse: ${sampleDate}`);
+      }
+    });
   };
 
   const handlePreview = async () => {
@@ -136,8 +199,43 @@ const ImportModal: React.FC<ImportModalProps> = ({
     setError('');
 
     try {
-      // Process the data
-      const transactions = await processImportData(importData, mappings, selectedAccount, userId);
+      console.log('🔄 Starting data processing...');
+      console.log('📊 Import data:', importData.length, 'rows');
+      console.log('🗺️ Mappings:', mappings);
+      console.log('📅 Selected date format:', selectedDateFormat);
+      
+      // Process the data with selected date format
+      console.log('🔍 About to call processImportData with:');
+      console.log('  - importData length:', importData.length);
+      console.log('  - mappings:', mappings);
+      console.log('  - selectedAccount:', selectedAccount);
+      console.log('  - userId:', userId);
+      console.log('  - selectedDateFormat:', selectedDateFormat);
+      
+      // Test a sample date first
+      if (importData.length > 0 && mappings.dateColumn) {
+        const sampleDate = importData[0][mappings.dateColumn];
+        console.log('🔍 Sample date value:', sampleDate, 'Type:', typeof sampleDate);
+        
+        // Test the date parsing directly
+        import('../firebase/config').then(({ parseDateString, parseDateStringWithFormat }) => {
+          if (selectedDateFormat && selectedDateFormat !== 'Auto-detect (recommended)') {
+            const parsedWithFormat = parseDateStringWithFormat(sampleDate, selectedDateFormat);
+            console.log('🔍 parseDateStringWithFormat result:', parsedWithFormat);
+          }
+          const parsedAuto = parseDateString(sampleDate);
+          console.log('🔍 parseDateString (auto) result:', parsedAuto);
+        });
+      }
+      
+      const transactions = await processImportData(importData, mappings, selectedAccount, userId, selectedDateFormat);
+      console.log('✅ Processed transactions:', transactions.length);
+      
+      if (transactions.length === 0) {
+        setError('No valid transactions found. Please check your data and column mappings.');
+        return;
+      }
+      
       setProcessedTransactions(transactions);
 
       // Get tag suggestions for each transaction
@@ -150,6 +248,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
 
       setStep('preview');
     } catch (error) {
+      console.error('❌ Error in handlePreview:', error);
       setError(error instanceof Error ? error.message : 'Failed to process data');
     } finally {
       setIsLoading(false);
@@ -339,6 +438,31 @@ const ImportModal: React.FC<ImportModalProps> = ({
                       </option>
                     ))}
                   </select>
+                  
+                  {/* Date Format Detection - Compact */}
+                  {mappings.dateColumn && (
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        {detectedDateFormats.length > 0 && (
+                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                            📅 {detectedDateFormats[0]?.format} ({Math.round((detectedDateFormats[0]?.confidence || 0) * 100)}%)
+                          </span>
+                        )}
+                        {selectedDateFormat && selectedDateFormat !== 'Auto-detect (recommended)' && (
+                          <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                            🔧 {selectedDateFormat}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={() => setShowDateFormatModal(true)}
+                        className="text-xs text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Configure Date Format
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -446,88 +570,147 @@ const ImportModal: React.FC<ImportModalProps> = ({
           )}
 
           {/* Step 3: Preview */}
-          {step === 'preview' && processedTransactions.length > 0 && (
+          {step === 'preview' && (
             <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Preview Transactions
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Review the {processedTransactions.length} transactions that will be imported.
-                </p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Description
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Suggested Tags
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {processedTransactions.slice(0, 10).map((transaction, index) => (
-                      <tr key={index}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {transaction.description}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <span className={transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            {formatAmount(transaction.amount)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          <div className="flex flex-wrap gap-1">
-                            {suggestedTags[transaction.description]?.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag.id}
-                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                                style={{ backgroundColor: tag.color + '20', color: tag.color }}
-                              >
-                                {tag.name}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {processedTransactions.length > 10 && (
-                <p className="text-sm text-gray-500 text-center">
-                  Showing first 10 transactions. {processedTransactions.length - 10} more will be imported.
-                </p>
+              {processedTransactions.length > 0 ? (
+                <>
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Preview Transactions
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      Review the {processedTransactions.length} transactions that will be imported.
+                    </p>
+                    
+                    {/* Date Format Validation Summary */}
+                    {detectedDateFormats.length > 0 && (
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="text-sm font-medium text-green-800 mb-2">
+                          ✅ Date Format Validation
+                        </h4>
+                        <div className="space-y-1 text-sm text-green-700">
+                          {detectedDateFormats.map((format, index) => (
+                            <div key={index}>
+                              • {format.format}: {Math.round(format.confidence * 100)}% of dates detected
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-green-600 mt-2">
+                          All detected date formats will be automatically parsed during import.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-3xl mb-3">⚠️</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No Transactions to Preview
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    No valid transactions were found during processing. This could be due to:
+                  </p>
+                  <ul className="text-sm text-gray-500 text-left max-w-md mx-auto space-y-1">
+                    <li>• Invalid date formats in your data</li>
+                    <li>• Missing or incorrect column mappings</li>
+                    <li>• Empty or invalid data rows</li>
+                    <li>• Date parsing errors</li>
+                  </ul>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => setStep('mapping')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                    >
+                      Back to Column Mapping
+                    </button>
+                  </div>
+                </div>
               )}
 
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setStep('mapping')}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleImport}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
-                >
-                  Import {processedTransactions.length} Transactions
-                </button>
-              </div>
+              {processedTransactions.length > 0 && (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Description
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Suggested Tags
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {processedTransactions.slice(0, 10).map((transaction, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {transaction.date ? formatDate(transaction.date) : 'Atemporal'}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-900">
+                              <span 
+                                title={transaction.description.length > 40 ? transaction.description : undefined}
+                                className="cursor-help"
+                              >
+                                {transaction.description.length > 40 
+                                  ? transaction.description.substring(0, 40) + '...' 
+                                  : transaction.description
+                                }
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <span className={transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                {formatAmount(transaction.amount)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-900">
+                              <div className="flex flex-wrap gap-1">
+                                {suggestedTags[transaction.description]?.slice(0, 3).map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                    style={{ backgroundColor: tag.color + '20', color: tag.color }}
+                                  >
+                                    {tag.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {processedTransactions.length > 10 && (
+                    <p className="text-sm text-gray-500 text-center">
+                      Showing first 10 transactions. {processedTransactions.length - 10} more will be imported.
+                    </p>
+                  )}
+
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      onClick={() => setStep('mapping')}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleImport}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                    >
+                      Import {processedTransactions.length} Transactions
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -552,6 +735,101 @@ const ImportModal: React.FC<ImportModalProps> = ({
                 <p className="text-sm text-gray-500">
                   {Math.round(importProgress)}% complete
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Date Format Configuration Modal */}
+          {showDateFormatModal && (
+            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+              <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div className="mt-3">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    📅 Configure Date Format
+                  </h3>
+                  
+                  {/* Detected Formats */}
+                  {detectedDateFormats.length > 0 && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2">
+                        Detected Formats
+                      </h4>
+                      <div className="space-y-2">
+                        {detectedDateFormats.map((format, index) => (
+                          <div key={index} className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-blue-700">{format.format}</span>
+                            <span className="text-blue-600">
+                              {Math.round(format.confidence * 100)}% confidence
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Manual Format Selection */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date Format
+                    </label>
+                    <select
+                      value={selectedDateFormat}
+                      onChange={(e) => setSelectedDateFormat(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Auto-detect (recommended)</option>
+                      <option value="YYYYMMDD">YYYYMMDD (e.g., 20241201)</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD (e.g., 2024-12-01)</option>
+                      <option value="MM/DD/YYYY">MM/DD/YYYY (e.g., 12/01/2024)</option>
+                      <option value="DD/MM/YYYY">DD/MM/YYYY (e.g., 01/12/2024)</option>
+                      <option value="MM-DD-YYYY">MM-DD-YYYY (e.g., 12-01-2024)</option>
+                      <option value="DD-MM-YYYY">DD-MM-YYYY (e.g., 01-12-2024)</option>
+                      <option value="YYYY/MM/DD">YYYY/MM/DD (e.g., 2024/12/01)</option>
+                      <option value="MM.DD.YYYY">MM.DD.YYYY (e.g., 12.01.2024)</option>
+                      <option value="DD.MM.YYYY">DD.MM.YYYY (e.g., 01.12.2024)</option>
+                      <option value="Excel Date Number">Excel Date Number</option>
+                      <option value="Timestamp">Timestamp (milliseconds)</option>
+                    </select>
+                  </div>
+                  
+                  {/* Test Format */}
+                  {selectedDateFormat && (
+                    <div className="mb-4">
+                      <button
+                        onClick={testDateFormat}
+                        className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                      >
+                        Test Format
+                      </button>
+                      {dateFormatTestResult && (
+                        <div className="mt-2 p-2 text-sm rounded" 
+                             style={{ 
+                               backgroundColor: dateFormatTestResult.includes('✅') ? '#f0f9ff' : '#fef2f2',
+                               color: dateFormatTestResult.includes('✅') ? '#1e40af' : '#dc2626'
+                             }}>
+                          {dateFormatTestResult}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Current Status */}
+                  <div className="mb-4 p-2 bg-gray-50 rounded text-sm text-gray-600">
+                    {selectedDateFormat && selectedDateFormat !== 'Auto-detect (recommended)' 
+                      ? `Using manual format: ${selectedDateFormat}`
+                      : 'Using auto-detection (recommended for most files)'
+                    }
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      onClick={() => setShowDateFormatModal(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -3,6 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter, deleteField } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { config, getCurrentDomain, isDomainAllowed, getSecurityInfo } from '../config/environment';
+import type { HierarchyItem, HierarchyLevel } from '../types/hierarchy';
 
 // Environment variable validation with enhanced security
 const requiredEnvVars = {
@@ -380,6 +381,12 @@ export interface ImportMapping {
   descriptionColumn: string;
   accountColumn?: string;
   categoryColumn?: string;
+}
+
+export interface DateFormatInfo {
+  format: string;
+  examples: string[];
+  confidence: number;
 }
 
 export interface ImportPreview {
@@ -1832,6 +1839,24 @@ export const createCategory = async (userId: string, categoryData: Omit<TagCateg
     return docRef.id;
   } catch (error) {
     console.error('❌ Error creating category:', error);
+    throw error;
+  }
+};
+
+export const createCategoryWithId = async (userId: string, categoryId: string, categoryData: Omit<TagCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> => {
+  try {
+    console.log('📂 Creating category with specific ID:', categoryId, 'name:', categoryData.name, 'for user:', userId);
+    
+    const categoryWithTimestamps = {
+      ...categoryData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    await setDoc(doc(db, 'users', userId, 'categories', categoryId), categoryWithTimestamps);
+    console.log('✅ Category created successfully with ID:', categoryId);
+  } catch (error) {
+    console.error('❌ Error creating category with ID:', error);
     throw error;
   }
 };
@@ -3478,7 +3503,7 @@ export const parseImportFile = async (file: File): Promise<any[]> => {
     } else if (file.type.includes('excel') || file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
       return await parseExcelFile(file);
     } else {
-      throw new Error('Unsupported file type. Please upload a CSV or Excel file.');
+      throw new Error('Unsupported file type. Please upload a CSV or Excel file (.xls, .xlsx).');
     }
   } catch (error) {
     console.error('❌ Error parsing import file:', error);
@@ -3560,17 +3585,395 @@ const parseCSVLine = (line: string): string[] => {
   return result;
 };
 
-const parseExcelFile = async (_file: File): Promise<any[]> => {
-  // For now, we'll use a simple approach
-  // In production, you might want to use a library like 'xlsx' or 'exceljs'
-  throw new Error('Excel file parsing not yet implemented. Please use CSV files for now.');
+const parseExcelFile = async (file: File): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = e.target?.result;
+        if (!data) {
+          reject(new Error('Failed to read file'));
+          return;
+        }
+
+        // Import xlsx dynamically to avoid SSR issues
+        const XLSX = await import('xlsx');
+        
+        // Parse the Excel file
+        const workbook = XLSX.read(data, { type: 'binary' });
+        
+        // Get the first sheet
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        if (!worksheet) {
+          reject(new Error('No worksheet found in Excel file'));
+          return;
+        }
+        
+        // Convert to JSON
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1,
+          defval: '',
+          blankrows: false
+        });
+        
+        if (jsonData.length === 0) {
+          resolve([]);
+          return;
+        }
+        
+        // Extract headers from first row
+        const headers = jsonData[0] as string[];
+        
+        // Convert remaining rows to objects
+        const result = jsonData.slice(1).map((row: any) => {
+          const obj: any = {};
+          headers.forEach((header, index) => {
+            obj[header] = row[index] || '';
+          });
+          return obj;
+        });
+        
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsBinaryString(file);
+  });
+};
+
+// Helper function to parse date with specific format
+export const parseDateStringWithFormat = (dateStr: any, format: string): string | null => {
+  if (!dateStr) return null;
+  
+  try {
+    let year: number, month: number, day: number;
+    
+    // Convert to string and clean up
+    const cleanDateStr = String(dateStr).trim().replace(/\s+/g, '');
+    
+    switch (format) {
+      case 'YYYYMMDD':
+        // More flexible YYYYMMDD parsing
+        if (/^\d{8}$/.test(cleanDateStr)) {
+          year = parseInt(cleanDateStr.substring(0, 4));
+          month = parseInt(cleanDateStr.substring(4, 6)) - 1;
+          day = parseInt(cleanDateStr.substring(6, 8));
+        } else if (/^\d{6,8}$/.test(cleanDateStr)) {
+          // Handle cases with leading zeros or shorter formats
+          const padded = cleanDateStr.padStart(8, '0');
+          year = parseInt(padded.substring(0, 4));
+          month = parseInt(padded.substring(4, 6)) - 1;
+          day = parseInt(padded.substring(6, 8));
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'YYYY-MM-DD':
+        if (typeof dateStr === 'string' && /^\d{4}-\d{1,2}-\d{1,2}$/.test(dateStr)) {
+          const parts = dateStr.split('-');
+          year = parseInt(parts[0]);
+          month = parseInt(parts[1]) - 1;
+          day = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'MM/DD/YYYY':
+        if (typeof dateStr === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+          const parts = dateStr.split('/');
+          month = parseInt(parts[0]) - 1;
+          day = parseInt(parts[1]);
+          year = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'DD/MM/YYYY':
+        if (typeof dateStr === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+          const parts = dateStr.split('/');
+          day = parseInt(parts[0]);
+          month = parseInt(parts[1]) - 1;
+          year = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'MM-DD-YYYY':
+        if (typeof dateStr === 'string' && /^\d{1,2}-\d{1,2}-\d{4}$/.test(dateStr)) {
+          const parts = dateStr.split('-');
+          month = parseInt(parts[0]) - 1;
+          day = parseInt(parts[1]);
+          year = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'DD-MM-YYYY':
+        if (typeof dateStr === 'string' && /^\d{1,2}-\d{1,2}-\d{4}$/.test(dateStr)) {
+          const parts = dateStr.split('-');
+          day = parseInt(parts[0]);
+          month = parseInt(parts[1]) - 1;
+          year = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'YYYY/MM/DD':
+        if (typeof dateStr === 'string' && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(dateStr)) {
+          const parts = dateStr.split('/');
+          year = parseInt(parts[0]);
+          month = parseInt(parts[1]) - 1;
+          day = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'MM.DD.YYYY':
+        if (typeof dateStr === 'string' && /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(dateStr)) {
+          const parts = dateStr.split('.');
+          month = parseInt(parts[0]) - 1;
+          day = parseInt(parts[1]);
+          year = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'DD.MM.YYYY':
+        if (typeof dateStr === 'string' && /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(dateStr)) {
+          const parts = dateStr.split('.');
+          day = parseInt(parts[0]);
+          month = parseInt(parts[1]) - 1;
+          year = parseInt(parts[2]);
+        } else {
+          return null;
+        }
+        break;
+        
+      case 'Excel Date Number':
+        if (typeof dateStr === 'number' && dateStr > 1 && dateStr < 100000) {
+          // Excel dates are days since 1900-01-01
+          const excelDate = new Date((dateStr - 25569) * 86400 * 1000);
+          return excelDate.toISOString().split('T')[0];
+        } else {
+          return null;
+        }
+        
+      case 'Timestamp':
+        if (typeof dateStr === 'number' && dateStr > 100000) {
+          // Timestamp in milliseconds
+          return new Date(dateStr).toISOString().split('T')[0];
+        } else {
+          return null;
+        }
+        
+      default:
+        // Fallback to auto-detection
+        return parseDateString(dateStr);
+    }
+    
+    // Validate the date
+    if (year >= 1900 && year <= 2100 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+      const date = new Date(year, month, day);
+      if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('Error parsing date with format:', format, 'value:', dateStr, error);
+    return null;
+  }
+};
+
+// Helper function to parse various date formats
+export const parseDateString = (dateStr: any): string | null => {
+  if (!dateStr) return null;
+  
+  // If it's already a Date object or timestamp
+  if (dateStr instanceof Date) {
+    return dateStr.toISOString().split('T')[0];
+  }
+  
+  // If it's a number (timestamp or Excel date number)
+  if (typeof dateStr === 'number') {
+    // Excel dates are days since 1900-01-01, convert to milliseconds
+    if (dateStr > 100000) {
+      // Likely a timestamp in milliseconds
+      return new Date(dateStr).toISOString().split('T')[0];
+    } else {
+      // Likely an Excel date number (days since 1900-01-01)
+      const excelDate = new Date((dateStr - 25569) * 86400 * 1000);
+      return excelDate.toISOString().split('T')[0];
+    }
+  }
+  
+  // If it's a string, try various formats
+  if (typeof dateStr === 'string') {
+    const trimmed = dateStr.trim();
+    
+    // Try common date formats
+    const formats = [
+      // YYYYMMDD (your specific case)
+      /^(\d{4})(\d{2})(\d{2})$/,
+      // YYYY-MM-DD
+      /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+      // MM/DD/YYYY
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+      // DD/MM/YYYY
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+      // MM-DD-YYYY
+      /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+      // DD-MM-YYYY
+      /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+      // YYYY/MM/DD
+      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
+      // MM.DD.YYYY
+      /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,
+      // DD.MM.YYYY
+      /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,
+    ];
+    
+    for (const format of formats) {
+      const match = trimmed.match(format);
+      if (match) {
+        let year, month, day;
+        
+        if (format.source.includes('YYYY')) {
+          // Format starts with year
+          year = parseInt(match[1]);
+          month = parseInt(match[2]) - 1; // Month is 0-indexed
+          day = parseInt(match[3]);
+        } else {
+          // Format starts with month or day
+          if (format.source.includes('MM') && format.source.includes('DD')) {
+            if (format.source.indexOf('MM') < format.source.indexOf('DD')) {
+              // MM/DD/YYYY format
+              month = parseInt(match[1]) - 1;
+              day = parseInt(match[2]);
+              year = parseInt(match[3]);
+            } else {
+              // DD/MM/YYYY format
+              day = parseInt(match[1]);
+              month = parseInt(match[2]) - 1;
+              year = parseInt(match[3]);
+            }
+          } else {
+            // Fallback to first two as month/day
+            month = parseInt(match[1]) - 1;
+            day = parseInt(match[2]);
+            year = parseInt(match[3]);
+          }
+        }
+        
+        // Validate the date
+        if (year >= 1900 && year <= 2100 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+          const date = new Date(year, month, day);
+          if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+            return date.toISOString().split('T')[0];
+          }
+        }
+      }
+    }
+    
+    // Try standard Date parsing as fallback
+    const parsedDate = new Date(trimmed);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString().split('T')[0];
+    }
+  }
+  
+  return null;
+};
+
+// Function to detect date format from sample data
+export const detectDateFormat = (dateValues: any[]): DateFormatInfo[] => {
+  const formatCounts: { [key: string]: { count: number; examples: string[] } } = {};
+  
+  dateValues.forEach(value => {
+    if (!value) return;
+    
+    const strValue = String(value).trim();
+    
+    // Check for YYYYMMDD format
+    if (/^\d{8}$/.test(strValue)) {
+      const format = 'YYYYMMDD';
+      if (!formatCounts[format]) formatCounts[format] = { count: 0, examples: [] };
+      formatCounts[format].count++;
+      if (formatCounts[format].examples.length < 3) {
+        formatCounts[format].examples.push(strValue);
+      }
+    }
+    
+    // Check for YYYY-MM-DD format
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(strValue)) {
+      const format = 'YYYY-MM-DD';
+      if (!formatCounts[format]) formatCounts[format] = { count: 0, examples: [] };
+      formatCounts[format].count++;
+      if (formatCounts[format].examples.length < 3) {
+        formatCounts[format].examples.push(strValue);
+      }
+    }
+    
+    // Check for MM/DD/YYYY format
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(strValue)) {
+      const format = 'MM/DD/YYYY';
+      if (!formatCounts[format]) formatCounts[format] = { count: 0, examples: [] };
+      formatCounts[format].count++;
+      if (formatCounts[format].examples.length < 3) {
+        formatCounts[format].examples.push(strValue);
+      }
+    }
+    
+    // Check for DD/MM/YYYY format
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(strValue)) {
+      const format = 'DD/MM/YYYY';
+      if (!formatCounts[format]) formatCounts[format] = { count: 0, examples: [] };
+      formatCounts[format].count++;
+      if (formatCounts[format].examples.length < 3) {
+        formatCounts[format].examples.push(strValue);
+      }
+    }
+    
+    // Check for Excel date numbers
+    if (typeof value === 'number' && value > 1 && value < 100000) {
+      const format = 'Excel Date Number';
+      if (!formatCounts[format]) formatCounts[format] = { count: 0, examples: [] };
+      formatCounts[format].count++;
+      if (formatCounts[format].examples.length < 3) {
+        formatCounts[format].examples.push(String(value));
+      }
+    }
+  });
+  
+  // Convert to array and sort by confidence
+  const results: DateFormatInfo[] = Object.entries(formatCounts).map(([format, data]) => ({
+    format,
+    examples: data.examples,
+    confidence: data.count / dateValues.filter(v => v).length
+  }));
+  
+  return results.sort((a, b) => b.confidence - a.confidence);
 };
 
 export const processImportData = async (
   data: any[], 
   mappings: ImportMapping, 
   accountId: string,
-  _userId: string
+  _userId: string,
+  dateFormat?: string
 ): Promise<Omit<Transaction, 'id'>[]> => {
   try {
     console.log('🔄 Processing import data:', data.length, 'rows');
@@ -3579,21 +3982,25 @@ export const processImportData = async (
     
     for (const row of data) {
       try {
-        // Parse date
+        // Parse date using our comprehensive parser
         const dateStr = row[mappings.dateColumn];
-        if (!dateStr) continue;
+        let date: string | null;
         
-        let date: string;
-        if (typeof dateStr === 'string') {
-          // Try to parse common date formats
-          const parsedDate = new Date(dateStr);
-          if (isNaN(parsedDate.getTime())) {
-            console.warn('⚠️ Invalid date format:', dateStr);
-            continue;
-          }
-          date = parsedDate.toISOString().split('T')[0];
+        console.log('🔍 Processing row date:', dateStr, 'Type:', typeof dateStr, 'Format:', dateFormat);
+        
+        if (dateFormat && dateFormat !== 'Auto-detect (recommended)') {
+          // Use manual format parsing
+          date = parseDateStringWithFormat(dateStr, dateFormat);
+          console.log('🔍 Manual format result:', date);
         } else {
-          date = new Date(dateStr).toISOString().split('T')[0];
+          // Use auto-detection
+          date = parseDateString(dateStr);
+          console.log('🔍 Auto-detection result:', date);
+        }
+        
+        if (!date) {
+          console.warn('⚠️ Invalid date format:', dateStr, 'with format:', dateFormat);
+          continue;
         }
         
         // Parse amount
@@ -3762,7 +4169,7 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       collection(db, 'users', userId, 'transactions'),
       where('accountId', '==', accountId),
       orderBy('createdAt', 'desc'),
-      limit(50) // Limit initial load to 50 transactions
+      limit(100) // Limit initial load to 100 transactions
     );
     
     const querySnapshot = await getDocs(q);
@@ -3847,8 +4254,8 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
 export const getTransactionsByAccountPaginated = async (
   userId: string, 
   accountId: string, 
-  pageSize: number = 50,
-  lastTransaction?: Transaction
+  pageSize: number = 100,
+  lastDoc?: any
 ): Promise<{
   transactions: Transaction[];
   hasMore: boolean;
@@ -3865,12 +4272,12 @@ export const getTransactionsByAccountPaginated = async (
     );
     
     // Add pagination cursor if provided
-    if (lastTransaction) {
+    if (lastDoc) {
       q = query(
         collection(db, 'users', userId, 'transactions'),
         where('accountId', '==', accountId),
         orderBy('createdAt', 'desc'),
-        startAfter(lastTransaction.createdAt),
+        startAfter(lastDoc),
         limit(pageSize)
       );
     }
@@ -3882,17 +4289,38 @@ export const getTransactionsByAccountPaginated = async (
     })) as Transaction[];
     
     const hasMore = querySnapshot.docs.length === pageSize;
-    const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+    const newLastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
     
     console.log(`✅ Found ${transactions.length} transactions (hasMore: ${hasMore})`);
     
     return {
       transactions,
       hasMore,
-      lastDoc
+      lastDoc: newLastDoc
     };
   } catch (error) {
     console.error('❌ Error getting paginated transactions:', error);
+    throw error;
+  }
+};
+
+export const getTransactionCount = async (userId: string, accountId: string): Promise<number> => {
+  try {
+    console.log(`💰 Getting transaction count for account:`, accountId);
+    
+    const q = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('accountId', '==', accountId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const count = querySnapshot.size;
+    
+    console.log(`✅ Found ${count} total transactions for account`);
+    
+    return count;
+  } catch (error) {
+    console.error('❌ Error getting transaction count:', error);
     throw error;
   }
 };
@@ -4089,6 +4517,368 @@ export const migrateExistingAccountsToInitialBalance = async (userId: string): P
     console.log(`🎉 Migration completed! Created: ${migratedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);
   } catch (error) {
     console.error('❌ Error during migration:', error);
+    throw error;
+  }
+};
+
+// =====================================
+// HIERARCHY MANAGEMENT FUNCTIONS
+// =====================================
+
+export const createHierarchyItem = async (
+  userId: string,
+  name: string,
+  level: HierarchyLevel,
+  parentId?: string
+): Promise<string> => {
+  try {
+    console.log('🏗️ Creating hierarchy item:', { name, level, parentId, userId });
+    
+    // Calculate order for new item (append at end of current level)
+    // Avoid composite index by fetching items and sorting in JavaScript
+    let order = 0;
+    
+    const orderQuery = query(
+      collection(db, 'users', userId, 'hierarchy'),
+      where('level', '==', level)
+    );
+    
+    const orderSnapshot = await getDocs(orderQuery);
+    
+    // Filter and sort in JavaScript to avoid composite index requirements
+    let relevantItems;
+    if (parentId) {
+      relevantItems = orderSnapshot.docs
+        .filter(doc => doc.data().parentId === parentId)
+        .map(doc => doc.data())
+        .sort((a, b) => (b.order || 0) - (a.order || 0)); // Sort descending
+    } else {
+      relevantItems = orderSnapshot.docs
+        .filter(doc => !doc.data().parentId)
+        .map(doc => doc.data())
+        .sort((a, b) => (b.order || 0) - (a.order || 0)); // Sort descending
+    }
+    
+    if (relevantItems.length > 0) {
+      order = (relevantItems[0].order || 0) + 1;
+    }
+
+    const hierarchyData: Omit<HierarchyItem, 'id'> = {
+      name,
+      level,
+      ...(parentId ? { parentId } : {}), // Only include parentId if it's not undefined
+      userId,
+      order,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    const docRef = await addDoc(collection(db, 'users', userId, 'hierarchy'), hierarchyData);
+    console.log('✅ Hierarchy item created with ID:', docRef.id);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error creating hierarchy item:', error);
+    throw error;
+  }
+};
+
+export const updateHierarchyItem = async (
+  userId: string,
+  itemId: string,
+  updates: Partial<HierarchyItem>
+): Promise<void> => {
+  try {
+    console.log('🔄 Updating hierarchy item:', itemId, updates);
+    
+    await updateDoc(doc(db, 'users', userId, 'hierarchy', itemId), {
+      ...updates,
+      updatedAt: Date.now()
+    });
+    
+    console.log('✅ Hierarchy item updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating hierarchy item:', error);
+    throw error;
+  }
+};
+
+export const deleteHierarchyItem = async (userId: string, itemId: string): Promise<void> => {
+  try {
+    console.log('🗑️ Deleting hierarchy item and all children:', itemId);
+    
+    // Get the item to be deleted
+    const itemDoc = await getDoc(doc(db, 'users', userId, 'hierarchy', itemId));
+    if (!itemDoc.exists()) {
+      throw new Error('Hierarchy item not found');
+    }
+    
+    // Find all children recursively
+    const findAllChildren = async (parentId: string): Promise<string[]> => {
+      const childrenQuery = query(
+        collection(db, 'users', userId, 'hierarchy'),
+        where('parentId', '==', parentId)
+      );
+      const childrenSnapshot = await getDocs(childrenQuery);
+      
+      let allChildIds = childrenSnapshot.docs.map(doc => doc.id);
+      
+      // Recursively find grandchildren
+      for (const childDoc of childrenSnapshot.docs) {
+        const grandchildIds = await findAllChildren(childDoc.id);
+        allChildIds = [...allChildIds, ...grandchildIds];
+      }
+      
+      return allChildIds;
+    };
+    
+    const childIds = await findAllChildren(itemId);
+    
+    // Use batch delete for all items
+    const batch = writeBatch(db);
+    
+    // Delete the main item
+    batch.delete(doc(db, 'users', userId, 'hierarchy', itemId));
+    
+    // Delete all children
+    childIds.forEach(childId => {
+      batch.delete(doc(db, 'users', userId, 'hierarchy', childId));
+    });
+    
+    await batch.commit();
+    console.log(`✅ Deleted hierarchy item and ${childIds.length} children`);
+    
+  } catch (error) {
+    console.error('❌ Error deleting hierarchy item:', error);
+    throw error;
+  }
+};
+
+export const moveHierarchyItemLevel = async (
+  userId: string,
+  itemId: string,
+  newLevel: HierarchyLevel,
+  newParentId?: string
+): Promise<void> => {
+  try {
+    console.log('📊 Moving item to new level:', { itemId, newLevel, newParentId });
+    
+    // Calculate new order at the destination
+    // Avoid composite index by fetching items and sorting in JavaScript
+    let newOrder = 0;
+    
+    const orderQuery = query(
+      collection(db, 'users', userId, 'hierarchy'),
+      where('level', '==', newLevel)
+    );
+    
+    const orderSnapshot = await getDocs(orderQuery);
+    
+    // Filter and sort in JavaScript to avoid composite index requirements
+    let relevantItems;
+    if (newParentId) {
+      relevantItems = orderSnapshot.docs
+        .filter(doc => doc.data().parentId === newParentId)
+        .map(doc => doc.data())
+        .sort((a, b) => (b.order || 0) - (a.order || 0)); // Sort descending
+    } else {
+      relevantItems = orderSnapshot.docs
+        .filter(doc => !doc.data().parentId)
+        .map(doc => doc.data())
+        .sort((a, b) => (b.order || 0) - (a.order || 0)); // Sort descending
+    }
+    
+    if (relevantItems.length > 0) {
+      newOrder = (relevantItems[0].order || 0) + 1;
+    }
+
+    const updateData: any = {
+      level: newLevel,
+      order: newOrder,
+      updatedAt: Date.now()
+    };
+    
+    // Handle parentId properly - use deleteField() to remove it if newParentId is undefined
+    if (newParentId) {
+      updateData.parentId = newParentId;
+    } else {
+      updateData.parentId = deleteField();
+    }
+    
+    await updateDoc(doc(db, 'users', userId, 'hierarchy', itemId), updateData);
+    
+    console.log('✅ Item moved to new level successfully');
+  } catch (error) {
+    console.error('❌ Error moving hierarchy item:', error);
+    throw error;
+  }
+};
+
+export const bulkUpdateHierarchyItems = async (
+  userId: string,
+  updates: { id: string; changes: Partial<HierarchyItem> }[]
+): Promise<void> => {
+  try {
+    console.log('📦 Bulk updating hierarchy items:', updates.length);
+    
+    const batch = writeBatch(db);
+    
+    updates.forEach(({ id, changes }) => {
+      batch.update(doc(db, 'users', userId, 'hierarchy', id), {
+        ...changes,
+        updatedAt: Date.now()
+      });
+    });
+    
+    await batch.commit();
+    console.log('✅ Bulk update completed successfully');
+    
+  } catch (error) {
+    console.error('❌ Error in bulk update:', error);
+    throw error;
+  }
+};
+
+export const getHierarchyItems = async (userId: string): Promise<HierarchyItem[]> => {
+  try {
+    console.log('📋 Fetching hierarchy items for user:', userId);
+    
+    // Avoid composite index by fetching all items and sorting in JavaScript
+    const q = query(collection(db, 'users', userId, 'hierarchy'));
+    
+    const querySnapshot = await getDocs(q);
+    const items: HierarchyItem[] = [];
+    
+    querySnapshot.docs.forEach(doc => {
+      items.push({
+        id: doc.id,
+        ...doc.data()
+      } as HierarchyItem);
+    });
+    
+    // Sort in JavaScript to avoid composite index requirements
+    // Primary sort by level (1-4), secondary sort by order within level
+    items.sort((a, b) => {
+      if (a.level !== b.level) {
+        return a.level - b.level; // Sort by level first
+      }
+      return (a.order || 0) - (b.order || 0); // Then by order within level
+    });
+    
+    console.log(`✅ Found ${items.length} hierarchy items`);
+    return items;
+    
+  } catch (error) {
+    console.error('❌ Error fetching hierarchy items:', error);
+    throw error;
+  }
+};
+
+export const getHierarchyItemUsageCount = async (userId: string, itemId: string): Promise<number> => {
+  try {
+    // Only tags (level 4) can have usage counts from transactions
+    const transactionsQuery = query(
+      collection(db, 'users', userId, 'transactions'),
+      where('tags', 'array-contains', itemId)
+    );
+    
+    const snapshot = await getDocs(transactionsQuery);
+    return snapshot.docs.length;
+    
+  } catch (error) {
+    console.error('❌ Error getting item usage count:', error);
+    return 0;
+  }
+};
+
+export const moveHierarchyItemWithChildren = async (
+  userId: string,
+  itemId: string,
+  direction: 'up' | 'down'
+): Promise<void> => {
+  try {
+    console.log('🔄 Moving item with children:', { itemId, direction });
+    
+    // Get all hierarchy items
+    const allItemsQuery = query(collection(db, 'users', userId, 'hierarchy'));
+    const allItemsSnapshot = await getDocs(allItemsQuery);
+    const allItems = allItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as HierarchyItem));
+    
+    // Find the item to move
+    const targetItem = allItems.find(item => item.id === itemId);
+    if (!targetItem) {
+      throw new Error('Item not found');
+    }
+    
+    // Get all descendants of the target item
+    const getDescendants = (parentId: string): HierarchyItem[] => {
+      const children = allItems.filter(item => item.parentId === parentId);
+      const descendants: HierarchyItem[] = [...children];
+      children.forEach(child => {
+        descendants.push(...getDescendants(child.id));
+      });
+      return descendants;
+    };
+    
+    const itemsToMove = [targetItem, ...getDescendants(targetItem.id)];
+    
+    // Get siblings at the same level and parent
+    const siblings = allItems.filter(item => 
+      item.level === targetItem.level && 
+      item.parentId === targetItem.parentId
+    ).sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    const currentIndex = siblings.findIndex(item => item.id === targetItem.id);
+    
+    // Check if move is valid
+    if ((direction === 'up' && currentIndex === 0) || 
+        (direction === 'down' && currentIndex === siblings.length - 1)) {
+      console.log('Cannot move item in that direction');
+      return;
+    }
+    
+    // Calculate new positions
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const swapSibling = siblings[targetIndex];
+    
+    // Get all descendants of the swap sibling
+    const swapSiblingDescendants = getDescendants(swapSibling.id);
+    const swapItemsToMove = [swapSibling, ...swapSiblingDescendants];
+    
+    // Calculate order adjustments
+    const targetNewOrder = swapSibling.order || 0;
+    const swapNewOrder = targetItem.order || 0;
+    
+    // Calculate the order offset for descendants
+    const targetOrderOffset = targetNewOrder - (targetItem.order || 0);
+    const swapOrderOffset = swapNewOrder - (swapSibling.order || 0);
+    
+    // Prepare batch updates
+    const batch = writeBatch(db);
+    
+    // Update target item and its descendants
+    itemsToMove.forEach(item => {
+      const newOrder = (item.order || 0) + targetOrderOffset;
+      batch.update(doc(db, 'users', userId, 'hierarchy', item.id), {
+        order: newOrder,
+        updatedAt: Date.now()
+      });
+    });
+    
+    // Update swap sibling and its descendants
+    swapItemsToMove.forEach(item => {
+      const newOrder = (item.order || 0) + swapOrderOffset;
+      batch.update(doc(db, 'users', userId, 'hierarchy', item.id), {
+        order: newOrder,
+        updatedAt: Date.now()
+      });
+    });
+    
+    await batch.commit();
+    console.log('✅ Items moved successfully');
+    
+  } catch (error) {
+    console.error('❌ Error moving hierarchy item with children:', error);
     throw error;
   }
 };
