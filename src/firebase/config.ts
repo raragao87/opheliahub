@@ -4955,7 +4955,9 @@ export const getTagsFromHierarchy = async (userId: string): Promise<Tag[]> => {
     
     querySnapshot.docs.forEach(doc => {
       const item = doc.data() as HierarchyItem;
+      console.log(`🔍 Checking hierarchy item: ${item.name} (level ${item.level})`);
       if (item.level === 4) { // Only level 4 items are tags
+        console.log(`✅ Adding tag: ${item.name}`);
         tags.push({
           id: item.id,
           name: item.name,
@@ -4966,6 +4968,8 @@ export const getTagsFromHierarchy = async (userId: string): Promise<Tag[]> => {
           createdAt: item.createdAt || Date.now(),
           updatedAt: item.updatedAt || Date.now()
         });
+      } else {
+        console.log(`❌ Skipping non-tag item: ${item.name} (level ${item.level})`);
       }
     });
     

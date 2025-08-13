@@ -35,7 +35,9 @@ const InlineTagInput: React.FC<InlineTagInputProps> = ({
 
   const loadTags = async (userId: string) => {
     try {
+      console.log('🔄 Loading tags from hierarchy...');
       const tags = await getTagsFromHierarchy(userId);
+      console.log('📋 Received tags:', tags);
       setAllTags(tags);
     } catch (error) {
       console.error('Error loading tags:', error);
@@ -73,8 +75,7 @@ const InlineTagInput: React.FC<InlineTagInputProps> = ({
         user.uid,
         inputValue.trim(),
         4, // Level 4 = tag
-        undefined, // No parent for top-level tags
-        randomColor
+        undefined // No parent for top-level tags
       );
       
       // Reload tags to get the new one
