@@ -4895,6 +4895,18 @@ export const moveHierarchyItemLevel = async (
     } else {
       updateData.parentId = deleteField();
     }
+
+    console.log('🔍 Firebase move debug:', {
+      itemId,
+      newLevel,
+      newParentId: newParentId || 'undefined (top level)',
+      updateData: {
+        ...updateData,
+        parentId: newParentId || 'deleteField() - will remove from document'
+      },
+      relevantItemsCount: relevantItems.length,
+      calculatedOrder: newOrder
+    });
     
     await updateDoc(doc(db, 'users', userId, 'hierarchy', itemId), updateData);
     
