@@ -4942,6 +4942,45 @@ export const bulkUpdateHierarchyItems = async (
   }
 };
 
+export const getTagsFromHierarchy = async (userId: string): Promise<Tag[]> => {
+  try {
+    console.log('🏷️ Fetching tags from hierarchy for user:', userId);
+    
+    // Get all hierarchy items
+    const q = query(collection(db, 'users', userId, 'hierarchy'));
+    const querySnapshot = await getDocs(q);
+    
+    // Filter only level 4 items (tags) and convert them to Tag format
+    const tags: Tag[] = [];
+    
+    querySnapshot.docs.forEach(doc => {
+      const item = doc.data() as HierarchyItem;
+      if (item.level === 4) { // Only level 4 items are tags
+        tags.push({
+          id: item.id,
+          name: item.name,
+          color: item.color || '#3B82F6', // Default blue if no color
+          category: 'custom',
+          userId: item.userId,
+          isDefault: false,
+          createdAt: item.createdAt || Date.now(),
+          updatedAt: item.updatedAt || Date.now()
+        });
+      }
+    });
+    
+    // Sort by name for consistent ordering
+    tags.sort((a, b) => a.name.localeCompare(b.name));
+    
+    console.log(`✅ Found ${tags.length} tags from hierarchy`);
+    return tags;
+    
+  } catch (error) {
+    console.error('❌ Error fetching tags from hierarchy:', error);
+    throw error;
+  }
+};
+
 export const getHierarchyItems = async (userId: string): Promise<HierarchyItem[]> => {
   try {
     console.log('📋 Fetching hierarchy items for user:', userId);
@@ -4982,7 +5021,7 @@ export const getHierarchyItemUsageCount = async (userId: string, itemId: string)
     // Only tags (level 4) can have usage counts from transactions
     const transactionsQuery = query(
       collection(db, 'users', userId, 'transactions'),
-      where('tags', 'array-contains', itemId)
+      where('tagIds', 'array-contains', itemId)
     );
     
     const snapshot = await getDocs(transactionsQuery);

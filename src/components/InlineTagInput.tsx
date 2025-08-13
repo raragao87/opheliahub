@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { type Tag } from '../firebase/config';
-import { getTags, createTag } from '../firebase/config';
+import { getTagsFromHierarchy, createHierarchyItem } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../firebase/config';
 
@@ -35,7 +35,7 @@ const InlineTagInput: React.FC<InlineTagInputProps> = ({
 
   const loadTags = async (userId: string) => {
     try {
-      const tags = await getTags(userId);
+      const tags = await getTagsFromHierarchy(userId);
       setAllTags(tags);
     } catch (error) {
       console.error('Error loading tags:', error);
@@ -68,13 +68,14 @@ const InlineTagInput: React.FC<InlineTagInputProps> = ({
       const colors = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
       
-      const newTagId = await createTag(user.uid, {
-        name: inputValue.trim(),
-        color: randomColor,
-        category: 'custom',
-        userId: user.uid,
-        isDefault: false
-      });
+      // Create new tag in hierarchy system (level 4 = tag)
+      const newTagId = await createHierarchyItem(
+        user.uid,
+        inputValue.trim(),
+        4, // Level 4 = tag
+        undefined, // No parent for top-level tags
+        randomColor
+      );
       
       // Reload tags to get the new one
       await loadTags(user.uid);
