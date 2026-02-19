@@ -5,15 +5,17 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../firebase/config';
 
 interface InlineTagInputProps {
-  transactionId: string;
+  transactionId?: string; // Optional if local update
   selectedTags: Tag[];
-  onTagsUpdate: (transactionId: string, tagIds: string[]) => void;
+  onTagsUpdate?: (transactionId: string, tagIds: string[]) => void; // For direct backend update
+  onTagsChange?: (tags: Tag[]) => void; // For local state update (new transactions)
 }
 
 const InlineTagInput: React.FC<InlineTagInputProps> = ({ 
   transactionId, 
   selectedTags, 
-  onTagsUpdate 
+  onTagsUpdate,
+  onTagsChange
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -45,16 +47,30 @@ const InlineTagInput: React.FC<InlineTagInputProps> = ({
   };
 
   const removeTag = (tagId: string) => {
-    const newTagIds = selectedTags
-      .filter(tag => tag.id !== tagId)
-      .map(tag => tag.id);
-    onTagsUpdate(transactionId, newTagIds);
+    if (onTagsChange) {
+      // Local update mode
+      const newTags = selectedTags.filter(tag => tag.id !== tagId);
+      onTagsChange(newTags);
+    } else if (transactionId && onTagsUpdate) {
+      // Direct update mode
+      const newTagIds = selectedTags
+        .filter(tag => tag.id !== tagId)
+        .map(tag => tag.id);
+      onTagsUpdate(transactionId, newTagIds);
+    }
   };
 
   const addTag = (tag: Tag) => {
     if (!selectedTags.find(t => t.id === tag.id)) {
-      const newTagIds = [...selectedTags.map(t => t.id), tag.id];
-      onTagsUpdate(transactionId, newTagIds);
+      if (onTagsChange) {
+        // Local update mode
+        const newTags = [...selectedTags, tag];
+        onTagsChange(newTags);
+      } else if (transactionId && onTagsUpdate) {
+        // Direct update mode
+        const newTagIds = [...selectedTags.map(t => t.id), tag.id];
+        onTagsUpdate(transactionId, newTagIds);
+      }
     }
     setInputValue('');
     setShowSuggestions(false);

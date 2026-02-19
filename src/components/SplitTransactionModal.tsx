@@ -91,6 +91,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
     setSplits(splits.filter((_, i) => i !== index));
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateSplit = (index: number, field: keyof SplitEntry, value: any) => {
     const updatedSplits = [...splits];
     updatedSplits[index] = { ...updatedSplits[index], [field]: value };

@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter, deleteField } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User, type Auth } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter, deleteField, type Firestore } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, type FirebaseStorage } from 'firebase/storage';
 import { config, getCurrentDomain, isDomainAllowed, getSecurityInfo } from '../config/environment';
 import type { HierarchyItem, HierarchyLevel } from '../types/hierarchy';
 
@@ -128,7 +128,7 @@ try {
 }
 
 // Initialize Firebase services with error handling
-let auth: any, db: any, storage: any, googleProvider: any;
+let auth: Auth, db: Firestore, storage: FirebaseStorage, googleProvider: GoogleAuthProvider;
 try {
   auth = getAuth(app);
   db = getFirestore(app);
@@ -147,7 +147,7 @@ export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error signing in with Google:', error);
     throw error;
   }
@@ -156,7 +156,7 @@ export const signInWithGoogle = async () => {
 export const signOutUser = async () => {
   try {
     await signOut(auth);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error signing out:', error);
     throw error;
   }
@@ -219,6 +219,7 @@ export interface Account {
   category: 'family' | 'personal' | 'assets';
   accountType: 'bank' | 'pseudo' | 'asset'; // NEW FIELD
   lastValueUpdate?: number; // Track when balance was last manually updated for asset accounts
+  notes?: string; // Optional notes
   createdAt: number;
   updatedAt: number;
 }
@@ -393,6 +394,7 @@ export interface ImportPreview {
   fileName: string;
   totalRows: number;
   columns: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sampleData: any[];
   mappings: ImportMapping;
 }
@@ -425,7 +427,7 @@ export const getAccessibleChildProfiles = async (userId: string): Promise<(Child
     })) as (ChildProfile & { id: string })[];
     
     return [...ownProfiles, ...sharedProfiles];
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting accessible child profiles:', error);
     throw error;
   }
@@ -484,7 +486,7 @@ export const sendSharingInvitation = async (
     await addDoc(collection(db, 'sharingInvitations'), invitationData);
     console.log('Invitation created successfully');
     console.log('=== END SENDING INVITATION ===');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending sharing invitation:', error);
     throw error;
   }
@@ -581,6 +583,7 @@ export const getPendingInvitations = async (userEmail: string): Promise<SharingI
         id: doc.id,
         ...doc.data(),
       }))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter((invitation: any) => {
         const matchesEmail = invitation.toUserEmail?.toLowerCase() === normalizedEmail ||
                            invitation.toUserEmail === userEmail;
@@ -606,7 +609,7 @@ export const getPendingInvitations = async (userEmail: string): Promise<SharingI
     console.log('=== END DEBUGGING ===');
     
     return results;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting pending invitations:', error);
     throw error;
   }
@@ -630,7 +633,7 @@ export const getSentInvitations = async (userId: string): Promise<SharingInvitat
       id: doc.id,
       ...doc.data(),
     })) as SharingInvitation[];
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting sent invitations:', error);
     throw error;
   }
@@ -656,7 +659,7 @@ export const getReceivedInvitations = async (userEmail: string): Promise<Sharing
       id: doc.id,
       ...doc.data(),
     })) as SharingInvitation[];
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting received invitations:', error);
     throw error;
   }
@@ -703,7 +706,7 @@ export const acceptSharingInvitation = async (invitationId: string, userId: stri
     
     await batch.commit();
     console.log('Invitation accepted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error accepting sharing invitation:', error);
     throw error;
   }
@@ -715,7 +718,7 @@ export const declineSharingInvitation = async (invitationId: string): Promise<vo
     await updateDoc(doc(db, 'sharingInvitations', invitationId), {
       status: 'declined',
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error declining sharing invitation:', error);
     throw error;
   }
@@ -748,7 +751,7 @@ export const removeSharingAccess = async (childProfileId: string, userIdToRemove
     }
     
     await batch.commit();
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error removing sharing access:', error);
     throw error;
   }
@@ -768,7 +771,7 @@ export const getSharedUsers = async (childProfileId: string): Promise<string[]> 
     }
     
     return [];
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting shared users:', error);
     throw error;
   }
@@ -781,7 +784,7 @@ export const saveGrowthRecord = async (userId: string, record: Omit<GrowthRecord
       timestamp: Date.now(),
     });
     return docRef;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving growth record:', error);
     throw error;
   }
@@ -798,7 +801,7 @@ export const getGrowthRecords = async (userId: string): Promise<(GrowthRecord & 
       id: doc.id,
       ...doc.data(),
     })) as (GrowthRecord & { id: string })[];
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting growth records:', error);
     throw error;
   }
@@ -807,7 +810,7 @@ export const getGrowthRecords = async (userId: string): Promise<(GrowthRecord & 
 export const deleteGrowthRecord = async (userId: string, recordId: string) => {
   try {
     await deleteDoc(doc(db, 'users', userId, 'growthRecords', recordId));
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting growth record:', error);
     throw error;
   }
@@ -819,7 +822,7 @@ export const updateGrowthRecord = async (userId: string, recordId: string, recor
       ...record,
       timestamp: Date.now(),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating growth record:', error);
     throw error;
   }
@@ -865,14 +868,14 @@ export const saveChildProfile = async (
             profileImageUrl,
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error uploading profile image:', error);
         // Don't fail the entire save operation if image upload fails
       }
     }
     
     return { id: finalProfileId, profileImageUrl };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving child profile:', error);
     throw error;
   }
@@ -893,7 +896,7 @@ export const getChildProfile = async (userId: string): Promise<(ChildProfile & {
       id: doc.id,
       ...doc.data(),
     } as ChildProfile & { id: string };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting child profile:', error);
     throw error;
   }
@@ -923,7 +926,7 @@ export const uploadProfileImage = async (userId: string, childProfileId: string,
     console.log('Download URL obtained:', downloadURL);
     
     return downloadURL;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading profile image:', error);
     throw new Error('Failed to upload image');
   }
@@ -938,7 +941,7 @@ export const deleteProfileImage = async (imageUrl: string): Promise<void> => {
     
     const storageRef = ref(storage, filePath);
     await deleteObject(storageRef);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting profile image:', error);
     // Don't throw error as this is not critical
   }
@@ -964,6 +967,13 @@ export const getDefaultAccountTypes = (): AccountType[] => {
       isCustom: false
     },
     {
+      id: 'cash',
+      name: 'Cash',
+      defaultSign: 'positive',
+      category: 'asset',
+      isCustom: false
+    },
+    {
       id: 'investment',
       name: 'Investment',
       defaultSign: 'positive',
@@ -971,8 +981,36 @@ export const getDefaultAccountTypes = (): AccountType[] => {
       isCustom: false
     },
     {
+      id: 'property',
+      name: 'Property',
+      defaultSign: 'positive',
+      category: 'asset',
+      isCustom: false
+    },
+    {
+      id: 'vehicle',
+      name: 'Vehicle',
+      defaultSign: 'positive',
+      category: 'asset',
+      isCustom: false
+    },
+    {
       id: 'credit-card',
       name: 'Credit Card',
+      defaultSign: 'negative',
+      category: 'liability',
+      isCustom: false
+    },
+    {
+      id: 'loan',
+      name: 'Personal Loan',
+      defaultSign: 'negative',
+      category: 'liability',
+      isCustom: false
+    },
+    {
+      id: 'mortgage',
+      name: 'Mortgage',
       defaultSign: 'negative',
       category: 'liability',
       isCustom: false
@@ -1012,7 +1050,7 @@ export const createAccount = async (userId: string, accountData: Omit<Account, '
     
     console.log('✅ Account created successfully with ID:', accountId);
     return accountId;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating account:', error);
     throw error;
   }
@@ -1039,7 +1077,7 @@ export const getAccountsByUser = async (userId: string): Promise<Account[]> => {
     
     console.log(`✅ Found ${accounts.length} accounts for user`);
     return accounts;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting accounts:', error);
     throw error;
   }
@@ -1055,7 +1093,7 @@ export const getAccessibleAccounts = async (userId: string): Promise<Account[]> 
     console.log(`✅ Found ${ownedAccounts.length} owned accounts`);
     
     // Get shared accounts from sharedProfiles collection
-    let sharedAccounts: Account[] = [];
+    const sharedAccounts: Account[] = [];
     try {
       const sharedProfilesQuery = query(
         collection(db, 'sharedProfiles'),
@@ -1098,7 +1136,7 @@ export const getAccessibleAccounts = async (userId: string): Promise<Account[]> 
     console.log(`✅ Total accessible accounts: ${allAccounts.length} (${ownedAccounts.length} owned, ${sharedAccounts.length} shared)`);
     
     return allAccounts;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting accessible accounts:', error);
     throw error;
   }
@@ -1115,7 +1153,7 @@ export const updateAccount = async (accountId: string, accountData: Partial<Acco
     
     await updateDoc(doc(db, 'users', accountData.ownerId!, 'accounts', accountId), updateData);
     console.log('✅ Account updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating account:', error);
     throw error;
   }
@@ -1170,7 +1208,7 @@ export const updateAssetAccountBalance = async (
     await createTransaction(userId, transactionData);
     
     console.log('✅ Asset balance updated successfully with auto-transaction');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating asset balance:', error);
     throw error;
   }
@@ -1197,7 +1235,7 @@ export const deleteAccount = async (accountId: string, userId: string): Promise<
     // Commit the batch
     await batch.commit();
     console.log('✅ Account and all transactions deleted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting account:', error);
     throw error;
   }
@@ -1241,7 +1279,7 @@ export const getAccountTypes = async (userId: string): Promise<AccountType[]> =>
     console.log(`✅ Found ${allTypes.length} account types (${defaultTypes.length} default, ${customTypes.length} custom)`);
     
     return allTypes;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting account types:', error);
     // Return default types even if there's an error
     console.log('🔄 Falling back to default account types');
@@ -1264,7 +1302,7 @@ export const createAccountType = async (userId: string, typeData: Omit<AccountTy
     console.log('✅ Account type created successfully with ID:', docRef.id);
     
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating account type:', error);
     throw error;
   }
@@ -1280,7 +1318,7 @@ export const updateAccountType = async (typeId: string, typeData: Partial<Accoun
     });
     
     console.log('✅ Account type updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating account type:', error);
     throw error;
   }
@@ -1293,7 +1331,7 @@ export const deleteAccountType = async (typeId: string, userId: string): Promise
     await deleteDoc(doc(db, 'users', userId, 'accountTypes', typeId));
     
     console.log('✅ Account type deleted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting account type:', error);
     throw error;
   }
@@ -1317,7 +1355,7 @@ export const createTransaction = async (userId: string, transactionData: Omit<Tr
     await forceUpdateAccountBalance(userId, transactionData.accountId);
     
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating transaction:', error);
     throw error;
   }
@@ -1345,7 +1383,7 @@ export const recalculateAccountBalance = async (userId: string, accountId: strin
     })));
     
     return newBalance;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error recalculating account balance:', error);
     throw error;
   }
@@ -1406,7 +1444,7 @@ export const emergencyFixAccountBalances = async (userId: string): Promise<void>
     }
     
     console.log('🎉 Emergency fix completed!');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error during emergency fix:', error);
     throw error;
   }
@@ -1428,7 +1466,7 @@ export const forceUpdateAccountBalance = async (userId: string, accountId: strin
     });
     
     console.log(`✅ Account balance force updated to: ${newBalance}`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error force updating account balance:', error);
     throw error;
   }
@@ -1465,7 +1503,7 @@ export const getTransactionsByAccount = async (userId: string, accountId: string
     
     console.log(`✅ Found ${transactions.length} transactions for account`);
     return transactions;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transactions:', error);
     throw error;
   }
@@ -1490,7 +1528,7 @@ export const updateTransaction = async (transactionId: string, transactionData: 
       // Force update account balance after updating transaction
       await forceUpdateAccountBalance(userId, transaction.accountId);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating transaction:', error);
     throw error;
   }
@@ -1520,7 +1558,7 @@ export const deleteTransaction = async (transactionId: string, userId: string): 
     
     // Force update account balance after deleting transaction
     await forceUpdateAccountBalance(userId, accountId);
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting transaction:', error);
     throw error;
   }
@@ -1537,7 +1575,7 @@ export const assignTagsToTransaction = async (transactionId: string, tagIds: str
     });
     
     console.log('✅ Tags assigned to transaction successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error assigning tags to transaction:', error);
     throw error;
   }
@@ -1563,7 +1601,7 @@ export const removeTagsFromTransaction = async (transactionId: string, tagIds: s
     });
     
     console.log('✅ Tags removed from transaction successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error removing tags from transaction:', error);
     throw error;
   }
@@ -1600,7 +1638,7 @@ export const getTransactionTags = async (transactionId: string, userId: string):
     
     console.log(`✅ Found ${transactionTags.length} tags for transaction`);
     return transactionTags;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transaction tags:', error);
     throw error;
   }
@@ -1623,7 +1661,7 @@ export const getTransactionsByTag = async (tagId: string, userId: string): Promi
     
     console.log(`✅ Found ${transactions.length} transactions for tag`);
     return transactions;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transactions by tag:', error);
     throw error;
   }
@@ -1646,7 +1684,7 @@ export const createTag = async (userId: string, tagData: Omit<Tag, 'id' | 'creat
     console.log('✅ Tag created successfully with ID:', docRef.id);
     
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating tag:', error);
     throw error;
   }
@@ -1671,7 +1709,7 @@ export const getTags = async (userId: string): Promise<Tag[]> => {
       })) as Tag[];
       
       console.log(`✅ Found ${userTags.length} user-created tags`);
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ No user-created tags found (this is normal for new users)');
     }
     
@@ -1682,7 +1720,7 @@ export const getTags = async (userId: string): Promise<Tag[]> => {
       const deletedTagsSnapshot = await getDocs(deletedTagsQuery);
       deletedDefaultTags = deletedTagsSnapshot.docs.map(doc => doc.data().tagId);
       console.log(`✅ Found ${deletedDefaultTags.length} deleted default tags to filter out`);
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ No deleted tags found (this is normal)');
     }
     
@@ -1695,7 +1733,7 @@ export const getTags = async (userId: string): Promise<Tag[]> => {
     console.log(`✅ Total tags: ${allTags.length} (${userTags.length} user + ${defaultTags.length} default)`);
     
     return allTags;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting tags:', error);
     throw error;
   }
@@ -1711,7 +1749,7 @@ export const updateTag = async (tagId: string, updates: Partial<Tag>, userId: st
     });
     
     console.log('✅ Tag updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating tag:', error);
     throw error;
   }
@@ -1748,7 +1786,7 @@ export const deleteTag = async (tagId: string, userId: string): Promise<void> =>
       });
       console.log('✅ Default tag hidden from UI');
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting tag:', error);
     throw error;
   }
@@ -1783,7 +1821,7 @@ export const getUserCategories = async (userId: string): Promise<string[]> => {
       const categoriesSnapshot = await getDocs(categoriesQuery);
       customCategories = categoriesSnapshot.docs.map(doc => doc.data().name);
       console.log(`✅ Found ${customCategories.length} custom categories`);
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ No custom categories found (this is normal)');
     }
     
@@ -1792,7 +1830,7 @@ export const getUserCategories = async (userId: string): Promise<string[]> => {
     console.log(`✅ Total categories: ${allCategories.length}`);
     
     return allCategories;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting user categories:', error);
     return getDefaultCategories();
   }
@@ -1816,7 +1854,7 @@ export const deleteCategory = async (categoryName: string, userId: string): Prom
     // For now, we'll just log the deletion since categories are predefined
     // In the future, we could store custom categories in Firestore
     console.log(`✅ Category "${categoryName}" marked for deletion`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting category:', error);
     throw error;
   }
@@ -1837,7 +1875,7 @@ export const createCategory = async (userId: string, categoryData: Omit<TagCateg
     console.log('✅ Category created successfully with ID:', docRef.id);
     
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating category:', error);
     throw error;
   }
@@ -1855,7 +1893,7 @@ export const createCategoryWithId = async (userId: string, categoryId: string, c
     
     await setDoc(doc(db, 'users', userId, 'categories', categoryId), categoryWithTimestamps);
     console.log('✅ Category created successfully with ID:', categoryId);
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating category with ID:', error);
     throw error;
   }
@@ -1880,12 +1918,12 @@ export const getCategories = async (userId: string): Promise<TagCategory[]> => {
       })) as TagCategory[];
       
       console.log(`✅ Found ${userCategories.length} user-created categories`);
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ No user-created categories found (this is normal for new users)');
     }
     
     return userCategories;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error fetching categories:', error);
     return [];
   }
@@ -1901,7 +1939,7 @@ export const updateCategory = async (categoryId: string, updates: Partial<TagCat
     });
     
     console.log('✅ Category updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating category:', error);
     throw error;
   }
@@ -1935,7 +1973,7 @@ export const deleteCategoryById = async (categoryId: string, userId: string): Pr
     
     await deleteDoc(doc(db, 'users', userId, 'categories', categoryId));
     console.log('✅ Category deleted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting category:', error);
     throw error;
   }
@@ -1956,7 +1994,7 @@ export const createSubcategory = async (userId: string, subcategoryData: Omit<Ta
     console.log('✅ Subcategory created successfully with ID:', docRef.id);
     
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating subcategory:', error);
     throw error;
   }
@@ -1981,12 +2019,12 @@ export const getSubcategories = async (userId: string): Promise<TagSubcategory[]
       })) as TagSubcategory[];
       
       console.log(`✅ Found ${userSubcategories.length} user-created subcategories`);
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ No user-created subcategories found (this is normal for new users)');
     }
     
     return userSubcategories;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error fetching subcategories:', error);
     return [];
   }
@@ -2002,7 +2040,7 @@ export const updateSubcategory = async (subcategoryId: string, updates: Partial<
     });
     
     console.log('✅ Subcategory updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating subcategory:', error);
     throw error;
   }
@@ -2025,7 +2063,7 @@ export const deleteSubcategory = async (subcategoryId: string, userId: string): 
     
     await deleteDoc(doc(db, 'users', userId, 'subcategories', subcategoryId));
     console.log('✅ Subcategory deleted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting subcategory:', error);
     throw error;
   }
@@ -2075,7 +2113,7 @@ export const bulkAssignTags = async (
     
     await batch.commit();
     console.log('✅ Bulk tag assignment completed');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error bulk assigning tags:', error);
     throw error;
   }
@@ -2113,7 +2151,7 @@ export const bulkRemoveTags = async (
     
     await batch.commit();
     console.log('✅ Bulk tag removal completed');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error bulk removing tags:', error);
     throw error;
   }
@@ -2138,7 +2176,7 @@ export const bulkDeleteTransactions = async (
     
     await batch.commit();
     console.log('✅ Bulk transaction deletion completed');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error bulk deleting transactions:', error);
     throw error;
   }
@@ -2220,7 +2258,7 @@ export const getSuggestedTags = async (
     
     console.log('✅ Tag suggestions:', uniqueSuggestions.map(t => t.name));
     return uniqueSuggestions.slice(0, 5); // Return top 5 suggestions
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting tag suggestions:', error);
     return [];
   }
@@ -2668,7 +2706,7 @@ export const createTransactionSplit = async (
     
     console.log('✅ Transaction split created with ID:', docRef.id);
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating transaction split:', error);
     throw error;
   }
@@ -2695,7 +2733,7 @@ export const getTransactionSplits = async (
     
     console.log(`✅ Found ${splits.length} splits for transaction ${transactionId}`);
     return splits;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transaction splits:', error);
     throw error;
   }
@@ -2716,7 +2754,7 @@ export const updateTransactionSplit = async (
       }
     );
     console.log('✅ Transaction split updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating transaction split:', error);
     throw error;
   }
@@ -2730,7 +2768,7 @@ export const deleteTransactionSplit = async (
     console.log('🔧 Deleting transaction split:', splitId);
     await deleteDoc(doc(db, 'users', userId, 'transactionSplits', splitId));
     console.log('✅ Transaction split deleted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting transaction split:', error);
     throw error;
   }
@@ -2795,7 +2833,7 @@ export const splitTransaction = async (
     await batch.commit();
     
     console.log('✅ Transaction split successfully into', splits.length, 'parts');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error splitting transaction:', error);
     throw error;
   }
@@ -2831,7 +2869,7 @@ export const mergeTransactionSplits = async (
     await batch.commit();
     
     console.log('✅ Transaction splits merged successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error merging transaction splits:', error);
     throw error;
   }
@@ -2877,6 +2915,7 @@ export const createTransactionLink = async (
       throw new Error('Transaction link already exists');
     }
     
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cleanLinkData: any = {
       sourceTransactionId: linkData.sourceTransactionId,
       targetTransactionId: linkData.targetTransactionId,
@@ -2899,7 +2938,7 @@ export const createTransactionLink = async (
     
     console.log('✅ Transaction link created with ID:', docRef.id);
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating transaction link:', error);
     throw error;
   }
@@ -2952,7 +2991,7 @@ export const getLinkedTransactions = async (
     
     console.log(`✅ Found ${linkedTransactions.length} linked transactions`);
     return linkedTransactions;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting linked transactions:', error);
     throw error;
   }
@@ -2966,7 +3005,7 @@ export const deleteTransactionLink = async (
     console.log('🔗 Deleting transaction link:', linkId);
     await deleteDoc(doc(db, 'users', userId, 'transactionLinks', linkId));
     console.log('✅ Transaction link deleted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting transaction link:', error);
     throw error;
   }
@@ -3065,7 +3104,7 @@ export const suggestTransactionLinks = async (
     
     console.log(`✅ Found ${suggestions.length} transaction link suggestions`);
     return suggestions;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error suggesting transaction links:', error);
     throw error;
   }
@@ -3088,7 +3127,7 @@ export const createBudget = async (userId: string, budgetData: Omit<Budget, 'id'
     const docRef = await addDoc(collection(db, 'users', userId, 'budgets'), budgetDoc);
     console.log('✅ Budget created with ID:', docRef.id);
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating budget:', error);
     throw error;
   }
@@ -3116,7 +3155,7 @@ export const getBudgets = async (userId: string): Promise<(Budget & { id: string
     
     console.log(`✅ Loaded ${budgets.length} budgets`);
     return budgets;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error loading budgets:', error);
     throw error;
   }
@@ -3135,7 +3174,7 @@ export const createBudgetItem = async (userId: string, budgetItemData: Omit<Budg
     const docRef = await addDoc(collection(db, 'users', userId, 'budgetItems'), budgetItemDoc);
     console.log('✅ Budget item created with ID:', docRef.id);
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating budget item:', error);
     throw error;
   }
@@ -3159,7 +3198,7 @@ export const getBudgetItems = async (budgetId: string, userId: string): Promise<
     
     console.log(`✅ Loaded ${budgetItems.length} budget items`);
     return budgetItems;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error loading budget items:', error);
     throw error;
   }
@@ -3176,7 +3215,7 @@ export const updateBudgetItem = async (budgetItemId: string, updates: Partial<Bu
     });
     
     console.log('✅ Budget item updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating budget item:', error);
     throw error;
   }
@@ -3190,7 +3229,7 @@ export const deleteBudgetItem = async (budgetItemId: string, userId: string): Pr
     await deleteDoc(budgetItemRef);
     
     console.log('✅ Budget item deleted successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting budget item:', error);
     throw error;
   }
@@ -3281,7 +3320,7 @@ export const getBudgetVsActual = async (budgetId: string, userId: string): Promi
       totalRemaining,
       overallPercentageUsed
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error calculating budget vs actual:', error);
     throw error;
   }
@@ -3336,7 +3375,7 @@ export const getDashboardPreferences = async (userId: string): Promise<Dashboard
       console.log('✅ Created default dashboard preferences:', defaultPreferences);
       return defaultPreferences;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error loading dashboard preferences:', error);
     throw error;
   }
@@ -3354,7 +3393,7 @@ export const saveDashboardPreferences = async (userId: string, preferences: Part
     }, { merge: true });
     
     console.log('✅ Dashboard preferences saved successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error saving dashboard preferences:', error);
     throw error;
   }
@@ -3422,7 +3461,7 @@ export const updateCardVisibility = async (userId: string, cardId: string, visib
     }, { merge: true });
     
     console.log('✅ Card visibility updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating card visibility:', error);
     throw error;
   }
@@ -3454,7 +3493,7 @@ export const getAccountsByCategory = async (userId: string, category: 'family' |
     
     console.log(`✅ Found ${filteredAccounts.length} ${category} accounts for user (out of ${allAccounts.length} total)`);
     return filteredAccounts;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`❌ Error getting ${category} accounts:`, error);
     throw error;
   }
@@ -3487,7 +3526,7 @@ export const getBudgetsByCategory = async (userId: string, category: 'family' | 
     
     console.log(`✅ Loaded ${filteredBudgets.length} ${category} budgets (out of ${allBudgets.length} total)`);
     return filteredBudgets;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`❌ Error loading ${category} budgets:`, error);
     throw error;
   }
@@ -3505,7 +3544,7 @@ export const parseImportFile = async (file: File): Promise<any[]> => {
     } else {
       throw new Error('Unsupported file type. Please upload a CSV or Excel file (.xls, .xlsx).');
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error parsing import file:', error);
     throw error;
   }
@@ -3531,6 +3570,7 @@ const parseCSVFile = async (file: File): Promise<any[]> => {
         // Parse data rows
         const data = lines.slice(1).map(line => {
           const values = parseCSVLine(line);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const row: any = {};
           headers.forEach((header, index) => {
             row[header] = values[index] || '';
@@ -3539,7 +3579,7 @@ const parseCSVFile = async (file: File): Promise<any[]> => {
         });
 
         resolve(data);
-      } catch (error) {
+      } catch (error: any) {
         reject(error);
       }
     };
@@ -3627,7 +3667,9 @@ const parseExcelFile = async (file: File): Promise<any[]> => {
         const headers = jsonData[0] as string[];
         
         // Convert remaining rows to objects
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = jsonData.slice(1).map((row: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const obj: any = {};
           headers.forEach((header, index) => {
             obj[header] = row[index] || '';
@@ -3636,7 +3678,7 @@ const parseExcelFile = async (file: File): Promise<any[]> => {
         });
         
         resolve(result);
-      } catch (error) {
+      } catch (error: any) {
         reject(error);
       }
     };
@@ -3646,6 +3688,7 @@ const parseExcelFile = async (file: File): Promise<any[]> => {
 };
 
 // Helper function to parse date with specific format
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const parseDateStringWithFormat = (dateStr: any, format: string): string | null => {
   if (!dateStr) return null;
   
@@ -3792,13 +3835,14 @@ export const parseDateStringWithFormat = (dateStr: any, format: string): string 
     }
     
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.warn('Error parsing date with format:', format, 'value:', dateStr, error);
     return null;
   }
 };
 
 // Helper function to parse various date formats
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const parseDateString = (dateStr: any): string | null => {
   if (!dateStr) return null;
   
@@ -3899,6 +3943,7 @@ export const parseDateString = (dateStr: any): string | null => {
 };
 
 // Function to detect date format from sample data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const detectDateFormat = (dateValues: any[]): DateFormatInfo[] => {
   const formatCounts: { [key: string]: { count: number; examples: string[] } } = {};
   
@@ -3969,6 +4014,7 @@ export const detectDateFormat = (dateValues: any[]): DateFormatInfo[] => {
 };
 
 export const processImportData = async (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[], 
   mappings: ImportMapping, 
   accountId: string,
@@ -4038,7 +4084,7 @@ export const processImportData = async (
         };
         
         transactions.push(transaction);
-      } catch (error) {
+      } catch (error: any) {
         console.warn('⚠️ Error processing row:', row, error);
         continue;
       }
@@ -4046,7 +4092,7 @@ export const processImportData = async (
     
     console.log('✅ Processed', transactions.length, 'valid transactions');
     return transactions;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error processing import data:', error);
     throw error;
   }
@@ -4060,6 +4106,7 @@ export const bulkCreateTransactions = async (
     console.log('📦 Creating', transactions.length, 'transactions in bulk');
     
     const batch = writeBatch(db);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const transactionRefs: any[] = [];
     
     // Create document references and add to batch
@@ -4083,7 +4130,7 @@ export const bulkCreateTransactions = async (
     }
     
     return transactionIds;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating bulk transactions:', error);
     throw error;
   }
@@ -4148,7 +4195,7 @@ export const suggestTagsForImport = async (
     
     console.log('✅ Suggested', uniqueSuggestions.length, 'tags');
     return uniqueSuggestions;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error suggesting tags for import:', error);
     return [];
   }
@@ -4220,6 +4267,7 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       // Build tags map
       if (transaction.tagIds && transaction.tagIds.length > 0) {
         tagsMap[transaction.id] = transaction.tagIds
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .map(tagId => allTags.find((tag: any) => tag.id === tagId))
           .filter(Boolean) as Tag[];
       } else {
@@ -4228,12 +4276,14 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       
       // Build splits map
       if (transaction.isSplit) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
         splitsMap[transaction.id] = allSplits.filter((split: any) => split.transactionId === transaction.id);
       } else {
         splitsMap[transaction.id] = [];
       }
       
       // Build linked map
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
       linkedMap[transaction.id] = allLinks.filter((link: any) => link.transaction.id === transaction.id);
     }
     
@@ -4245,7 +4295,7 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       splitsMap,
       linkedMap
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error fetching transactions with data:', error);
     throw error;
   }
@@ -4255,10 +4305,12 @@ export const getTransactionsByAccountPaginated = async (
   userId: string, 
   accountId: string, 
   pageSize: number = 100,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lastDoc?: any
 ): Promise<{
   transactions: Transaction[];
   hasMore: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lastDoc: any;
 }> => {
   try {
@@ -4298,7 +4350,7 @@ export const getTransactionsByAccountPaginated = async (
       hasMore,
       lastDoc: newLastDoc
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting paginated transactions:', error);
     throw error;
   }
@@ -4321,7 +4373,7 @@ export const getTransactionsByAccountPage = async (
     // This is not ideal for large datasets, but Firebase doesn't support offset-based pagination
     // In a production app, you'd implement cursor-based pagination with page tracking
     
-    let q = query(
+    const q = query(
       collection(db, 'users', userId, 'transactions'),
       where('accountId', '==', accountId),
       orderBy('createdAt', 'desc'),
@@ -4369,7 +4421,7 @@ export const getTransactionsByAccountPage = async (
       tagsMap,
       splitsMap
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transactions by page:', error);
     throw error;
   }
@@ -4392,7 +4444,7 @@ export const getTransactionsByAccountPageCursor = async (
     // This is not ideal for large datasets, but Firebase doesn't support offset-based pagination
     // In a production app, you'd implement cursor-based pagination with page tracking
     
-    let q = query(
+    const q = query(
       collection(db, 'users', userId, 'transactions'),
       where('accountId', '==', accountId),
       orderBy('createdAt', 'desc'),
@@ -4440,7 +4492,7 @@ export const getTransactionsByAccountPageCursor = async (
       tagsMap,
       splitsMap
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transactions by page:', error);
     throw error;
   }
@@ -4492,7 +4544,7 @@ export const getTransactionTagsBatch = async (transactionIds: string[], userId: 
     
     console.log(`✅ Loaded ${relevantTags.length} relevant tags for ${transactionIds.length} transactions`);
     return relevantTags;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error batch loading tags:', error);
     return [];
   }
@@ -4517,7 +4569,7 @@ export const getTransactionSplitsBatch = async (transactionIds: string[], userId
     
     console.log(`✅ Loaded ${splits.length} splits`);
     return splits;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error batch loading splits:', error);
     return [];
   }
@@ -4571,7 +4623,7 @@ export const getLinkedTransactionsBatch = async (transactionIds: string[], userI
     });
     
     // Batch load all linked transactions
-    let linkedTransactions: Transaction[] = [];
+    const linkedTransactions: Transaction[] = [];
     if (linkedIds.size > 0) {
       const linkedIdsArray = Array.from(linkedIds);
       // Firestore 'in' query has a limit of 10, so we need to batch
@@ -4619,7 +4671,7 @@ export const getLinkedTransactionsBatch = async (transactionIds: string[], userI
     
     console.log(`✅ Loaded ${linkedMap.length} linked transactions`);
     return linkedMap;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error batch loading linked transactions:', error);
     return [];
   }
@@ -4641,7 +4693,7 @@ export const linkTransactions = async (userId: string, transactionId1: string, t
     });
     
     console.log('✅ Transactions linked successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error linking transactions:', error);
     throw error;
   }
@@ -4706,7 +4758,7 @@ export const migrateExistingAccountsToInitialBalance = async (userId: string): P
     }
     
     console.log(`🎉 Migration completed! Created: ${migratedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error during migration:', error);
     throw error;
   }
@@ -4768,7 +4820,7 @@ export const createHierarchyItem = async (
     console.log('✅ Hierarchy item created with ID:', docRef.id);
     
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating hierarchy item:', error);
     throw error;
   }
@@ -4788,7 +4840,7 @@ export const updateHierarchyItem = async (
     });
     
     console.log('✅ Hierarchy item updated successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error updating hierarchy item:', error);
     throw error;
   }
@@ -4839,7 +4891,7 @@ export const deleteHierarchyItem = async (userId: string, itemId: string): Promi
     await batch.commit();
     console.log(`✅ Deleted hierarchy item and ${childIds.length} children`);
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting hierarchy item:', error);
     throw error;
   }
@@ -4883,6 +4935,7 @@ export const moveHierarchyItemLevel = async (
       newOrder = (relevantItems[0].order || 0) + 1;
     }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       level: newLevel,
       order: newOrder,
@@ -4911,7 +4964,7 @@ export const moveHierarchyItemLevel = async (
     await updateDoc(doc(db, 'users', userId, 'hierarchy', itemId), updateData);
     
     console.log('✅ Item moved to new level successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error moving hierarchy item:', error);
     throw error;
   }
@@ -4936,7 +4989,7 @@ export const bulkUpdateHierarchyItems = async (
     await batch.commit();
     console.log('✅ Bulk update completed successfully');
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in bulk update:', error);
     throw error;
   }
@@ -4979,7 +5032,7 @@ export const getTagsFromHierarchy = async (userId: string): Promise<Tag[]> => {
     console.log(`✅ Found ${tags.length} tags from hierarchy`);
     return tags;
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error fetching tags from hierarchy:', error);
     throw error;
   }
@@ -5014,7 +5067,7 @@ export const getHierarchyItems = async (userId: string): Promise<HierarchyItem[]
     console.log(`✅ Found ${items.length} hierarchy items`);
     return items;
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error fetching hierarchy items:', error);
     throw error;
   }
@@ -5031,7 +5084,7 @@ export const getHierarchyItemUsageCount = async (userId: string, itemId: string)
     const snapshot = await getDocs(transactionsQuery);
     return snapshot.docs.length;
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting item usage count:', error);
     return 0;
   }
@@ -5123,7 +5176,7 @@ export const moveHierarchyItemWithChildren = async (
     await batch.commit();
     console.log('✅ Items moved successfully');
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error moving hierarchy item with children:', error);
     throw error;
   }
@@ -5191,7 +5244,7 @@ export const getTransactionsByAccountPageSimple = async (
       tagsMap,
       splitsMap
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transactions by page:', error);
     throw error;
   }
@@ -5212,7 +5265,7 @@ export const getTransactionCount = async (userId: string, accountId: string): Pr
     console.log(`✅ Found ${count} total transactions for account`);
     
     return count;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error getting transaction count:', error);
     throw error;
   }

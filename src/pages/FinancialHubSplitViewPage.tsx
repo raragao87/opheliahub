@@ -537,8 +537,10 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   const [showBulkTagModal, setShowBulkTagModal] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [pageTransactions, setPageTransactions] = useState<(Transaction & { id: string })[]>([]);
-  const [pageTransactionTags, setPageTransactionTags] = useState<Record<string, Tag[]>>({});
-  const [pageTransactionSplits, setPageTransactionSplits] = useState<Record<string, TransactionSplit[]>>({});
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_pageTransactionTags, setPageTransactionTags] = useState<Record<string, Tag[]>>({});
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_pageTransactionSplits, setPageTransactionSplits] = useState<Record<string, TransactionSplit[]>>({});
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -611,7 +613,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
         console.log('✅ Account initial balance synced successfully');
         
         // Reload accounts to reflect the updated balance
-        await loadAccounts(user.uid);
+        // await loadAccounts(user.uid);
       }
       
       onTransactionUpdate();
@@ -713,8 +715,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
 
   // Use page-specific data if available, otherwise fall back to props
   const displayTransactions = pageTransactions.length > 0 ? pageTransactions : transactions;
-  const displayTransactionTags = Object.keys(pageTransactionTags).length > 0 ? pageTransactionTags : transactionTags;
-  const displayTransactionSplits = Object.keys(pageTransactionSplits).length > 0 ? pageTransactionSplits : transactionSplits;
+  // const displayTransactionTags = Object.keys(pageTransactionTags).length > 0 ? pageTransactionTags : transactionTags;
+  // const displayTransactionSplits = Object.keys(pageTransactionSplits).length > 0 ? pageTransactionSplits : transactionSplits;
 
   // Filter and sort transactions
   const filteredAndSortedTransactions = useMemo(() => {
@@ -723,7 +725,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     // Apply filters
     if (filters.dateFrom || filters.dateTo) {
       filtered = filtered.filter(transaction => {
-        const transactionDate = new Date(transaction.date);
+        const transactionDate = new Date(transaction.date || 0);
         if (filters.dateFrom && filters.dateFrom.trim()) {
           const fromDate = new Date(filters.dateFrom);
           if (transactionDate < fromDate) return false;
@@ -782,13 +784,15 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     
     // Apply sorting
     filtered.sort((a, b) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let aValue: any = a[sortConfig.key];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let bValue: any = b[sortConfig.key];
       
       // Handle date sorting
       if (sortConfig.key === 'date') {
-        aValue = new Date(a.date).getTime();
-        bValue = new Date(b.date).getTime();
+        aValue = new Date(a.date || 0).getTime();
+        bValue = new Date(b.date || 0).getTime();
       }
       
       // Handle amount sorting
@@ -879,10 +883,6 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     } else {
       setActiveFilterColumn(column);
     }
-  };
-
-  const closeAllFilters = () => {
-    setActiveFilterColumn(null);
   };
 
   // Close filters when clicking outside

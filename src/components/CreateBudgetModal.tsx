@@ -134,6 +134,7 @@ const CreateBudgetModal: React.FC<CreateBudgetModalProps> = ({
     setBudgetItems(budgetItems.filter((_, i) => i !== index));
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateBudgetItem = (index: number, field: string, value: any) => {
     const updatedItems = [...budgetItems];
     updatedItems[index] = {

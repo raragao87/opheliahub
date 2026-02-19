@@ -16,8 +16,8 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState('');
-  const [accountType, setAccountType] = useState<'bank' | 'pseudo' | 'asset'>('bank');
-  const [category, setCategory] = useState<'family' | 'personal' | 'assets'>('personal');
+  const [classification, setClassification] = useState<'bank' | 'asset' | 'liability'>('bank');
+  const [scope, setScope] = useState<'family' | 'personal'>('personal');
   const [balance, setBalance] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedType, setSelectedType] = useState<string>('');
@@ -47,8 +47,6 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
     }
   };
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -68,20 +66,32 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
 
     try {
       const finalType = customType.trim() || selectedType;
-      const isReal = accountType === 'bank';
+      // Determine if it's a "real" bank account based on classification
+      const isReal = classification === 'bank' || classification === 'liability';
       
+      // Map scope/classification to backend category
+      let backendCategory: 'family' | 'personal' | 'assets' = scope;
+      if (classification === 'asset' && scope === 'personal') {
+          if (classification === 'asset') backendCategory = 'assets';
+      }
+
+      // Determine default sign based on selected type
+      const selectedTypeObj = availableTypes.find(t => t.id === selectedType);
+      const defaultSign = selectedTypeObj?.defaultSign || (classification === 'liability' ? 'negative' : 'positive');
+
       await createAccount(user.uid, {
         name: name.trim(),
         type: finalType,
-        category,
+        category: backendCategory,
         balance: parseFloat(balance) || 0,
         initialBalance: parseFloat(balance) || 0,
         isReal,
-        accountType,
-        defaultSign: 'positive',
+        accountType: classification === 'liability' ? 'pseudo' : (classification === 'asset' ? 'asset' : 'bank'),
+        defaultSign,
         currency: 'EUR',
         sharedWith: [],
         ownerId: user.uid,
+        notes: notes // Using the notes state
       });
 
       onSuccess();
@@ -96,8 +106,8 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
 
   const handleClose = () => {
     setName('');
-    setAccountType('bank');
-    setCategory('personal');
+    setClassification('bank');
+    setScope('personal');
     setBalance('');
     setNotes('');
     setSelectedType('');
@@ -115,6 +125,19 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
       setShowCustomTypeInput(false);
       setSelectedType(type);
       setCustomType('');
+    }
+  };
+
+  const getFilteredTypes = () => {
+    switch (classification) {
+      case 'bank':
+        return availableTypes.filter(t => ['checking', 'savings', 'cash'].includes(t.id));
+      case 'liability':
+        return availableTypes.filter(t => ['credit-card', 'loan', 'mortgage'].includes(t.id));
+      case 'asset':
+        return availableTypes.filter(t => ['investment', 'property', 'vehicle'].includes(t.id));
+      default:
+        return availableTypes;
     }
   };
 
@@ -136,64 +159,70 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Main Checking, Savings, etc."
+              placeholder="e.g., Main Checking, Amex Gold"
             />
           </div>
 
-          {/* Account Type */}
+          {/* Account Classification */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Account Type *
+              Account Classification *
             </label>
             <div className="space-y-2">
               <label className="flex items-center">
                 <input
                   type="radio"
                   value="bank"
-                  checked={accountType === 'bank'}
-                  onChange={(e) => setAccountType(e.target.value as 'bank' | 'pseudo' | 'asset')}
+                  checked={classification === 'bank'}
+                  onChange={() => {
+                      setClassification('bank');
+                      setSelectedType('');
+                  }}
                   className="mr-2"
                 />
-                <span>🏦 Bank Account</span>
+                <span>🏦 Banking / Cash (Liquid)</span>
               </label>
               <label className="flex items-center">
                 <input
                   type="radio"
-                  value="pseudo"
-                  checked={accountType === 'pseudo'}
-                  onChange={(e) => setAccountType(e.target.value as 'bank' | 'pseudo' | 'asset')}
+                  value="liability"
+                  checked={classification === 'liability'}
+                  onChange={() => {
+                      setClassification('liability');
+                      setSelectedType('');
+                  }}
                   className="mr-2"
                 />
-                <span>💳 Pseudo Account</span>
+                <span>💳 Credit / Loan (Liability)</span>
               </label>
               <label className="flex items-center">
                 <input
                   type="radio"
                   value="asset"
-                  checked={accountType === 'asset'}
-                  onChange={(e) => setAccountType(e.target.value as 'bank' | 'pseudo' | 'asset')}
+                  checked={classification === 'asset'}
+                  onChange={() => {
+                      setClassification('asset');
+                      setSelectedType('');
+                  }}
                   className="mr-2"
                 />
-                <span>🏠 Asset Account</span>
+                <span>🏠 Property / Asset (Illiquid)</span>
               </label>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
-              Choose the type of account you want to create. Bank accounts are real accounts with actual balances, pseudo accounts are for tracking purposes, and asset accounts are for tracking valuable items like houses, cars, or investments.
-            </p>
           </div>
 
-          {/* Family/Personal Category */}
+          {/* Scope (Family/Personal) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Family/Personal Category
+              Ownership Scope
             </label>
-            <div className="space-y-2">
+            <div className="flex space-x-4">
               <label className="flex items-center">
                 <input
                   type="radio"
                   value="personal"
-                  checked={category === 'personal'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
+                  checked={scope === 'personal'}
+                  onChange={(e) => setScope(e.target.value as 'family' | 'personal')}
                   className="mr-2"
                 />
                 <span>👤 Personal</span>
@@ -202,38 +231,23 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                 <input
                   type="radio"
                   value="family"
-                  checked={category === 'family'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
+                  checked={scope === 'family'}
+                  onChange={(e) => setScope(e.target.value as 'family' | 'personal')}
                   className="mr-2"
                 />
-                <span>👨‍👩‍👧‍👦 Family</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  value="assets"
-                  checked={category === 'assets'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
-                  className="mr-2"
-                />
-                <span>🏠 Assets</span>
+                <span>👨‍👩‍👧‍👦 Family Shared</span>
               </label>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
-              Choose whether this account is for personal, family, or assets use.
-            </p>
           </div>
 
-          {/* Account Type Selection */}
+          {/* Specific Account Type Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Account Type *
             </label>
             <div className="grid grid-cols-2 gap-2 mb-2">
-              {availableTypes
-                .filter(type => type.category === accountType)
-                .map((type) => (
-                  <label key={type.id} className="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50">
+              {getFilteredTypes().map((type) => (
+                  <label key={type.id} className={`flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50 ${selectedType === type.id ? 'bg-blue-50 border-blue-500' : ''}`}>
                     <input
                       type="radio"
                       name="accountType"
@@ -275,14 +289,20 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Initial Balance
             </label>
-            <input
-              type="number"
-              step="0.01"
-              value={balance}
-              onChange={(e) => setBalance(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="0.00"
-            />
+            <div className="relative">
+                <span className="absolute left-3 top-2 text-gray-500">€</span>
+                <input
+                type="number"
+                step="0.01"
+                value={balance}
+                onChange={(e) => setBalance(e.target.value)}
+                className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+                />
+            </div>
+            {classification === 'liability' && (
+                <p className="text-xs text-gray-500 mt-1">For liabilities, enter a positive number (e.g., 500 for a €500 debt).</p>
+            )}
           </div>
 
           {/* Notes */}
@@ -327,4 +347,4 @@ const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   );
 };
 
-export default CreateAccountModal; 
+export default CreateAccountModal;

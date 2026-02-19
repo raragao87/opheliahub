@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
-import { createTransaction, getTags } from '../firebase/config';
+import { createTransaction, type Tag } from '../firebase/config';
+import InlineTagInput from './InlineTagInput';
 
 interface InlineTransactionRowProps {
   accountId: string;
@@ -17,27 +18,10 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
     date: new Date().toISOString().split('T')[0], // Today's date
     description: '',
     amount: '',
-    tags: [] as string[]
+    tags: [] as Tag[]
   });
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [showTagSelector, setShowTagSelector] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-
-  useEffect(() => {
-    // Load available tags
-    const loadTags = async () => {
-      if (auth.currentUser) {
-        try {
-          const tags = await getTags(auth.currentUser.uid);
-          setAvailableTags(tags.map(tag => tag.name));
-        } catch (error) {
-          console.error('Error loading tags:', error);
-        }
-      }
-    };
-    loadTags();
-  }, []);
 
   useEffect(() => {
     const handleGlobalKeyPress = (e: KeyboardEvent) => {
@@ -53,7 +37,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
     document.addEventListener('keydown', handleGlobalKeyPress);
     return () => document.removeEventListener('keydown', handleGlobalKeyPress);
-  }, []);
+  }, [formData]);
 
   const handleSubmit = async () => {
     if (!formData.description.trim() || !formData.amount.trim()) {
@@ -71,6 +55,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
           amount,
           description: formData.description.trim(),
           date: formData.date,
+          tagIds: formData.tags.map(t => t.id),
           isManual: true,
           source: 'manual',
           createdAt: Date.now(),
@@ -101,30 +86,6 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       onCancel();
     }
   };
-
-  const handleTagToggle = (tag: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.includes(tag)
-        ? prev.tags.filter(t => t !== tag)
-        : [...prev.tags, tag]
-    }));
-  };
-
-  // Close tag selector when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.tag-selector-container')) {
-        setShowTagSelector(false);
-      }
-    };
-
-    if (showTagSelector) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showTagSelector]);
 
   return (
     <tr className={`transition-all duration-300 ${
@@ -168,54 +129,11 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       </td>
 
       {/* Tags */}
-      <td className="px-4 py-2 text-sm relative">
-        <div className="relative tag-selector-container">
-          <button
-            onClick={() => setShowTagSelector(!showTagSelector)}
-            className="w-full px-2 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-left min-h-[24px] flex items-center justify-between"
-            disabled={saving}
-          >
-            <span className="flex flex-wrap gap-1">
-              {formData.tags.length > 0 ? (
-                formData.tags.map((tag, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {tag}
-                  </span>
-                ))
-              ) : (
-                <span className="text-gray-400">Select tags...</span>
-              )}
-            </span>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {showTagSelector && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-              {availableTags.map((tag) => (
-                <label
-                  key={tag}
-                  className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.tags.includes(tag)}
-                    onChange={() => handleTagToggle(tag)}
-                    className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm">{tag}</span>
-                </label>
-              ))}
-              {availableTags.length === 0 && (
-                <div className="px-3 py-2 text-sm text-gray-500">No tags available</div>
-              )}
-            </div>
-          )}
-        </div>
+      <td className="px-4 py-2 text-sm">
+        <InlineTagInput
+          selectedTags={formData.tags}
+          onTagsChange={(newTags) => setFormData(prev => ({ ...prev, tags: newTags }))}
+        />
       </td>
 
       {/* Amount */}

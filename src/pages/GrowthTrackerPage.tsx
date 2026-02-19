@@ -357,6 +357,7 @@ const GrowthTrackerPage: FC = () => {
         },
         ticks: {
           color: '#6B7280',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
           callback: function(value: any) {
             return Math.round(value / 30.44) + 'm';
           }

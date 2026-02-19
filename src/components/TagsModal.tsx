@@ -822,7 +822,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
     const childrenCount = items.filter(i => i.parentId === itemId).length;
     
     let confirmMessage = `Delete "${item.name}"?`;
-    let warningDetails = [];
+    const warningDetails = [];
     
     if (hasChildren) {
       warningDetails.push(`This will also delete ${childrenCount} child item${childrenCount !== 1 ? 's' : ''}`);

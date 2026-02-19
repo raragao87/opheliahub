@@ -24,12 +24,16 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   // Form fields
   const [accountName, setAccountName] = useState('');
   const [initialBalance, setInitialBalance] = useState('');
-  const [selectedAccountTypeId, setSelectedAccountTypeId] = useState('');
+  const [selectedType, setSelectedType] = useState('');
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
   const [currency, setCurrency] = useState('EUR');
+  
+  // Classification: what kind of "container" is this?
+  const [classification, setClassification] = useState<'bank' | 'asset' | 'liability'>('bank');
+  // Scope: personal vs family
+  const [scope, setScope] = useState<'family' | 'personal'>('personal');
+  
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [category, setCategory] = useState<'family' | 'personal' | 'assets'>('personal');
-  const [accountType, setAccountType] = useState<'bank' | 'pseudo' | 'asset'>('bank');
   const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
 
   useEffect(() => {
@@ -45,18 +49,33 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       // Initialize form with current account data
       setAccountName(account.name);
       setInitialBalance(account.initialBalance.toString());
-      setSelectedAccountTypeId(account.type);
+      setSelectedType(account.type);
       setCurrency(account.currency || 'EUR');
-      setCategory(account.category || 'personal');
       
-      // Initialize accountType based on existing account data
+      // Determine Classification
       if (account.accountType) {
-        setAccountType(account.accountType);
+         // Modern account: use explicit accountType
+         if (account.accountType === 'pseudo') {
+             // Heuristic: check if it's a liability type or just a manual bank account?
+             // For now, if it's 'pseudo' and category is 'liability', it's liability.
+             // If account.defaultSign is 'negative', it's liability.
+             setClassification(account.defaultSign === 'negative' ? 'liability' : 'bank');
+         } else {
+             setClassification(account.accountType as 'bank' | 'asset');
+         }
       } else {
-        // Backward compatibility: map isReal to accountType
-        setAccountType(account.isReal ? 'bank' : 'pseudo');
+         // Legacy account fallback
+         if (!account.isReal) {
+             setClassification(account.defaultSign === 'negative' ? 'liability' : 'bank');
+         } else {
+             setClassification(account.category === 'assets' ? 'asset' : 'bank');
+         }
       }
       
+      // Determine Scope
+      if (account.category === 'family') setScope('family');
+      else setScope('personal'); // 'assets' category usually implies personal unless shared, but default to personal
+
       setError(null);
       
       // Load account types
@@ -72,6 +91,19 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       setAccountTypes(types);
     } catch (error) {
       console.error('Error loading account types:', error);
+    }
+  };
+  
+  const getFilteredTypes = () => {
+    switch (classification) {
+      case 'bank':
+        return accountTypes.filter(t => ['checking', 'savings', 'cash'].includes(t.id));
+      case 'liability':
+        return accountTypes.filter(t => ['credit-card', 'loan', 'mortgage'].includes(t.id));
+      case 'asset':
+        return accountTypes.filter(t => ['investment', 'property', 'vehicle'].includes(t.id));
+      default:
+        return accountTypes;
     }
   };
 
@@ -164,25 +196,30 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       const balanceDifference = newInitialBalance - account.initialBalance;
       const newBalance = account.balance + balanceDifference;
 
-      console.log('🔄 Submitting account update with selectedAccountTypeId:', selectedAccountTypeId);
+      console.log('🔄 Submitting account update with selectedType:', selectedType);
       
       // Find the selected account type to get its properties
-      const selectedType = accountTypes.find(t => t.name === selectedAccountTypeId);
-      
+      const selectedTypeObj = accountTypes.find(t => t.id === selectedType || t.name === selectedType);
+      const defaultSign = selectedTypeObj?.defaultSign || (classification === 'liability' ? 'negative' : 'positive');
+
+      // Map scope/classification to backend category
+      let backendCategory: 'family' | 'personal' | 'assets' = scope;
+      if (classification === 'asset') backendCategory = 'assets'; // Force assets category for assets
+
       // Ensure initial balance transaction exists and is in sync - ALWAYS check/update
       await findAndUpdateInitialBalanceTransaction(newInitialBalance);
       
       // Update account
       await updateAccount(account.id, {
         name: accountName.trim(),
-        type: selectedAccountTypeId || account.type,
-        defaultSign: selectedType?.defaultSign || account.defaultSign,
+        type: selectedType || account.type,
+        defaultSign: defaultSign,
         initialBalance: newInitialBalance,
         balance: newBalance,
         currency: currency,
-        isReal: accountType === 'bank', // Map accountType to isReal for backward compatibility
-        category: category,
-        accountType: accountType, // Add new accountType field
+        isReal: classification === 'bank' || classification === 'liability',
+        category: backendCategory,
+        accountType: classification === 'liability' ? 'pseudo' : (classification === 'asset' ? 'asset' : 'bank'),
         updatedAt: Date.now(),
         ownerId: account.ownerId
       });
@@ -273,126 +310,98 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             />
           </div>
 
-          {/* Account Type */}
+          {/* Account Classification */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Classification *
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={classification === 'bank'}
+                  onChange={() => {
+                      setClassification('bank');
+                      setSelectedType('');
+                  }}
+                  className="mr-2"
+                />
+                <span>🏦 Banking / Cash (Liquid)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={classification === 'liability'}
+                  onChange={() => {
+                      setClassification('liability');
+                      setSelectedType('');
+                  }}
+                  className="mr-2"
+                />
+                <span>💳 Credit / Loan (Liability)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={classification === 'asset'}
+                  onChange={() => {
+                      setClassification('asset');
+                      setSelectedType('');
+                  }}
+                  className="mr-2"
+                />
+                <span>🏠 Property / Asset (Illiquid)</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Scope (Family/Personal) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ownership Scope
+            </label>
+            <div className="flex space-x-4">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={scope === 'personal'}
+                  onChange={() => setScope('personal')}
+                  className="mr-2"
+                />
+                <span>👤 Personal</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={scope === 'family'}
+                  onChange={() => setScope('family')}
+                  className="mr-2"
+                />
+                <span>👨‍👩‍👧‍👦 Family Shared</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Specific Account Type Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Account Type *
             </label>
-            <select
-              value={selectedAccountTypeId}
-              onChange={(e) => setSelectedAccountTypeId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="">Select an account type</option>
-              <optgroup label="Assets">
-                {accountTypes.filter(type => type.category === 'asset').map((type) => (
-                  <option key={type.id} value={type.name}>
-                    {type.name} {type.isCustom && '(Custom)'}
-                  </option>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {getFilteredTypes().map((type) => (
+                  <label key={type.id} className={`flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50 ${selectedType === type.id || selectedType === type.name ? 'bg-blue-50 border-blue-500' : ''}`}>
+                    <input
+                      type="radio"
+                      name="accountTypeSelection"
+                      value={type.id}
+                      checked={selectedType === type.id || selectedType === type.name}
+                      onChange={() => setSelectedType(type.id)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">{type.name}</span>
+                  </label>
                 ))}
-              </optgroup>
-              <optgroup label="Liabilities">
-                {accountTypes.filter(type => type.category === 'liability').map((type) => (
-                  <option key={type.id} value={type.name}>
-                    {type.name} {type.isCustom && '(Custom)'}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Manage custom account types in the Account Types settings
-            </p>
-          </div>
-
-          {/* Account Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Account Category
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="accountType"
-                  value="bank"
-                  checked={accountType === 'bank'}
-                  onChange={() => setAccountType('bank')}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Bank Account</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="accountType"
-                  value="pseudo"
-                  checked={accountType === 'pseudo'}
-                  onChange={() => setAccountType('pseudo')}
-                  className="mr-2 text-orange-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Pseudo Account</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="accountType"
-                  value="asset"
-                  checked={accountType === 'asset'}
-                  onChange={() => setAccountType('asset')}
-                  className="mr-2 text-green-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">🏠 Asset Account</span>
-              </label>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Bank accounts are real institutions, pseudo accounts are for budgeting, asset accounts track property/investment values
-            </p>
-          </div>
-
-          {/* Family/Personal Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Family/Personal Category
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="category"
-                  value="personal"
-                  checked={category === 'personal'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Personal</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="category"
-                  value="family"
-                  checked={category === 'family'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Family</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="category"
-                  value="assets"
-                  checked={category === 'assets'}
-                  onChange={(e) => setCategory(e.target.value as 'family' | 'personal' | 'assets')}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">🏠 Assets</span>
-              </label>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Choose whether this account is for personal, family, or assets use
-            </p>
           </div>
 
           {/* Currency */}
@@ -452,7 +461,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
           </div>
 
           {/* Update Asset Value Button */}
-          {accountType === 'asset' && (
+          {classification === 'asset' && (
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
@@ -560,4 +569,4 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   );
 };
 
-export default EditAccountModal; 
+export default EditAccountModal;
