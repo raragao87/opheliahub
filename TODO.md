@@ -4,10 +4,10 @@
 - [x] **Transactions:**
     - [x] Add ability to *edit* transaction date/description/amount inline (Verified).
     - [x] Verify **Transaction Tagging** (Refactored `InlineTagInput` to support both modes).
-    - [ ] Ensure **Split Transactions** work correctly (UI & backend).
-- [ ] **Accounts:**
+    - [ ] **WIP:** Ensure **Split Transactions** work correctly (UI & backend).
+- [x] **Accounts:**
     - [x] Create/Edit/Delete accounts (Verified & Fixed Types).
-    - [ ] Sync account balances with transaction history (auto-calc).
+    - [x] Sync account balances with transaction history (Logic Verified in `firebase/config.ts`).
 - [ ] **Budgeting:**
     - [ ] Create monthly budgets by Category/Tag.
     - [ ] Visual progress bars for budget vs actuals.
