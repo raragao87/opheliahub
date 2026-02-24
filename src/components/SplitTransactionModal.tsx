@@ -43,6 +43,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
     if (isOpen && user) {
       loadSplits();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user]);
 
   const loadSplits = async () => {

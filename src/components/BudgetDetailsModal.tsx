@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { 
-  getBudgetVsActual, 
-  createBudgetItem, 
-  updateBudgetItem, 
+import {
+  getBudgetVsActual,
+  createBudgetItem,
+  updateBudgetItem,
   deleteBudgetItem,
-  getTags, 
+  getTags,
   getDefaultTags,
-  type Budget, 
+  type Budget,
   type BudgetItem,
-  type Tag 
+  type Tag
 } from '../firebase/config';
+
+type BudgetVsActualData = Awaited<ReturnType<typeof getBudgetVsActual>>;
 import TagSelector from './TagSelector';
 
 interface BudgetDetailsModalProps {
@@ -30,7 +32,7 @@ const BudgetDetailsModal: React.FC<BudgetDetailsModalProps> = ({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [budgetData, setBudgetData] = useState<any>(null);
+  const [budgetData, setBudgetData] = useState<BudgetVsActualData | null>(null);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -50,6 +52,7 @@ const BudgetDetailsModal: React.FC<BudgetDetailsModalProps> = ({
     });
 
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budget.id]);
 
   const loadBudgetData = async () => {
@@ -319,8 +322,7 @@ const BudgetDetailsModal: React.FC<BudgetDetailsModalProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-4">
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    {budgetData.budgetItems.map((item: any) => (
+                    {budgetData.budgetItems.map((item) => (
                       <div key={item.id} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>

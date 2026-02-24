@@ -10,11 +10,7 @@ import {
 import CreateBudgetModal from '../components/CreateBudgetModal';
 import BudgetDetailsModal from '../components/BudgetDetailsModal';
 
-interface BudgetPageProps {
-  // Add any props if needed
-}
-
-const BudgetPage: React.FC<BudgetPageProps> = () => {
+const BudgetPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<User | null>(null);

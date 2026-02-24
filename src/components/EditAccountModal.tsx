@@ -81,6 +81,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       // Load account types
       loadAccountTypes();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, account, user]);
 
   const loadAccountTypes = async () => {

@@ -106,6 +106,7 @@ const DashboardPage: React.FC = () => {
     });
 
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadPreferences = async () => {

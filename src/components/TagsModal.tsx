@@ -493,6 +493,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       }
     });
     return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info') => {
@@ -666,8 +667,6 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
       let parentId: string | undefined;
       let itemName = 'New Tag';
       let insertAfterItemId: string | undefined;
-      let defaultColor: string | undefined;
-      
       if (selectedItemId) {
         const selectedItem = items.find(i => i.id === selectedItemId);
         if (selectedItem) {
@@ -686,11 +685,11 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
           }
         }
       }
-      
+
       // Assign a default color from the level's palette
       const levelColors = HIERARCHY_LEVEL_DEFAULT_COLORS[level];
       const existingItemsAtLevel = items.filter(i => i.level === level);
-      defaultColor = levelColors[existingItemsAtLevel.length % levelColors.length];
+      const defaultColor = levelColors[existingItemsAtLevel.length % levelColors.length];
       
       const newItemId = await createHierarchyItemWithPosition(
         user.uid, 
@@ -1246,6 +1245,7 @@ const TagsModal: React.FC<TagsModalProps> = ({ isOpen, onClose }) => {
         handleStartEdit(selectedItemId);
         break;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editing.itemId, selectedItems]);
 
   useEffect(() => {

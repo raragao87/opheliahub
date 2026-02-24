@@ -72,18 +72,3 @@ export const HIERARCHY_LEVEL_DEFAULT_COLORS = {
   3: ['#F59E0B', '#EAB308', '#84CC16', '#22C55E'], // Yellows and greens for tag groups
   4: ['#EF4444', '#F97316', '#EC4899', '#F43F5E']  // Reds and pinks for tags
 } as const;
-
-export interface HierarchyTree {
-  [key: string]: HierarchyItem & {
-    children: HierarchyTree;
-  };
-}
-
-export interface HierarchyOperations {
-  createItem: (name: string, level: HierarchyLevel, parentId?: string) => Promise<string>;
-  updateItem: (id: string, updates: Partial<HierarchyItem>) => Promise<void>;
-  deleteItem: (id: string) => Promise<void>;
-  moveItemLevel: (id: string, newLevel: HierarchyLevel, newParentId?: string) => Promise<void>;
-  bulkUpdateItems: (items: { id: string; updates: Partial<HierarchyItem> }[]) => Promise<void>;
-  getHierarchyTree: () => Promise<HierarchyItem[]>;
-}

@@ -37,6 +37,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
 
     document.addEventListener('keydown', handleGlobalKeyPress);
     return () => document.removeEventListener('keydown', handleGlobalKeyPress);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
 
   const handleSubmit = async () => {

@@ -22,6 +22,7 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, itemId, itemName
     if (isOpen && auth.currentUser) {
       loadPendingInvitations();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const loadPendingInvitations = async () => {

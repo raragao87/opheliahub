@@ -53,6 +53,7 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({
     if (isOpen && user) {
       loadPreferences();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user]);
 
   const loadPreferences = async () => {

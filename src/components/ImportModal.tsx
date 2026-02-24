@@ -30,7 +30,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
 }) => {
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview' | 'importing'>('upload');
 
-  const [importData, setImportData] = useState<any[]>([]);
+  const [importData, setImportData] = useState<Record<string, string>[]>([]);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mappings, setMappings] = useState<ImportMapping>({
     dateColumn: '',

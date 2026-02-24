@@ -36,6 +36,20 @@ import BulkTagModal from '../components/BulkTagModal';
 import TagSelector from '../components/TagSelector';
 
 
+const getCurrencySymbol = (currency: string): string => {
+  switch (currency) {
+    case 'EUR': return '€';
+    case 'USD': return '$';
+    case 'BRL': return 'R$';
+    case 'AUD': return 'A$';
+    case 'GBP': return '£';
+    case 'CAD': return 'C$';
+    case 'JPY': return '¥';
+    case 'CHF': return 'Fr';
+    default: return '$';
+  }
+};
+
 // AccountListItem Component
 interface AccountListItemProps {
   account: Account;
@@ -47,19 +61,6 @@ interface AccountListItemProps {
 }
 
 const AccountListItem: React.FC<AccountListItemProps> = ({ account, isSelected, onClick, onShare, onEdit, onUpdateValue }) => {
-  const getCurrencySymbol = (currency: string) => {
-    switch (currency) {
-      case 'EUR': return '€';
-      case 'USD': return '$';
-      case 'BRL': return 'R$';
-      case 'AUD': return 'A$';
-      case 'GBP': return '£';
-      case 'CAD': return 'C$';
-      case 'JPY': return '¥';
-      case 'CHF': return 'Fr';
-      default: return '$';
-    }
-  };
 
   const getAccountTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
@@ -284,10 +285,11 @@ const InlineEditableDate: React.FC<InlineEditableDateProps> = ({ value, onSave, 
 interface InlineEditableAmountProps {
   value: number;
   onSave: (value: number) => void;
+  currencySymbol?: string;
   className?: string;
 }
 
-const InlineEditableAmount: React.FC<InlineEditableAmountProps> = ({ value, onSave, className = "" }) => {
+const InlineEditableAmount: React.FC<InlineEditableAmountProps> = ({ value, onSave, currencySymbol = '$', className = "" }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value.toString());
 
@@ -332,7 +334,7 @@ const InlineEditableAmount: React.FC<InlineEditableAmountProps> = ({ value, onSa
         } ${className}`}
         title="Click to edit amount"
       >
-        {value >= 0 ? '+' : ''}${Math.abs(value).toLocaleString()}
+        {value >= 0 ? '+' : ''}{currencySymbol}{Math.abs(value).toLocaleString()}
       </span>
     </div>
   );
@@ -346,6 +348,7 @@ interface TransactionRowProps {
   splits?: TransactionSplit[];
   tags?: Tag[];
   isSelected?: boolean;
+  currencySymbol?: string;
   onSelect?: (id: string, checked: boolean) => void;
   onDateUpdate: (id: string, date: string) => void;
   onAmountUpdate: (id: string, amount: number) => void;
@@ -356,12 +359,13 @@ interface TransactionRowProps {
   onDeleteTransaction: (id: string) => void;
 }
 
-const TransactionRow: React.FC<TransactionRowProps> = ({ 
-  transaction, 
-  isMain, 
-  isSplit, 
+const TransactionRow: React.FC<TransactionRowProps> = ({
+  transaction,
+  isMain,
+  isSplit,
   tags = [],
   isSelected = false,
+  currencySymbol = '$',
   onSelect,
   onDateUpdate,
   onAmountUpdate,
@@ -445,6 +449,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         <InlineEditableAmount
           value={transaction.amount}
           onSave={(value) => onAmountUpdate(transaction.id, value)}
+          currencySymbol={currencySymbol}
         />
       </td>
       
@@ -518,18 +523,18 @@ interface TransactionTableProps {
   setShowSplitModal: (show: boolean) => void;
 }
 
-const TransactionTable: React.FC<TransactionTableProps> = ({ 
-  transactions, 
+const TransactionTable: React.FC<TransactionTableProps> = ({
+  transactions,
   transactionTags,
   transactionSplits,
   selectedAccount,
   totalTransactionCount,
   onTransactionUpdate,
   onLinkTransaction,
-
   setSplittingTransaction,
   setShowSplitModal
 }) => {
+  const currencySymbol = getCurrencySymbol(selectedAccount.currency);
   const [user, setUser] = useState<User | null>(null);
   const [showInlineAdd, setShowInlineAdd] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
@@ -537,10 +542,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   const [showBulkTagModal, setShowBulkTagModal] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [pageTransactions, setPageTransactions] = useState<(Transaction & { id: string })[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_pageTransactionTags, setPageTransactionTags] = useState<Record<string, Tag[]>>({});
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_pageTransactionSplits, setPageTransactionSplits] = useState<Record<string, TransactionSplit[]>>({});
+  const [pageTransactionTags, setPageTransactionTags] = useState<Record<string, Tag[]>>({});
+  const [pageTransactionSplits, setPageTransactionSplits] = useState<Record<string, TransactionSplit[]>>({});
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -715,8 +718,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
 
   // Use page-specific data if available, otherwise fall back to props
   const displayTransactions = pageTransactions.length > 0 ? pageTransactions : transactions;
-  // const displayTransactionTags = Object.keys(pageTransactionTags).length > 0 ? pageTransactionTags : transactionTags;
-  // const displayTransactionSplits = Object.keys(pageTransactionSplits).length > 0 ? pageTransactionSplits : transactionSplits;
+  const displayTransactionTags = Object.keys(pageTransactionTags).length > 0 ? pageTransactionTags : transactionTags;
+  const displayTransactionSplits = Object.keys(pageTransactionSplits).length > 0 ? pageTransactionSplits : transactionSplits;
 
   // Filter and sort transactions
   const filteredAndSortedTransactions = useMemo(() => {
@@ -811,9 +814,11 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
 
   // Pagination logic
   const totalPages = Math.ceil(totalTransactionCount / transactionsPerPage);
-  const startIndex = (currentPage - 1) * transactionsPerPage;
-  const endIndex = startIndex + transactionsPerPage;
-  const currentTransactions = filteredAndSortedTransactions.slice(startIndex, endIndex);
+  // When pageTransactions is set (page > 1), the data is already scoped to that page —
+  // do NOT apply a page-offset slice or the result will be empty.
+  const currentTransactions = pageTransactions.length > 0 && currentPage > 1
+    ? filteredAndSortedTransactions
+    : filteredAndSortedTransactions.slice(0, transactionsPerPage);
 
   // Debug logging
   console.log('🔍 Pagination Debug:', {
@@ -822,26 +827,31 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     transactionsPerPage,
     totalPages,
     currentPage,
-    startIndex,
-    endIndex,
     currentTransactionsLength: currentTransactions.length
   });
 
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
+    setPageTransactions([]);
+    setPageTransactionTags({});
+    setPageTransactionSplits({});
   }, [filters, sortConfig]);
 
   // Pagination functions
   const goToPage = async (page: number) => {
     const targetPage = Math.max(1, Math.min(page, totalPages));
     if (targetPage === currentPage) return;
-    
+
     setCurrentPage(targetPage);
-    
-    // Load transactions for the new page if it's not the first page
+
     if (targetPage > 1 && user && selectedAccount) {
       await loadTransactionsForPage(user.uid, selectedAccount.id, targetPage);
+    } else {
+      // Returning to page 1: clear page-specific data so the initial transactions show
+      setPageTransactions([]);
+      setPageTransactionTags({});
+      setPageTransactionSplits({});
     }
   };
 
@@ -1349,7 +1359,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
               <TransactionRow
                 transaction={transaction}
                 isMain={true}
-                tags={transactionTags[transaction.id] || []}
+                currencySymbol={currencySymbol}
+                tags={displayTransactionTags[transaction.id] || []}
                 isSelected={selectedTransactions.has(transaction.id)}
                 onSelect={handleSelectTransaction}
                 onDateUpdate={handleDateUpdate}
@@ -1360,9 +1371,9 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                 onLinkTransaction={onLinkTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
               />
-              
+
               {/* Split Transaction Rows */}
-              {transactionSplits[transaction.id]?.map((split, index) => (
+              {displayTransactionSplits[transaction.id]?.map((split, index) => (
                 <TransactionRow
                   key={`${transaction.id}-split-${index}`}
                   transaction={{
@@ -1371,13 +1382,14 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                     accountId: transaction.accountId,
                     isManual: true,
                     source: 'manual' as const,
-                    date: transaction.date, // Use parent transaction date
+                    date: transaction.date,
                     createdAt: transaction.createdAt,
                     updatedAt: transaction.updatedAt
                   }}
                   isMain={false}
                   isSplit={true}
-                  tags={[]} // Split tags would need separate handling
+                  currencySymbol={currencySymbol}
+                  tags={[]}
                   isSelected={selectedTransactions.has(`${transaction.id}-split-${index}`)}
                   onSelect={handleSelectTransaction}
                   onDateUpdate={handleDateUpdate}
@@ -1399,8 +1411,8 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
         <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center text-sm text-gray-700">
             <span>
-              Showing {startIndex + 1} to {Math.min(endIndex, filteredAndSortedTransactions.length)} of{' '}
-              {filteredAndSortedTransactions.length} transactions
+              Showing {(currentPage - 1) * transactionsPerPage + 1} to {Math.min(currentPage * transactionsPerPage, filteredAndSortedTransactions.length + (currentPage - 1) * transactionsPerPage)} of{' '}
+              {totalTransactionCount} transactions
               {totalTransactionCount > filteredAndSortedTransactions.length && (
                 <span className="text-gray-500">
                   {' '}({totalTransactionCount} total in account)
@@ -1560,6 +1572,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
       }
     });
     return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reload accounts when accountType parameter changes
@@ -1567,6 +1580,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
     if (user) {
       loadAccounts(user.uid);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountType, user]);
 
   useEffect(() => {
