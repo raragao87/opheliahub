@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage';
 import GrowthTrackerPage from './pages/GrowthTrackerPage';
 import FinancialHubSplitViewPage from './pages/FinancialHubSplitViewPage';
 import BudgetPage from './pages/BudgetPage';
+import ReportsPage from './pages/ReportsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -40,6 +41,14 @@ function App() {
           element={
             <ProtectedRoute>
               <BudgetPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/reports" 
+          element={
+            <ProtectedRoute>
+              <ReportsPage />
             </ProtectedRoute>
           } 
         />
