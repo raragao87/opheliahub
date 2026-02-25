@@ -16,8 +16,8 @@
 - [ ] **Dashboard Cards:**
     - [ ] "Family Budget" overview card (Income vs Expense).
     - [x] "Recent Transactions" list widget.
-- [ ] **Reports Page:**
-    - [ ] Monthly spending breakdown by Category.
+- [x] **Reports Page:**
+    - [x] Monthly spending breakdown by Category (✅ Implemented with visual charts).
     - [ ] Net Worth tracking (Assets - Liabilities).
 
 ## Priority 3: Polish & UX
