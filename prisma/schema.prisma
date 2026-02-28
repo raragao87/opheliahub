@@ -1,0 +1,546 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── AUTH.JS REQUIRED MODELS ────────────────────────────────────────
+// Auth.js mandates an "Account" model for OAuth accounts.
+// Our financial accounts are named "FinancialAccount" to avoid collision.
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("oauth_accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── CORE DOMAIN MODELS ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Auth.js relations
+  oauthAccounts Account[]
+  sessions      Session[]
+
+  // Domain relations
+  householdMembers      HouseholdMember[]
+  financialAccounts     FinancialAccount[]
+  transactions          Transaction[]
+  trackers              Tracker[]
+  tags                  Tag[]
+  tagGroups             TagGroup[]
+  assets                Asset[]
+  debts                 Debt[]
+  goals                 Goal[]
+  importBatches         ImportBatch[]
+  auditLogs             AuditLog[]
+  recurringRules        RecurringRule[]
+  dismissedPatterns     DismissedRecurringPattern[]
+
+  @@map("users")
+}
+
+model Household {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members               HouseholdMember[]
+  categories            Category[]
+  tagGroups             TagGroup[]
+  financialAccounts     FinancialAccount[]
+  trackers              Tracker[]
+  recurringRules        RecurringRule[]
+  dismissedPatterns     DismissedRecurringPattern[]
+
+  @@map("households")
+}
+
+enum HouseholdRole {
+  OWNER
+  PARTNER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model HouseholdMember {
+  id           String        @id @default(cuid())
+  householdId  String
+  userId       String
+  role         HouseholdRole @default(PARTNER)
+  inviteStatus InviteStatus  @default(PENDING)
+  inviteEmail  String?
+  joinedAt     DateTime?
+  createdAt    DateTime      @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+  @@map("household_members")
+}
+
+// ─── FINANCIAL ACCOUNTS ─────────────────────────────────────────────
+
+enum AccountType {
+  CHECKING
+  CREDIT_CARD
+  SAVINGS
+  INVESTMENT
+  CASH
+  CRYPTO
+  LOAN
+  PROPERTY
+  VEHICLE
+  MORTGAGE
+  OTHER_ASSET
+  OTHER_DEBT
+}
+
+enum AccountOwnership {
+  PERSONAL
+  SHARED
+}
+
+model FinancialAccount {
+  id          String           @id @default(cuid())
+  name        String
+  type        AccountType
+  ownership   AccountOwnership @default(PERSONAL)
+  currency    String           @default("EUR")
+  balance     Int              @default(0) // cents — computed from transactions
+  isActive    Boolean          @default(true)
+  institution String?
+  icon        String?
+  color       String?
+  metadata    Json?
+  notes       String?          @db.Text
+  ownerId     String
+  householdId String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  owner          User             @relation(fields: [ownerId], references: [id])
+  household      Household?       @relation(fields: [householdId], references: [id])
+  transactions   Transaction[]
+  importProfiles ImportProfile[]
+  recurringRules RecurringRule[]
+
+  @@index([ownerId])
+  @@index([householdId])
+  @@map("financial_accounts")
+}
+
+// ─── TRANSACTIONS ───────────────────────────────────────────────────
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum Visibility {
+  SHARED
+  PERSONAL
+}
+
+model Transaction {
+  id                  String          @id @default(cuid())
+  amount              Int // cents — positive for income, negative for expense
+  currency            String          @default("EUR")
+  type                TransactionType
+  visibility          Visibility      @default(SHARED)
+  description         String
+  displayName         String? // short human-readable name, parsed from description
+  originalDescription String? // preserved from import for AI categorization
+  notes               String?         @db.Text
+  date                DateTime
+  accrualDate         DateTime? // budget override date — if set, tracker uses this instead of date
+  isInitialBalance    Boolean   @default(false) // true for the synthetic "Initial Balance" transaction created per account
+  accountId           String
+  categoryId          String?
+  userId              String // creator / owner
+  importBatchId       String?
+  externalId          String? // for duplicate detection on import
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  // Transfer linking — one-to-one self-relation
+  linkedTransactionId String?       @unique
+  linkedTransaction   Transaction?  @relation("TransferLink", fields: [linkedTransactionId], references: [id])
+  linkedBy            Transaction?  @relation("TransferLink")
+
+  account     FinancialAccount @relation(fields: [accountId], references: [id])
+  category    Category?        @relation(fields: [categoryId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+  importBatch ImportBatch?     @relation(fields: [importBatchId], references: [id])
+  tags        TransactionTag[]
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([date])
+  @@index([externalId])
+  @@index([importBatchId])
+  @@map("transactions")
+}
+
+model TransactionTag {
+  id            String @id @default(cuid())
+  transactionId String
+  tagId         String
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag         Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, tagId])
+  @@map("transaction_tags")
+}
+
+// ─── CATEGORIES & TAGS ──────────────────────────────────────────────
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  name        String
+  icon        String?
+  color       String?
+  type        CategoryType @default(EXPENSE)
+  parentId    String?
+  householdId String
+  sortOrder   Int          @default(0)
+  visibility  Visibility   @default(SHARED)
+
+  parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryChildren")
+
+  household      Household          @relation(fields: [householdId], references: [id])
+  transactions   Transaction[]
+  allocations    TrackerAllocation[]
+  recurringRules RecurringRule[]
+
+  @@unique([householdId, name, parentId, visibility])
+  @@map("categories")
+}
+
+model TagGroup {
+  id          String     @id @default(cuid())
+  name        String
+  icon        String?
+  color       String?
+  householdId String
+  userId      String?
+  visibility  Visibility @default(SHARED)
+  sortOrder   Int        @default(0)
+
+  household Household @relation(fields: [householdId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id])
+  tags      Tag[]
+
+  @@unique([householdId, name, visibility])
+  @@index([userId])
+  @@map("tag_groups")
+}
+
+model Tag {
+  id         String     @id @default(cuid())
+  name       String
+  color      String?
+  groupId    String?
+  userId     String // creator
+  visibility Visibility @default(SHARED)
+  isArchived Boolean    @default(false)
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+
+  group             TagGroup?              @relation(fields: [groupId], references: [id])
+  user              User                   @relation(fields: [userId], references: [id])
+  transactions      TransactionTag[]
+  trackerAllocations TagTrackerAllocation[]
+
+  @@index([userId])
+  @@map("tags")
+}
+
+// ─── TRACKER (ZERO-BASED) ───────────────────────────────────────────
+
+model Tracker {
+  id          String     @id @default(cuid())
+  month       Int // 1-12
+  year        Int
+  totalIncome Int        @default(0) // cents
+  householdId String
+  userId      String
+  visibility  Visibility @default(SHARED)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  household      Household              @relation(fields: [householdId], references: [id])
+  user           User                   @relation(fields: [userId], references: [id])
+  allocations    TrackerAllocation[]
+  tagAllocations TagTrackerAllocation[]
+
+  @@unique([householdId, userId, month, year, visibility])
+  @@map("budgets")
+}
+
+model TrackerAllocation {
+  id         String @id @default(cuid())
+  trackerId  String @map("budgetId")
+  categoryId String
+  amount     Int // cents allocated to this category
+
+  tracker  Tracker  @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([trackerId, categoryId])
+  @@map("budget_allocations")
+}
+
+model TagTrackerAllocation {
+  id        String @id @default(cuid())
+  trackerId String @map("budgetId")
+  tagId     String
+  amount    Int // cents allocated to this tag
+
+  tracker Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([trackerId, tagId])
+  @@map("tag_budget_allocations")
+}
+
+// ─── NET WORTH: ASSETS & DEBTS ──────────────────────────────────────
+
+model Asset {
+  id          String     @id @default(cuid())
+  name        String
+  value       Int // cents
+  currency    String     @default("EUR")
+  category    String // "real_estate", "vehicle", "valuable", "other"
+  userId      String
+  visibility  Visibility @default(PERSONAL)
+  lastUpdated DateTime   @default(now())
+  notes       String?    @db.Text
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("assets")
+}
+
+model Debt {
+  id             String     @id @default(cuid())
+  name           String
+  balance        Int // cents outstanding
+  interestRate   Float?
+  monthlyPayment Int? // cents
+  currency       String     @default("EUR")
+  userId         String
+  visibility     Visibility @default(PERSONAL)
+  lastUpdated    DateTime   @default(now())
+  notes          String?    @db.Text
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("debts")
+}
+
+// ─── GOALS ──────────────────────────────────────────────────────────
+
+model Goal {
+  id            String     @id @default(cuid())
+  name          String
+  targetAmount  Int // cents
+  currentAmount Int        @default(0) // cents
+  currency      String     @default("EUR")
+  deadline      DateTime?
+  userId        String
+  visibility    Visibility @default(SHARED)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("goals")
+}
+
+// ─── IMPORT ─────────────────────────────────────────────────────────
+
+enum ImportFormat {
+  CSV
+  MT940
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model ImportBatch {
+  id           String       @id @default(cuid())
+  fileName     String
+  format       ImportFormat
+  status       ImportStatus @default(PENDING)
+  totalRows    Int          @default(0)
+  importedRows Int          @default(0)
+  skippedRows  Int          @default(0)
+  errorRows    Int          @default(0)
+  errorDetails Json?
+  userId       String
+  accountId    String
+  profileId    String?
+  createdAt    DateTime     @default(now())
+
+  user         User          @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+  profile      ImportProfile? @relation(fields: [profileId], references: [id])
+
+  @@map("import_batches")
+}
+
+model ImportProfile {
+  id            String      @id @default(cuid())
+  name          String
+  format        ImportFormat
+  accountId     String
+  columnMapping Json // { date: "col_name", amount: "col_name", description: "col_name", ... }
+  dateFormat    String      @default("dd/MM/yyyy")
+  delimiter     String      @default(",")
+  skipRows      Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  account       FinancialAccount @relation(fields: [accountId], references: [id])
+  importBatches ImportBatch[]
+
+  @@map("import_profiles")
+}
+
+// ─── RECURRING RULES ────────────────────────────────────────────────
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model RecurringRule {
+  id                String              @id @default(cuid())
+  name              String
+  description       String?
+  amount            Int // cents
+  type              TransactionType
+  frequency         RecurrenceFrequency
+  startDate         DateTime
+  totalInstallments Int?
+  categoryId        String?
+  accountId         String
+  householdId       String
+  userId            String
+  visibility        Visibility          @default(SHARED)
+  nextDueDate       DateTime
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  account   FinancialAccount @relation(fields: [accountId], references: [id])
+  household Household        @relation(fields: [householdId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+  category  Category?        @relation(fields: [categoryId], references: [id])
+
+  @@index([userId])
+  @@index([householdId])
+  @@map("recurring_rules")
+}
+
+// ─── AUDIT LOG ──────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String // e.g., "transaction.create", "visibility.change"
+  entityType String
+  entityId   String
+  userId     String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── DISMISSED RECURRING PATTERN SUGGESTIONS ────────────────────────
+
+model DismissedRecurringPattern {
+  id          String     @id @default(cuid())
+  patternKey  String
+  userId      String
+  householdId String
+  visibility  Visibility @default(SHARED)
+  createdAt   DateTime   @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([patternKey, userId, visibility])
+  @@index([userId])
+  @@map("dismissed_recurring_patterns")
+}

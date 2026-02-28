@@ -1,0 +1,333 @@
+"use client";
+
+import { useState, useRef, useEffect, useMemo } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTRPC } from "@/trpc/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOwnership } from "@/lib/ownership-context";
+import { cn } from "@/lib/utils";
+import { MoneyDisplay } from "@/components/shared/money-display";
+import { groupAccountsForSidebar, ACCOUNT_TYPE_META } from "@/lib/account-types";
+import type { SidebarGroupKey } from "@/lib/account-types";
+import { fromCents, parseToCents } from "@/lib/money";
+import { ChevronDown, ChevronRight, Pencil, Plus } from "lucide-react";
+
+// ── Types ─────────────────────────────────────────────────────────
+
+interface SidebarItem {
+  id: string;
+  name: string;
+  type: string;
+  balance: number; // cents
+  currency: string;
+  href: string;
+}
+
+interface SidebarGroup {
+  key: SidebarGroupKey;
+  label: string;
+  items: SidebarItem[];
+  totalBalance: number;
+  href: string;
+}
+
+// ── Component ─────────────────────────────────────────────────────
+
+interface SidebarAccountsProps {
+  /** Called after a link is clicked — used in mobile menu to close the overlay */
+  onNavigate?: () => void;
+}
+
+export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const { isVisible } = useOwnership();
+
+  // Detect which account(s) are active from the URL
+  const isOnTransactions = pathname === "/transactions";
+  const activeAccountId = isOnTransactions
+    ? searchParams.get("accountId")
+    : null;
+  const activeAccountIds = isOnTransactions
+    ? new Set((searchParams.get("accountIds") ?? "").split(",").filter(Boolean))
+    : new Set<string>();
+
+  // Fetch all accounts (including migrated assets/debts)
+  const accountsQuery = useQuery(trpc.account.list.queryOptions());
+  const allAccounts = accountsQuery.data ?? [];
+  const visibleAccounts = allAccounts.filter(
+    (a) =>
+      a.isActive &&
+      isVisible(a.ownership as "SHARED" | "PERSONAL")
+  );
+
+  // Build unified sidebar groups
+  const sidebarGroups = useMemo(() => {
+    const accountGroups = groupAccountsForSidebar(visibleAccounts);
+
+    return accountGroups.map((ag) => {
+      const items: SidebarItem[] = ag.accounts.map((a) => {
+        const acct = a as (typeof allAccounts)[number];
+        return {
+          id: acct.id,
+          name: acct.name,
+          type: acct.type,
+          balance: acct.balance,
+          currency: acct.currency,
+          href: `/transactions?accountId=${acct.id}`,
+        };
+      });
+
+      const groupAccountIds = items.map((i) => i.id).join(",");
+      return {
+        key: ag.key,
+        label: ag.label,
+        items,
+        totalBalance: items.reduce((s, i) => s + i.balance, 0),
+        href: items.length > 0 ? `/transactions?accountIds=${groupAccountIds}` : "/transactions",
+      } satisfies SidebarGroup;
+    });
+  }, [visibleAccounts, allAccounts]);
+
+  // Collapse state per group (all start expanded)
+  const [collapsed, setCollapsed] = useState<
+    Record<SidebarGroupKey, boolean>
+  >({
+    LIQUID: false,
+    ILLIQUID: false,
+  });
+
+  const toggleGroup = (key: SidebarGroupKey) => {
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // ── Inline balance editing (for ILLIQUID group) ────────
+
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const reconcileMutation = useMutation(
+    trpc.account.reconcile.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        setEditingItemId(null);
+        setEditValue("");
+      },
+    })
+  );
+
+  // Focus the input when editing starts
+  useEffect(() => {
+    if (editingItemId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingItemId]);
+
+  const startEditing = (item: SidebarItem, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingItemId(item.id);
+    setEditValue(fromCents(Math.abs(item.balance)).toFixed(2));
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent, item: SidebarItem) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const cents = parseToCents(editValue);
+      if (cents == null) {
+        setEditingItemId(null);
+        return;
+      }
+      // For liability account types, store as negative
+      const isLiability = ACCOUNT_TYPE_META[item.type]?.isLiability ?? false;
+      const newBalance = isLiability ? -Math.abs(cents) : cents;
+      reconcileMutation.mutate({ id: item.id, newBalance });
+    } else if (e.key === "Escape") {
+      setEditingItemId(null);
+      setEditValue("");
+    }
+  };
+
+  const handleEditBlur = () => {
+    setEditingItemId(null);
+    setEditValue("");
+  };
+
+  const isEditable = (groupKey: SidebarGroupKey) =>
+    groupKey === "ILLIQUID";
+
+  const isLoading = accountsQuery.isLoading;
+
+  return (
+    <div className="mt-2">
+      {/* Section header with add account button */}
+      <div className="flex items-center justify-between px-3 mb-1">
+        <Link
+          href="/transactions"
+          onClick={onNavigate}
+          className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+        >
+          Accounts
+        </Link>
+        <Link
+          href="/accounts/new"
+          onClick={onNavigate}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          title="Add account"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      {/* Loading skeleton */}
+      {isLoading && (
+        <div className="px-3 py-2 space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-4 bg-muted rounded animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {/* Account groups */}
+      {sidebarGroups.map((group) => {
+        const isGroupCollapsed = collapsed[group.key];
+
+        const isGroupActive =
+          isOnTransactions &&
+          group.items.length > 0 &&
+          group.items.every((i) => activeAccountIds.has(i.id)) &&
+          activeAccountIds.size === group.items.length;
+
+        return (
+          <div key={group.key} className="mt-2">
+            {/* Group header — chevron toggles collapse, label navigates */}
+            <div className="flex items-center justify-between w-full px-3 py-1">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.key)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {isGroupCollapsed ? (
+                    <ChevronRight className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                </button>
+                <Link
+                  href={group.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "text-[11px] font-semibold uppercase tracking-wider transition-colors hover:text-foreground",
+                    isGroupActive ? "text-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  {group.label}
+                </Link>
+              </div>
+              <MoneyDisplay
+                amount={group.totalBalance}
+                className="text-[11px] font-medium"
+                colorize={false}
+              />
+            </div>
+
+            {/* Individual items */}
+            {!isGroupCollapsed && (
+              <div className="space-y-0.5 mt-0.5">
+                {group.items.map((item) => {
+                  const isActive = activeAccountId === item.id;
+                  const canEdit = isEditable(group.key);
+                  const isEditingThis = editingItemId === item.id;
+
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      onClick={onNavigate}
+                      className={cn(
+                        "group/account flex items-center justify-between rounded-md px-3 py-1.5 text-sm transition-colors ml-2",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <span className="truncate text-xs flex items-center gap-1">
+                        {item.name}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            router.push(`/accounts/${item.id}?edit`);
+                            onNavigate?.();
+                          }}
+                          className={cn(
+                            "opacity-0 group-hover/account:opacity-100 transition-opacity shrink-0",
+                            isActive
+                              ? "text-primary-foreground/70 hover:text-primary-foreground"
+                              : "text-muted-foreground/50 hover:text-muted-foreground"
+                          )}
+                          title="Edit account"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </span>
+
+                      {isEditingThis ? (
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => handleEditKeyDown(e, item)}
+                          onBlur={handleEditBlur}
+                          onClick={(e) => e.preventDefault()}
+                          className="w-20 text-xs text-right bg-background border border-border rounded px-1.5 py-0.5 font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      ) : canEdit ? (
+                        <button
+                          type="button"
+                          onClick={(e) => startEditing(item, e)}
+                          className="cursor-pointer hover:opacity-70"
+                          title="Click to update balance"
+                        >
+                          <MoneyDisplay
+                            amount={item.balance}
+                            currency={item.currency}
+                            className={cn(
+                              "text-xs shrink-0 ml-2",
+                              isActive && "text-primary-foreground"
+                            )}
+                            colorize={!isActive}
+                          />
+                        </button>
+                      ) : (
+                        <MoneyDisplay
+                          amount={item.balance}
+                          currency={item.currency}
+                          className={cn(
+                            "text-xs shrink-0 ml-2",
+                            isActive && "text-primary-foreground"
+                          )}
+                          colorize={!isActive}
+                        />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+    </div>
+  );
+}
