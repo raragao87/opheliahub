@@ -488,6 +488,32 @@ function TransactionsContent() {
     bulkRemoveTagsMutation.isPending ||
     bulkDeleteMutation.isPending;
 
+  // ── Ophelia: silent auto-categorization on scroll ─────────────────
+  // Runs silently in the background whenever loaded transactions contain
+  // rows that have never been processed by Ophelia (opheliaProcessedAt === null).
+  // Chains automatically: after each 200-transaction batch completes the
+  // query is invalidated, transactions refresh, and the effect re-fires
+  // until no unprocessed rows remain.
+  const autoCategorizeMutation = useMutation(
+    trpc.ophelia.runCategorization.mutationOptions({
+      onSuccess: (data) => {
+        if (data.opheliaEnabled && data.processed > 0) {
+          queryClient.invalidateQueries({ queryKey: infiniteQueryKey });
+        }
+      },
+    })
+  );
+
+  useEffect(() => {
+    if (autoCategorizeMutation.isPending) return;
+    const hasUnprocessed = transactions.some(
+      (t) => !t.isInitialBalance && t.opheliaProcessedAt === null
+    );
+    if (!hasUnprocessed) return;
+    autoCategorizeMutation.mutate({ batchSize: 200 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, autoCategorizeMutation.isPending]);
+
   // ── Ophelia categorization ─────────────────────────────────────────
   const categorizeMutation = useMutation(
     trpc.ophelia.runCategorization.mutationOptions({

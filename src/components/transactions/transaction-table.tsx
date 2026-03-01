@@ -56,6 +56,7 @@ export interface TransactionItem {
   importBatchId?: string | null;
   notes?: string | null;
   // Ophelia AI fields
+  opheliaProcessedAt?: Date | string | null;
   opheliaCategoryId?: string | null;
   opheliaCategory?: { id: string; name: string } | null;
   opheliaConfidence?: number | null;
