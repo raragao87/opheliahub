@@ -1,0 +1,218 @@
+import "server-only";
+import type { PrismaClient } from "@prisma/client";
+import { enrichTransactions } from "./enrichTransactions";
+import { isOpheliaEnabled } from "./provider";
+
+const DEFAULT_BATCH_SIZE = 50;
+const REPROCESS_AFTER_DAYS = 7;
+
+export interface CategorizeBatchResult {
+  processed: number;
+  skipped: number;
+  errors: number;
+}
+
+/**
+ * Runs Ophelia background categorization for one or all households.
+ *
+ * - If `householdId` is provided, only that household is processed.
+ * - If omitted, all households with unprocessed transactions are processed.
+ * - Only sends transaction descriptions to the AI — no IBANs, names, or account numbers.
+ * - Never overwrites the user-set `categoryId` — only writes to `opheliaCategoryId`.
+ * - Sets `opheliaProcessedAt = now()` on every processed transaction.
+ * - Transactions where `opheliaProcessedAt IS NULL` are processed first.
+ * - Transactions processed more than REPROCESS_AFTER_DAYS ago are eligible for re-processing.
+ */
+export async function categorizeTransactionBatch(
+  prisma: PrismaClient,
+  householdId?: string,
+  batchSize = DEFAULT_BATCH_SIZE
+): Promise<CategorizeBatchResult> {
+  const opheliaEnabled = isOpheliaEnabled();
+  console.log(`[Ophelia] categorizeTransactionBatch — enabled=${opheliaEnabled}, householdId=${householdId ?? "all"}`);
+  if (!opheliaEnabled) return { processed: 0, skipped: 0, errors: 0 };
+
+  const reprocessBefore = new Date(
+    Date.now() - REPROCESS_AFTER_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  // Resolve which households to process
+  let householdIds: string[];
+  if (householdId) {
+    householdIds = [householdId];
+  } else {
+    const memberships = await prisma.householdMember.findMany({
+      where: { inviteStatus: "ACCEPTED" },
+      select: { householdId: true },
+      distinct: ["householdId"],
+    });
+    householdIds = memberships.map((m) => m.householdId);
+  }
+
+  console.log(`[Ophelia] households to process: [${householdIds.join(", ")}]`);
+
+  let processed = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const hid of householdIds) {
+    try {
+      // Get all accepted member user IDs for this household
+      const members = await prisma.householdMember.findMany({
+        where: { householdId: hid, inviteStatus: "ACCEPTED" },
+        select: { userId: true },
+      });
+      const memberUserIds = members.map((m) => m.userId);
+      console.log(`[Ophelia] household ${hid} — ${memberUserIds.length} member(s): [${memberUserIds.join(", ")}]`);
+
+      // Find unprocessed (or stale) transactions for this household.
+      // Scope: shared accounts of this household + personal accounts owned by household members.
+      // Privacy: only description + amount + date are sent to the AI — no IBAN, no user name.
+      //
+      // A transaction needs (re)processing if ANY of these are true:
+      //   1. opheliaProcessedAt IS NULL           → never processed
+      //   2. opheliaProcessedAt IS NOT NULL AND opheliaCategoryId IS NULL
+      //                                           → processed but got no suggestion → retry immediately
+      //   3. opheliaProcessedAt < reprocessBefore → processed > 7 days ago → refresh suggestion
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          isInitialBalance: false,
+          OR: [
+            { opheliaProcessedAt: null },                                       // 1. never processed
+            { opheliaProcessedAt: { not: null }, opheliaCategoryId: null },     // 2. processed, no suggestion
+            { opheliaProcessedAt: { lt: reprocessBefore } },                   // 3. processed > 7 days ago
+          ],
+          account: {
+            OR: [
+              { householdId: hid },
+              { ownerId: { in: memberUserIds }, householdId: null },
+            ],
+          },
+        },
+        select: {
+          id: true,
+          description: true,
+          amount: true,
+          date: true,
+        },
+        take: batchSize,
+        orderBy: { opheliaProcessedAt: "asc" }, // null comes first
+      });
+
+      console.log(`[Ophelia] household ${hid} — query found ${transactions.length} transaction(s) to process (batch size ${batchSize})`);
+
+      if (transactions.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      // Fetch all leaf categories for this household (both SHARED and PERSONAL)
+      const categories = await prisma.category.findMany({
+        where: {
+          householdId: hid,
+          parentId: { not: null },
+        },
+        select: { id: true, name: true, parent: { select: { name: true } } },
+        orderBy: [{ parent: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+      });
+
+      // Fetch all non-archived tags visible to household members
+      const tags = await prisma.tag.findMany({
+        where: {
+          isArchived: false,
+          OR: [
+            { visibility: "SHARED" },
+            { visibility: "PERSONAL", userId: { in: memberUserIds } },
+          ],
+        },
+        select: { id: true, name: true, group: { select: { name: true } } },
+        orderBy: { sortOrder: "asc" },
+      });
+
+      // Fetch up to 20 recently user-categorized transactions as few-shot examples
+      const recentExamples = await prisma.transaction.findMany({
+        where: {
+          categoryId: { not: null },
+          account: {
+            OR: [
+              { householdId: hid },
+              { ownerId: { in: memberUserIds } },
+            ],
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        select: {
+          description: true,
+          displayName: true,
+          category: { select: { name: true } },
+          tags: { select: { tag: { select: { name: true } } } },
+        },
+      });
+
+      // Call the Ophelia AI — only descriptions go to the AI
+      const results = await enrichTransactions({
+        transactions: transactions.map((tx) => ({
+          date: tx.date.toISOString().slice(0, 10),
+          description: tx.description,
+          amount: tx.amount,
+        })),
+        categories: categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          parentName: c.parent?.name ?? undefined,
+        })),
+        tags: tags.map((t) => ({
+          id: t.id,
+          name: t.name,
+          groupName: t.group?.name ?? undefined,
+        })),
+        recentExamples: recentExamples
+          .filter((t) => t.category !== null)
+          .map((t) => ({
+            description: t.description,
+            categoryName: t.category!.name,
+            displayName: t.displayName ?? t.description,
+            tags: t.tags.map((tt) => tt.tag.name),
+          })),
+      });
+
+      const now = new Date();
+
+      if (!results) {
+        // AI call failed — leave opheliaProcessedAt unset so they'll be retried next run
+        console.error(`[Ophelia] enrichTransactions returned null for household ${hid}`);
+        errors++;
+        continue;
+      }
+
+      // Write back Ophelia suggestions for each transaction.
+      // IMPORTANT: never touch categoryId — that's the user's domain.
+      for (let i = 0; i < transactions.length; i++) {
+        const tx = transactions[i];
+        const result = results.find((r) => r.index === i);
+
+        try {
+          await prisma.transaction.update({
+            where: { id: tx.id },
+            data: {
+              opheliaCategoryId: result?.suggestedCategoryId ?? null,
+              opheliaConfidence: result?.categoryConfidence ?? null,
+              opheliaDisplayName: result?.suggestedDisplayName ?? null,
+              opheliaProcessedAt: now,
+            },
+          });
+          processed++;
+        } catch (updateErr) {
+          console.error(`[Ophelia] Failed to update transaction ${tx.id}:`, updateErr);
+          errors++;
+        }
+      }
+    } catch (err) {
+      console.error(`[Ophelia] categorizeTransactionBatch error for household ${hid}:`, err);
+      errors++;
+    }
+  }
+
+  return { processed, skipped, errors };
+}
