@@ -1472,6 +1472,124 @@ export const forceUpdateAccountBalance = async (userId: string, accountId: strin
   }
 };
 
+// Enhanced balance sync with transfer handling
+export const syncAllAccountBalances = async (userId: string): Promise<{
+  synced: number;
+  errors: Array<{ accountId: string; accountName: string; error: string }>;
+}> => {
+  try {
+    console.log('🔄 Starting comprehensive balance sync for all accounts...');
+    
+    const accounts = await getAccountsByUser(userId);
+    let synced = 0;
+    const errors = [];
+    
+    for (const account of accounts) {
+      try {
+        console.log(`🔄 Syncing balance for account: ${account.name}`);
+        
+        // Calculate the correct balance
+        const calculatedBalance = await recalculateAccountBalance(userId, account.id);
+        
+        // Only update if there's a significant difference (> 0.01 to handle floating point precision)
+        const currentBalance = account.balance;
+        const difference = Math.abs(calculatedBalance - currentBalance);
+        
+        if (difference > 0.01) {
+          console.log(`💰 Balance mismatch for ${account.name}: ${currentBalance} → ${calculatedBalance}`);
+          await forceUpdateAccountBalance(userId, account.id);
+          synced++;
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error syncing balance for account ${account.name}:`, error);
+        errors.push({
+          accountId: account.id,
+          accountName: account.name,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+    
+    console.log(`✅ Balance sync complete. Synced: ${synced}, Errors: ${errors.length}`);
+    return { synced, errors };
+    
+  } catch (error) {
+    console.error('❌ Error in comprehensive balance sync:', error);
+    throw error;
+  }
+};
+
+// Enhanced balance calculation with transfer detection
+export const calculateAccountBalanceWithTransferValidation = async (userId: string, accountId: string): Promise<{
+  balance: number;
+  transactionCount: number;
+  transferCount: number;
+  warnings: string[];
+}> => {
+  try {
+    const transactions = await getTransactionsByAccount(userId, accountId);
+    const warnings: string[] = [];
+    
+    let transferCount = 0;
+    let balance = 0;
+    
+    for (const transaction of transactions) {
+      balance += transaction.amount;
+      
+      // Check for potential transfer transactions
+      if (transaction.description.toLowerCase().includes('transfer') || 
+          transaction.description.toLowerCase().includes('moved') ||
+          Math.abs(transaction.amount) > 1000) {
+        transferCount++;
+        
+        // Warn about large transactions that might be transfers
+        if (Math.abs(transaction.amount) > 1000 && !transaction.description.toLowerCase().includes('transfer')) {
+          warnings.push(
+            `Large transaction detected: ${transaction.description} (${transaction.amount}). ` +
+            'Please verify this is not an untracked transfer between accounts.'
+          );
+        }
+      }
+    }
+    
+    return {
+      balance,
+      transactionCount: transactions.length,
+      transferCount,
+      warnings
+    };
+    
+  } catch (error) {
+    console.error('❌ Error calculating account balance with transfer validation:', error);
+    throw error;
+  }
+};
+
+// Scheduled balance sync for maintenance
+export const scheduledBalanceSync = async (userId: string): Promise<void> => {
+  try {
+    console.log('⏰ Running scheduled balance sync...');
+    
+    const result = await syncAllAccountBalances(userId);
+    
+    if (result.synced > 0) {
+      console.log(`🔧 Scheduled sync updated ${result.synced} accounts.`);
+    }
+    
+    if (result.errors.length > 0) {
+      console.warn(`⚠️ Scheduled sync had ${result.errors.length} errors:`, result.errors);
+    }
+    
+    if (result.synced === 0 && result.errors.length === 0) {
+      console.log('✅ Scheduled sync: All accounts already in sync.');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in scheduled balance sync:', error);
+  }
+};
+
 export const getTransactionsByAccount = async (userId: string, accountId: string): Promise<Transaction[]> => {
   try {
     console.log('💰 Fetching transactions for account:', accountId);
