@@ -11,6 +11,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import * as XLSX from "xlsx";
 
 // ── Module mocks (hoisted by vitest before imports) ─────────────────────────
 
@@ -37,6 +38,52 @@ const FIXTURE_DIR = resolve(process.cwd(), "src/lib/ophelia/__tests__");
 
 function readFixture(relativePath: string): string {
   return readFileSync(resolve(FIXTURE_DIR, relativePath), "utf-8");
+}
+
+/**
+ * Reads an Excel file (.xls / .xlsx) from the fixtures dir and returns its
+ * first sheet as a CSV string.
+ *
+ * When `skipToHeaderContaining` is provided, the function scans rows until it
+ * finds one whose cells include that string, then discards all preceding
+ * metadata rows. This handles bank statements (e.g. Amex) that prepend
+ * several informational rows before the real column header.
+ */
+function excelFixtureToCsv(
+  relativePath: string,
+  skipToHeaderContaining?: string
+): string {
+  const wb = XLSX.readFile(resolve(FIXTURE_DIR, relativePath));
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<string[]>(ws, {
+    header: 1,
+    defval: "",
+  });
+
+  let startRow = 0;
+  if (skipToHeaderContaining) {
+    const idx = rows.findIndex((r) =>
+      r.some(
+        (cell) =>
+          typeof cell === "string" && cell.includes(skipToHeaderContaining)
+      )
+    );
+    if (idx !== -1) startRow = idx;
+  }
+
+  return rows
+    .slice(startRow)
+    .map((r) =>
+      r
+        .map((c) => {
+          const s = String(c);
+          return s.includes(",") || s.includes('"') || s.includes("\n")
+            ? `"${s.replace(/"/g, '""')}"`
+            : s;
+        })
+        .join(",")
+    )
+    .join("\n");
 }
 
 /** Returns the DetectedField for a given source column header, or undefined. */
@@ -152,6 +199,98 @@ describe.skipIf(!HAS_API_KEY)(
           expect(r.decimalSeparator).toBe(".");
 
           // First row is a header
+          expect(r.hasHeaderRow).toBe(true);
+        },
+        60_000
+      );
+    });
+
+    // ── ABN AMRO XLS export ──────────────────────────────────────────────────
+
+    describe("ABN AMRO XLS export (Dutch)", () => {
+      it(
+        "detects date (Transactiedatum), description (Omschrijving), amount (Transactiebedrag), currency (Muntsoort), balance (Eindsaldo)",
+        async () => {
+          // XLS is binary; convert to CSV via SheetJS first.
+          // ABN AMRO has a clean header at row 1 — no metadata rows to skip.
+          const rawContent = excelFixtureToCsv(
+            "__fixtures__/XLS260301100918.xls"
+          );
+
+          const result = await analyzeFileStructure({
+            rawContent,
+            filename: "XLS260301100918.xls",
+            delimiter: ",",
+          });
+
+          expect(result).not.toBeNull();
+          const r = result!;
+
+          // Date: Transactiedatum → date, compact numeric format yyyyMMdd
+          expect(bySource(r, "Transactiedatum")?.mappedTo).toBe("date");
+          expect(r.dateFormat).toMatch(/yyyyMMdd/);
+
+          // Description: Omschrijving → description
+          expect(bySource(r, "Omschrijving")?.mappedTo).toBe("description");
+
+          // Amount: Transactiebedrag → amount (signed, e.g. -77.09)
+          expect(bySource(r, "Transactiebedrag")?.mappedTo).toBe("amount");
+
+          // Currency: Muntsoort → currency (contains "EUR")
+          expect(bySource(r, "Muntsoort")?.mappedTo).toBe("currency");
+
+          // Balance: Eindsaldo (ending balance) → balance
+          expect(bySource(r, "Eindsaldo")?.mappedTo).toBe("balance");
+
+          // ABN AMRO uses period decimal separator
+          expect(r.decimalSeparator).toBe(".");
+
+          // First row is a header
+          expect(r.hasHeaderRow).toBe(true);
+        },
+        60_000
+      );
+    });
+
+    // ── American Express XLSX export (Dutch) ─────────────────────────────────
+
+    describe("American Express XLSX export (Dutch)", () => {
+      it(
+        "detects date (Datum), description (Omschrijving), amount (Bedrag), reference (Referentie)",
+        async () => {
+          // The Amex XLSX has 5 rows of metadata before the real header row.
+          // Skip to the row that starts with "Datum" (the column header row).
+          const rawContent = excelFixtureToCsv(
+            "__fixtures__/activiteit.xlsx",
+            "Datum" // skip metadata rows until header containing "Datum"
+          );
+
+          const result = await analyzeFileStructure({
+            rawContent,
+            filename: "activiteit.xlsx",
+            delimiter: ",",
+          });
+
+          expect(result).not.toBeNull();
+          const r = result!;
+
+          // Date: Datum → date, US-style MM/dd/yyyy (e.g. 02/27/2026)
+          expect(bySource(r, "Datum")?.mappedTo).toBe("date");
+          expect(r.dateFormat).toMatch(/MM\/dd\/yyyy/);
+
+          // Description: Omschrijving → description
+          expect(bySource(r, "Omschrijving")?.mappedTo).toBe("description");
+
+          // Amount: Bedrag → amount (signed, e.g. -16.14 for refund)
+          expect(bySource(r, "Bedrag")?.mappedTo).toBe("amount");
+
+          // Reference: Referentie → reference
+          expect(bySource(r, "Referentie")?.mappedTo).toBe("reference");
+
+          // Amex uses period decimal separator
+          expect(r.decimalSeparator).toBe(".");
+
+          // First row (after metadata skip) is a header
           expect(r.hasHeaderRow).toBe(true);
         },
         60_000
