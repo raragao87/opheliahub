@@ -166,6 +166,7 @@ export const transactionRouter = router({
         include: {
           account: { select: { id: true, name: true, type: true, institution: true } },
           category: { select: { id: true, name: true, icon: true, color: true } },
+          opheliaCategory: { select: { id: true, name: true } },
           tags: {
             include: {
               tag: { select: { id: true, name: true, color: true } },
@@ -197,6 +198,7 @@ export const transactionRouter = router({
         include: {
           account: true,
           category: true,
+          opheliaCategory: { select: { id: true, name: true } },
           tags: { include: { tag: true } },
           user: { select: { id: true, name: true, image: true } },
           linkedTransaction: { include: { account: true } },
@@ -522,6 +524,39 @@ export const transactionRouter = router({
             data: tagIds.map((tagId) => ({ transactionId: id, tagId })),
           });
         }
+      }
+
+      // ── Ophelia feedback capture ────────────────────────────────────
+      // When a user sets/changes a category on a transaction that Ophelia
+      // has already processed, record it as a training signal.
+      if (input.categoryId !== undefined && existing.opheliaCategoryId) {
+        // Look up both category names for the prompt
+        const categoryIds = [
+          existing.opheliaCategoryId,
+          ...(input.categoryId ? [input.categoryId] : []),
+        ];
+        const cats = await ctx.prisma.category.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, name: true },
+        });
+        const nameOf = (cid: string | null) =>
+          cid ? (cats.find((c) => c.id === cid)?.name ?? null) : null;
+
+        await ctx.prisma.opheliaFeedback.create({
+          data: {
+            householdId: ctx.householdId,
+            userId: ctx.userId,
+            transactionDescription: existing.description,
+            opheliaCategoryId: existing.opheliaCategoryId,
+            opheliaCategoryName: nameOf(existing.opheliaCategoryId),
+            userCategoryId: input.categoryId,
+            userCategoryName: nameOf(input.categoryId),
+            opheliaDisplayName: existing.opheliaDisplayName,
+            userDisplayName: input.displayName ?? null,
+            opheliaConfidence: existing.opheliaConfidence,
+            wasCorrection: input.categoryId !== existing.opheliaCategoryId,
+          },
+        });
       }
 
       return ctx.prisma.transaction.update({

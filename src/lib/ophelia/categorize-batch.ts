@@ -152,6 +152,34 @@ export async function categorizeTransactionBatch(
         },
       });
 
+      // Fetch recent user corrections as high-priority examples.
+      // Corrections come first in the prompt — they represent explicit preferences.
+      const recentCorrections = await prisma.opheliaFeedback.findMany({
+        where: { householdId: hid },
+        orderBy: [{ wasCorrection: "desc" }, { createdAt: "desc" }],
+        take: 20,
+        select: {
+          transactionDescription: true,
+          opheliaCategoryName: true,
+          userCategoryName: true,
+          userDisplayName: true,
+          wasCorrection: true,
+        },
+      });
+
+      // Build correction examples — formatted as explicit override instructions
+      const correctionExamples = recentCorrections
+        .filter((c) => c.userCategoryName !== null)
+        .map((c) => ({
+          description: c.transactionDescription,
+          categoryName: c.userCategoryName!,
+          displayName: c.userDisplayName ?? c.transactionDescription,
+          tags: [] as string[],
+          note: c.wasCorrection
+            ? `USER CORRECTION: do NOT use "${c.opheliaCategoryName}" for this`
+            : undefined,
+        }));
+
       // Call the Ophelia AI — only descriptions go to the AI
       const results = await enrichTransactions({
         transactions: transactions.map((tx) => ({
@@ -169,14 +197,18 @@ export async function categorizeTransactionBatch(
           name: t.name,
           groupName: t.group?.name ?? undefined,
         })),
-        recentExamples: recentExamples
-          .filter((t) => t.category !== null)
-          .map((t) => ({
-            description: t.description,
-            categoryName: t.category!.name,
-            displayName: t.displayName ?? t.description,
-            tags: t.tags.map((tt) => tt.tag.name),
-          })),
+        // Corrections first (highest priority), then general examples
+        recentExamples: [
+          ...correctionExamples,
+          ...recentExamples
+            .filter((t) => t.category !== null)
+            .map((t) => ({
+              description: t.description,
+              categoryName: t.category!.name,
+              displayName: t.displayName ?? t.description,
+              tags: t.tags.map((tt) => tt.tag.name),
+            })),
+        ].slice(0, 20),
       });
 
       const now = new Date();
@@ -208,6 +240,27 @@ export async function categorizeTransactionBatch(
         } catch (updateErr) {
           console.error(`[Ophelia] Failed to update transaction ${tx.id}:`, updateErr);
           errors++;
+        }
+      }
+      // ── Feedback cleanup ────────────────────────────────────────────
+      // Keep only the most recent 500 feedback records per household
+      // to prevent unbounded table growth.
+      const feedbackCount = await prisma.opheliaFeedback.count({
+        where: { householdId: hid },
+      });
+      if (feedbackCount > 500) {
+        // Find the cutoff record (500th most recent)
+        const cutoff = await prisma.opheliaFeedback.findMany({
+          where: { householdId: hid },
+          orderBy: { createdAt: "desc" },
+          skip: 500,
+          take: 1,
+          select: { createdAt: true },
+        });
+        if (cutoff[0]) {
+          await prisma.opheliaFeedback.deleteMany({
+            where: { householdId: hid, createdAt: { lte: cutoff[0].createdAt } },
+          });
         }
       }
     } catch (err) {

@@ -96,6 +96,7 @@ model Household {
   trackers              Tracker[]
   recurringRules        RecurringRule[]
   dismissedPatterns     DismissedRecurringPattern[]
+  opheliaFeedback       OpheliaFeedback[]
 
   @@map("households")
 }
@@ -213,16 +214,23 @@ model Transaction {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
+  // Ophelia AI fields — populated by background categorization (Session 8+)
+  opheliaCategoryId  String?   // Ophelia's suggested category (FK to Category)
+  opheliaConfidence  Float?    // 0.0 - 1.0
+  opheliaDisplayName String?   // Ophelia's suggested clean merchant name
+  opheliaProcessedAt DateTime? // when Ophelia last processed this transaction
+
   // Transfer linking — one-to-one self-relation
   linkedTransactionId String?       @unique
   linkedTransaction   Transaction?  @relation("TransferLink", fields: [linkedTransactionId], references: [id])
   linkedBy            Transaction?  @relation("TransferLink")
 
-  account     FinancialAccount @relation(fields: [accountId], references: [id])
-  category    Category?        @relation(fields: [categoryId], references: [id])
-  user        User             @relation(fields: [userId], references: [id])
-  importBatch ImportBatch?     @relation(fields: [importBatchId], references: [id])
-  tags        TransactionTag[]
+  account         FinancialAccount @relation(fields: [accountId], references: [id])
+  category        Category?        @relation("UserCategory", fields: [categoryId], references: [id])
+  opheliaCategory Category?        @relation("OpheliaCategory", fields: [opheliaCategoryId], references: [id])
+  user            User             @relation(fields: [userId], references: [id])
+  importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id])
+  tags            TransactionTag[]
 
   @@index([userId])
   @@index([accountId])
@@ -265,10 +273,11 @@ model Category {
   parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
   children Category[] @relation("CategoryChildren")
 
-  household      Household          @relation(fields: [householdId], references: [id])
-  transactions   Transaction[]
-  allocations    TrackerAllocation[]
-  recurringRules RecurringRule[]
+  household           Household          @relation(fields: [householdId], references: [id])
+  transactions        Transaction[]      @relation("UserCategory")
+  opheliaTransactions Transaction[]      @relation("OpheliaCategory")
+  allocations         TrackerAllocation[]
+  recurringRules      RecurringRule[]
 
   @@unique([householdId, name, parentId, visibility])
   @@map("categories")
@@ -543,4 +552,29 @@ model DismissedRecurringPattern {
   @@unique([patternKey, userId, visibility])
   @@index([userId])
   @@map("dismissed_recurring_patterns")
+}
+
+// ── Ophelia feedback ──────────────────────────────────────────────────────────
+// Records every time a user accepts or corrects an Ophelia category suggestion.
+// Used as high-priority few-shot examples in future categorization prompts.
+// Category names are stored inline (denormalized) for prompt construction.
+model OpheliaFeedback {
+  id                     String   @id @default(cuid())
+  householdId            String
+  userId                 String
+  transactionDescription String
+  opheliaCategoryId      String?  // what Ophelia suggested
+  opheliaCategoryName    String?  // denormalized for prompt
+  userCategoryId         String?  // what the user chose (null = user cleared the category)
+  userCategoryName       String?  // denormalized for prompt
+  opheliaDisplayName     String?
+  userDisplayName        String?
+  opheliaConfidence      Float?
+  wasCorrection          Boolean  @default(false) // true = Ophelia was wrong
+  createdAt              DateTime @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, createdAt])
+  @@map("ophelia_feedback")
 }

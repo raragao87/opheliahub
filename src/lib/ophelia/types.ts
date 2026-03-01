@@ -28,6 +28,13 @@ export interface DetectedField {
   confidence: number;
   /** A few representative values from this column */
   sampleValues: string[];
+  /**
+   * For debit/credit columns: whether the values are stored as positive
+   * numbers ("positive", the most common case) or as negative numbers
+   * ("negative", e.g. eToro's "Money Out" column stores outflows as -87.17).
+   * Omitted for non-amount columns.
+   */
+  signConvention?: "positive" | "negative";
 }
 
 export interface FileStructureAnalysis {
@@ -40,6 +47,11 @@ export interface FileStructureAnalysis {
   hasHeaderRow: boolean;
   /** Any extra observations (e.g. "This looks like an ING export", "Column 5 contains SEPA IBANs") */
   additionalNotes: string;
+  /**
+   * The bank or institution name detected from the file content or filename
+   * (e.g. "eToro", "ING", "ABN AMRO", "Revolut"). Null if cannot be determined.
+   */
+  detectedInstitution: string | null;
 }
 
 export interface AnalyzeFileStructureInput {
@@ -49,4 +61,57 @@ export interface AnalyzeFileStructureInput {
   filename: string;
   /** Detected or guessed delimiter */
   delimiter?: string;
+}
+
+// ── enrichTransactions ───────────────────────────────────────────────────────
+
+export interface EnrichTransactionInput {
+  date: string;
+  description: string;
+  /** Amount in cents (negative = expense) */
+  amount: number;
+  counterpartyName?: string;
+}
+
+export interface CategoryContext {
+  id: string;
+  name: string;
+  parentName?: string;
+}
+
+export interface TagContext {
+  id: string;
+  name: string;
+  groupName?: string;
+}
+
+export interface RecentExample {
+  description: string;
+  categoryName: string;
+  displayName: string;
+  tags: string[];
+  /** Optional note shown in the prompt — used to highlight corrections. */
+  note?: string;
+}
+
+export interface EnrichTransactionsInput {
+  transactions: EnrichTransactionInput[];
+  categories: CategoryContext[];
+  tags: TagContext[];
+  recentExamples: RecentExample[];
+}
+
+export interface EnrichmentResult {
+  /** 0-based index into the input transactions array */
+  index: number;
+  /** Category ID from the provided categories list, or null if no good match */
+  suggestedCategoryId: string | null;
+  /** 0–1 confidence for the category suggestion */
+  categoryConfidence: number;
+  /** Human-readable display name (cleaned up merchant name) */
+  suggestedDisplayName: string;
+  /** Tag IDs from the provided tags list */
+  suggestedTags: string[];
+  /** 0–1 confidence for the tag suggestions */
+  tagConfidence: number;
 }
