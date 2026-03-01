@@ -10,6 +10,7 @@ import { importRouter } from "./routers/import";
 import { dashboardRouter } from "./routers/dashboard";
 import { netWorthRouter } from "./routers/net-worth";
 import { recurringRouter } from "./routers/recurring";
+import { opheliaRouter } from "./routers/ophelia";
 
 export const appRouter = router({
   auth: authRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
   dashboard: dashboardRouter,
   netWorth: netWorthRouter,
   recurring: recurringRouter,
+  ophelia: opheliaRouter,
 });
 
 export type AppRouter = typeof appRouter;

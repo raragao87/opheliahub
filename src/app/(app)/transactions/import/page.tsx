@@ -15,11 +15,50 @@ import { VisibilityBadge } from "@/components/shared/visibility-badge";
 import { formatDate } from "@/lib/date";
 import { parseCsvFile, transformCsvToTransactions, type ColumnMapping, type ParsedTransaction } from "@/lib/parsers/csv-parser";
 import { parseMT940 } from "@/lib/parsers/mt940-parser";
-import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertTriangle, ChevronRight, Filter, Pencil } from "lucide-react";
+import type { FileStructureAnalysis } from "@/lib/ophelia/types";
+import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertTriangle, ChevronRight, Filter, Pencil, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractDisplayName } from "@/lib/recurring";
 
 type Step = "upload" | "mapping" | "filter" | "preview" | "confirm";
+
+/**
+ * Scans rows from an Excel sheet (as string[][]) to find the first row that
+ * looks like a column header row, skipping bank-statement metadata rows.
+ * Returns the 0-based row index to start from.
+ */
+function detectExcelHeaderRow(rows: string[][]): number {
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const row = rows[i];
+    const nonEmpty = row.filter((c) => String(c).trim() !== "");
+    if (nonEmpty.length < 3) continue; // too few columns to be a header
+    const looksLikeHeaders = nonEmpty.every((c) => {
+      const s = String(c).trim();
+      if (/^[\d.,\s-]+$/.test(s)) return false; // pure numeric value
+      if (s.length > 60) return false; // too long for a column header
+      return true;
+    });
+    if (looksLikeHeaders) return i;
+  }
+  return 0;
+}
+
+/** Small colored dot showing Ophelia confidence (green / yellow / red). */
+function ConfidenceDot({ confidence }: { confidence: number | undefined }) {
+  if (confidence === undefined) return null;
+  const cls =
+    confidence >= 0.8
+      ? "bg-green-500"
+      : confidence >= 0.5
+      ? "bg-yellow-400"
+      : "bg-red-400";
+  return (
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${cls} shrink-0`}
+      title={`Ophelia confidence: ${Math.round(confidence * 100)}%`}
+    />
+  );
+}
 
 export default function ImportPage() {
   const router = useRouter();
@@ -40,6 +79,11 @@ export default function ImportPage() {
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [mapping, setMapping] = useState<ColumnMapping>({ date: "", description: "", amount: "" });
   const [amountMode, setAmountMode] = useState<"single" | "split">("single");
+  const [delimiter, setDelimiter] = useState(",");
+
+  // Ophelia AI column analysis
+  const [opheliaLoading, setOpheliaLoading] = useState(false);
+  const [opheliaAnalysis, setOpheliaAnalysis] = useState<FileStructureAnalysis | null>(null);
 
   // Filter step state
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
@@ -56,37 +100,164 @@ export default function ImportPage() {
 
   const commitMutation = useMutation(
     trpc.import.commit.mutationOptions({
-      onSuccess: (data) => {
+      onSuccess: () => {
         queryClient.invalidateQueries();
         router.push("/transactions");
       },
     })
   );
 
+  const analyzeFileMutation = useMutation(
+    trpc.ophelia.analyzeFile.mutationOptions({
+      onSuccess: (analysis) => {
+        setOpheliaLoading(false);
+        if (!analysis) return;
+        setOpheliaAnalysis(analysis);
+
+        // Pre-fill column mapping from Ophelia suggestions (confidence > 0.4)
+        const byMapped = (key: string) =>
+          analysis.detectedFields.find(
+            (f) => f.mappedTo === key && f.confidence > 0.4
+          );
+
+        const dateF = byMapped("date");
+        const descF = byMapped("description") ?? byMapped("counterpartyName");
+        const amtF = byMapped("amount");
+        const debitF = byMapped("debit");
+        const creditF = byMapped("credit");
+
+        if (debitF && creditF) {
+          setAmountMode("split");
+          setMapping({
+            date: dateF ? String(dateF.sourceColumn) : "",
+            description: descF ? String(descF.sourceColumn) : "",
+            amount: "",
+            debit: String(debitF.sourceColumn),
+            credit: String(creditF.sourceColumn),
+          });
+        } else {
+          setAmountMode("single");
+          setMapping({
+            date: dateF ? String(dateF.sourceColumn) : "",
+            description: descF ? String(descF.sourceColumn) : "",
+            amount: amtF ? String(amtF.sourceColumn) : "",
+          });
+        }
+      },
+      onError: () => setOpheliaLoading(false),
+    })
+  );
+
+  /** Returns Ophelia's confidence for a given mapping field when the current
+   *  dropdown value matches what Ophelia suggested. */
+  const opheliaConf = (mappedTo: "date" | "description" | "amount" | "debit" | "credit"): number | undefined => {
+    if (!opheliaAnalysis) return undefined;
+    const currentValue =
+      mappedTo === "date"        ? mapping.date
+      : mappedTo === "description" ? mapping.description
+      : mappedTo === "amount"      ? mapping.amount
+      : mappedTo === "debit"       ? (mapping.debit ?? "")
+      :                             (mapping.credit ?? "");
+    if (!currentValue) return undefined;
+    const matchedMappedTos =
+      mappedTo === "description"
+        ? ["description", "counterpartyName"]
+        : [mappedTo];
+    const field = opheliaAnalysis.detectedFields.find(
+      (f) =>
+        matchedMappedTos.includes(f.mappedTo) &&
+        String(f.sourceColumn) === currentValue
+    );
+    return field?.confidence;
+  };
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const name = file.name.toLowerCase();
     setFileName(file.name);
+    // Reset Ophelia state whenever a new file is chosen
+    setOpheliaAnalysis(null);
+    setOpheliaLoading(false);
 
+    // ── MT940 ──────────────────────────────────────────────────────────────
+    if (name.endsWith(".mt940") || name.endsWith(".sta") || name.endsWith(".940")) {
+      setFormat("MT940");
+      const reader = new FileReader();
+      reader.onload = (ev) => setFileContent(ev.target?.result as string);
+      reader.readAsText(file);
+      return;
+    }
+
+    // ── Excel (.xls / .xlsx) ───────────────────────────────────────────────
+    if (name.endsWith(".xls") || name.endsWith(".xlsx")) {
+      setFormat("CSV");
+      setDelimiter(",");
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const buffer = new Uint8Array(ev.target?.result as ArrayBuffer);
+        const XLSX = await import("xlsx");
+        const wb = XLSX.read(buffer, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const allRows = XLSX.utils.sheet_to_json<string[]>(ws, {
+          header: 1,
+          defval: "",
+        }) as string[][];
+
+        // Skip metadata rows (e.g., Amex XLSX has 5 info rows before the real header)
+        const headerIdx = detectExcelHeaderRow(allRows);
+        const dataRows = allRows.slice(headerIdx);
+
+        // Serialize to CSV
+        const csv = dataRows
+          .map((r) =>
+            r
+              .map((c) => {
+                const s = String(c);
+                return s.includes(",") || s.includes('"') || s.includes("\n")
+                  ? `"${s.replace(/"/g, '""')}"`
+                  : s;
+              })
+              .join(",")
+          )
+          .join("\n");
+
+        setFileContent(csv);
+        const result = parseCsvFile(csv, ",");
+        setCsvHeaders(result.headers);
+        setCsvRows(result.rows);
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    // ── TSV ────────────────────────────────────────────────────────────────
+    if (name.endsWith(".tsv")) {
+      setFormat("CSV");
+      setDelimiter("\t");
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const content = ev.target?.result as string;
+        setFileContent(content);
+        const result = parseCsvFile(content, "\t");
+        setCsvHeaders(result.headers);
+        setCsvRows(result.rows);
+      };
+      reader.readAsText(file);
+      return;
+    }
+
+    // ── Plain CSV (default) ────────────────────────────────────────────────
+    setFormat("CSV");
+    setDelimiter(",");
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;
       setFileContent(content);
-
-      // Auto-detect format
-      if (file.name.endsWith(".mt940") || file.name.endsWith(".sta") || file.name.endsWith(".940")) {
-        setFormat("MT940");
-      } else {
-        setFormat("CSV");
-      }
-
-      // For CSV, parse headers immediately
-      if (!file.name.endsWith(".mt940") && !file.name.endsWith(".sta") && !file.name.endsWith(".940")) {
-        const result = parseCsvFile(content);
-        setCsvHeaders(result.headers);
-        setCsvRows(result.rows);
-      }
+      const result = parseCsvFile(content);
+      setCsvHeaders(result.headers);
+      setCsvRows(result.rows);
     };
     reader.readAsText(file);
   }, []);
@@ -224,11 +395,11 @@ export default function ImportPage() {
                   Drag and drop or click to upload
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  CSV, MT940, STA formats supported
+                  CSV, TSV, Excel (.xls/.xlsx), MT940 formats supported
                 </p>
                 <Input
                   type="file"
-                  accept=".csv,.mt940,.sta,.940,.txt"
+                  accept=".csv,.tsv,.xls,.xlsx,.mt940,.sta,.940,.txt"
                   onChange={handleFileUpload}
                   className="max-w-xs mx-auto"
                 />
@@ -247,6 +418,19 @@ export default function ImportPage() {
               onClick={() => {
                 if (format === "CSV") {
                   setStep("mapping");
+                  // Kick off Ophelia file analysis in the background
+                  const sampleLines = fileContent
+                    .split("\n")
+                    .filter((l) => l.trim().length > 0)
+                    .slice(0, 30)
+                    .join("\n");
+                  setOpheliaLoading(true);
+                  setOpheliaAnalysis(null);
+                  analyzeFileMutation.mutate({
+                    rawContent: sampleLines,
+                    filename: fileName,
+                    delimiter,
+                  });
                 } else {
                   // MT940: parse immediately and go to preview
                   const result = parseMT940(fileContent);
@@ -275,9 +459,26 @@ export default function ImportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Ophelia analysis banner */}
+            {opheliaLoading && (
+              <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-800 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <span>Ophelia is analyzing your file…</span>
+              </div>
+            )}
+            {opheliaAnalysis && !opheliaLoading && (
+              <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span>Ophelia pre-filled the mapping — review and adjust if needed.</span>
+              </div>
+            )}
+
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label>Date Column</Label>
+                <Label className="flex items-center gap-1.5">
+                  Date Column
+                  <ConfidenceDot confidence={opheliaConf("date")} />
+                </Label>
                 <Select
                   value={mapping.date}
                   onChange={(e) => setMapping({ ...mapping, date: e.target.value })}
@@ -290,7 +491,10 @@ export default function ImportPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Description Column</Label>
+                <Label className="flex items-center gap-1.5">
+                  Description Column
+                  <ConfidenceDot confidence={opheliaConf("description")} />
+                </Label>
                 <Select
                   value={mapping.description}
                   onChange={(e) => setMapping({ ...mapping, description: e.target.value })}
@@ -303,7 +507,18 @@ export default function ImportPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Amount Layout</Label>
+                <Label className="flex items-center gap-1.5">
+                  Amount Layout
+                  {opheliaAnalysis && !opheliaLoading && (
+                    <ConfidenceDot
+                      confidence={
+                        amountMode === "split"
+                          ? opheliaConf("debit") ?? opheliaConf("credit")
+                          : opheliaConf("amount")
+                      }
+                    />
+                  )}
+                </Label>
                 <Select
                   value={amountMode}
                   onChange={(e) => {
@@ -323,7 +538,10 @@ export default function ImportPage() {
 
               {amountMode === "single" ? (
                 <div className="space-y-2">
-                  <Label>Amount Column</Label>
+                  <Label className="flex items-center gap-1.5">
+                    Amount Column
+                    <ConfidenceDot confidence={opheliaConf("amount")} />
+                  </Label>
                   <Select
                     value={mapping.amount}
                     onChange={(e) => setMapping({ ...mapping, amount: e.target.value })}
@@ -337,7 +555,10 @@ export default function ImportPage() {
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>Credit / Incoming Column</Label>
+                    <Label className="flex items-center gap-1.5">
+                      Credit / Incoming Column
+                      <ConfidenceDot confidence={opheliaConf("credit")} />
+                    </Label>
                     <Select
                       value={mapping.credit ?? ""}
                       onChange={(e) => setMapping({ ...mapping, credit: e.target.value || undefined })}
@@ -349,7 +570,10 @@ export default function ImportPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Debit / Outgoing Column</Label>
+                    <Label className="flex items-center gap-1.5">
+                      Debit / Outgoing Column
+                      <ConfidenceDot confidence={opheliaConf("debit")} />
+                    </Label>
                     <Select
                       value={mapping.debit ?? ""}
                       onChange={(e) => setMapping({ ...mapping, debit: e.target.value || undefined })}
@@ -389,7 +613,15 @@ export default function ImportPage() {
             )}
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep("upload")} className="flex-1">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setStep("upload");
+                  setOpheliaAnalysis(null);
+                  setOpheliaLoading(false);
+                }}
+                className="flex-1"
+              >
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
               <Button
@@ -547,7 +779,11 @@ export default function ImportPage() {
               </Button>
               <Button
                 onClick={() => {
-                  const result = transformCsvToTransactions(filteredCsvRows, mapping);
+                  const result = transformCsvToTransactions(
+                    filteredCsvRows,
+                    mapping,
+                    opheliaAnalysis?.dateFormat
+                  );
                   setTransactions(result.transactions);
                   setErrors(result.errors);
                   setStep("preview");
