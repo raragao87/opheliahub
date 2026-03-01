@@ -3,6 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleAccountsWhere } from "@/lib/privacy";
 import { extractDisplayName } from "@/lib/recurring";
+import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
+import { isOpheliaEnabled } from "@/lib/ophelia";
 
 const parsedTransactionSchema = z.object({
   date: z.coerce.date(),
@@ -53,37 +55,119 @@ export const importRouter = router({
           accountId: input.accountId,
           date: { gte: minDate, lte: maxDate },
         },
-        select: { id: true, date: true, amount: true, description: true, externalId: true },
+        select: { id: true, date: true, amount: true, description: true, displayName: true, externalId: true },
       });
 
-      const duplicates: number[] = [];
-      const newTransactions: typeof input.transactions = [];
+      // Pass 1 — classify each imported transaction:
+      //   "definite"  → exact externalId match OR same amount + date + similar description
+      //   "weakFuzzy" → same amount + date but different description (send to Ophelia)
+      //   otherwise   → not a duplicate
+
+      type ExistingTx = (typeof existing)[number];
+
+      const definiteIndices: number[] = [];
+      const weakFuzzyCandidates: { importIdx: number; existingTx: ExistingTx }[] = [];
 
       for (let i = 0; i < input.transactions.length; i++) {
         const imported = input.transactions[i];
-        const isDuplicate = existing.some((ex) => {
-          // Exact externalId match
-          if (imported.externalId && ex.externalId === imported.externalId) return true;
+        let isDefinite = false;
+        let weakMatch: ExistingTx | null = null;
 
-          // Same amount + same date + similar description
+        for (const ex of existing) {
+          // Exact by externalId
+          if (imported.externalId && ex.externalId && imported.externalId === ex.externalId) {
+            isDefinite = true;
+            break;
+          }
+
           const sameAmount = ex.amount === imported.amount;
           const sameDate =
             Math.abs(ex.date.getTime() - imported.date.getTime()) < 86400000; // 1 day
+          if (!sameAmount || !sameDate) continue;
+
+          // Check description similarity
           const similarDesc =
             ex.description.toLowerCase().includes(imported.description.toLowerCase().slice(0, 20)) ||
             imported.description.toLowerCase().includes(ex.description.toLowerCase().slice(0, 20));
 
-          return sameAmount && sameDate && similarDesc;
-        });
+          if (similarDesc) {
+            isDefinite = true;
+            break;
+          }
 
-        if (isDuplicate) {
-          duplicates.push(i);
-        } else {
-          newTransactions.push(imported);
+          // Same amount + date but different description → weak fuzzy candidate
+          if (!weakMatch) weakMatch = ex;
+        }
+
+        if (isDefinite) {
+          definiteIndices.push(i);
+        } else if (weakMatch) {
+          weakFuzzyCandidates.push({ importIdx: i, existingTx: weakMatch });
         }
       }
 
-      return { duplicates, newTransactions };
+      // Pass 2 — resolve weak fuzzy candidates with Ophelia AI (fast: usually <10 pairs)
+      type FuzzyResult = {
+        index: number;
+        isDuplicate: boolean | null; // null = AI unavailable, user decides
+        confidence: number;
+        reasoning: string;
+        matchedDescription: string;
+      };
+
+      let fuzzy: FuzzyResult[] = [];
+
+      if (weakFuzzyCandidates.length > 0) {
+        if (isOpheliaEnabled()) {
+          const pairs = weakFuzzyCandidates.map(({ importIdx, existingTx: ex }) => ({
+            index: importIdx,
+            newTransaction: {
+              date: input.transactions[importIdx].date.toISOString().slice(0, 10),
+              description: input.transactions[importIdx].description,
+              amount: input.transactions[importIdx].amount,
+            },
+            existingTransaction: {
+              date: ex.date.toISOString().slice(0, 10),
+              description: ex.description,
+              amount: ex.amount,
+              displayName: ex.displayName ?? ex.description,
+            },
+          }));
+
+          const resolutions = await resolveDuplicates(pairs);
+
+          if (resolutions) {
+            fuzzy = resolutions.map((r) => ({
+              index: r.pairIndex,
+              isDuplicate: r.isDuplicate,
+              confidence: r.confidence,
+              reasoning: r.reasoning,
+              matchedDescription:
+                pairs.find((p) => p.index === r.pairIndex)?.existingTransaction.displayName ?? "",
+            }));
+          } else {
+            // AI call failed — surface as undecided so user can review manually
+            fuzzy = weakFuzzyCandidates.map(({ importIdx, existingTx: ex }) => ({
+              index: importIdx,
+              isDuplicate: null,
+              confidence: 0,
+              reasoning: "Could not check automatically — please review",
+              matchedDescription: ex.displayName ?? ex.description,
+            }));
+          }
+        } else {
+          // Ophelia disabled — surface as undecided
+          fuzzy = weakFuzzyCandidates.map(({ importIdx, existingTx: ex }) => ({
+            index: importIdx,
+            isDuplicate: null,
+            confidence: 0,
+            reasoning: "Potential duplicate — please review",
+            matchedDescription: ex.displayName ?? ex.description,
+          }));
+        }
+      }
+
+      return { duplicates: definiteIndices, fuzzy };
     }),
 
   /** Commit imported transactions to the database */
