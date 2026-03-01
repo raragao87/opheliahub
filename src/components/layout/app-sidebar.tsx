@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useOwnership } from "@/lib/ownership-context";
 import { navSections, bottomNavItems } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
+import { OpheliaStatus } from "./ophelia-status";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -97,6 +98,9 @@ export function AppSidebar() {
             <SidebarAccounts />
           </Suspense>
         </nav>
+
+        {/* Ophelia status */}
+        <OpheliaStatus />
 
         {/* Bottom-anchored items */}
         <div className="border-t px-2 py-2 space-y-0.5">

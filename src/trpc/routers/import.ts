@@ -5,6 +5,7 @@ import { visibleAccountsWhere } from "@/lib/privacy";
 import { extractDisplayName } from "@/lib/recurring";
 import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
 import { isOpheliaEnabled } from "@/lib/ophelia";
+import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
 
 const parsedTransactionSchema = z.object({
   date: z.coerce.date(),
@@ -261,6 +262,14 @@ export const importRouter = router({
 
         return { batchId: batch.id, importedRows };
       });
+
+      // Fire-and-forget: kick off Ophelia for newly imported transactions.
+      // Not awaited — doesn't slow down the commit response.
+      if (isOpheliaEnabled()) {
+        categorizeTransactionBatch(ctx.prisma, ctx.householdId, 50).catch((err) =>
+          console.error("[Ophelia] Post-import categorization error:", err)
+        );
+      }
 
       return result;
     }),

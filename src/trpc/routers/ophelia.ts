@@ -140,6 +140,54 @@ export const opheliaRouter = router({
     }),
 
   /**
+   * Returns the number of transactions that Ophelia hasn't processed yet
+   * (opheliaProcessedAt IS NULL, excluding initial balance rows).
+   * Returns { pending: 0, enabled: false } when Ophelia is disabled.
+   */
+  pendingCount: householdProcedure.query(async ({ ctx }) => {
+    if (!isOpheliaEnabled()) return { pending: 0, enabled: false };
+    const pending = await ctx.prisma.transaction.count({
+      where: {
+        account: { householdId: ctx.householdId },
+        opheliaProcessedAt: null,
+        isInitialBalance: false,
+      },
+    });
+    return { pending, enabled: true };
+  }),
+
+  /**
+   * Acceptance rate and top corrections from OpheliaFeedback.
+   * Returns null fields when there is not enough data yet.
+   */
+  stats: householdProcedure.query(async ({ ctx }) => {
+    const [total, corrections] = await Promise.all([
+      ctx.prisma.opheliaFeedback.count({ where: { householdId: ctx.householdId } }),
+      ctx.prisma.opheliaFeedback.count({ where: { householdId: ctx.householdId, wasCorrection: true } }),
+    ]);
+
+    const acceptanceRate = total > 0 ? Math.round(((total - corrections) / total) * 100) : null;
+
+    const topCorrections = await ctx.prisma.opheliaFeedback.groupBy({
+      by: ["opheliaCategoryName"],
+      where: { householdId: ctx.householdId, wasCorrection: true, opheliaCategoryName: { not: null } },
+      _count: { opheliaCategoryName: true },
+      orderBy: { _count: { opheliaCategoryName: "desc" } },
+      take: 5,
+    });
+
+    return {
+      total,
+      corrections,
+      acceptanceRate,
+      topCorrections: topCorrections.map((r) => ({
+        category: r.opheliaCategoryName as string,
+        count: r._count.opheliaCategoryName,
+      })),
+    };
+  }),
+
+  /**
    * Tries to extract transactions from a file in an unrecognized format.
    * Called when no built-in parser handles the file extension/content.
    *
