@@ -153,6 +153,8 @@ function TransactionsContent() {
   const { visibilityParam } = useOwnership();
 
   const [filters, setFilters] = useState<Filters>(() => filtersFromParams(searchParams));
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // Sync URL params → filter state (when URL changes externally)
   useEffect(() => {
@@ -606,10 +608,10 @@ function TransactionsContent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-2xl font-bold" suppressHydrationWarning>
-              {selectedAccount ? selectedAccount.name : "Transactions"}
+            <h1 className="text-2xl font-bold">
+              {mounted && selectedAccount ? selectedAccount.name : "Transactions"}
             </h1>
-            {selectedAccount && (
+            {mounted && selectedAccount && (
               <p className="text-sm text-muted-foreground mt-0.5">
                 {ACCOUNT_TYPE_META[selectedAccount.type]?.label ?? selectedAccount.type}
                 {selectedAccount.institution && ` · ${selectedAccount.institution}`}
