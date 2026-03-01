@@ -89,6 +89,12 @@ export default function ImportPage() {
   const [opheliaLoading, setOpheliaLoading] = useState(false);
   const [opheliaAnalysis, setOpheliaAnalysis] = useState<FileStructureAnalysis | null>(null);
 
+  // Unknown-format fallback: set when Ophelia extracted transactions from an
+  // unrecognized file. The warning text is shown as a banner in preview.
+  const [opheliaFallbackWarning, setOpheliaFallbackWarning] = useState<string | null>(null);
+  // True when the uploaded file has an extension we don't recognize
+  const [isUnknownFormat, setIsUnknownFormat] = useState(false);
+
   // Per-transaction category and tag overrides (index → id / ids)
   const [categoryOverrides, setCategoryOverrides] = useState<Record<number, string>>({});
   const [tagOverrides, setTagOverrides] = useState<Record<number, string[]>>({});
@@ -133,6 +139,53 @@ export default function ImportPage() {
         setDuplicateIndices(data.duplicates);
         setFuzzyDuplicates(data.fuzzy ?? []);
       },
+    })
+  );
+
+  const [unknownFormatError, setUnknownFormatError] = useState<string | null>(null);
+  const extractUnknownMutation = useMutation(
+    trpc.ophelia.extractUnknownFormat.mutationOptions({
+      onSuccess: (result) => {
+        if (!result) {
+          setUnknownFormatError(
+            "Ophelia is not available. We couldn't recognize this file format. Please convert it to CSV and try again."
+          );
+          return;
+        }
+        if (result.confidence < 0.5 || result.transactions.length === 0) {
+          setUnknownFormatError(
+            result.transactions.length === 0
+              ? `Ophelia couldn't find any transactions in this file (format guess: ${result.formatGuess}). Please convert it to CSV and try again.`
+              : `Ophelia extracted ${result.transactions.length} transactions but confidence is low (${Math.round(result.confidence * 100)}% — format: ${result.formatGuess}). Please convert to CSV for a more reliable import.`
+          );
+          return;
+        }
+
+        // Convert Ophelia's output to ParsedTransaction format
+        const txs: import("@/lib/parsers/csv-parser").ParsedTransaction[] = result.transactions
+          .map((t) => {
+            const d = new Date(t.date);
+            if (isNaN(d.getTime())) return null;
+            const amountCents = Math.round(t.amount * 100);
+            return {
+              date: d,
+              description: t.description,
+              amount: amountCents,
+              type: (amountCents >= 0 ? "INCOME" : "EXPENSE") as "INCOME" | "EXPENSE",
+            };
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+
+        const warnings = [
+          `Ophelia detected this as: ${result.formatGuess} (${Math.round(result.confidence * 100)}% confidence).`,
+          ...result.warnings,
+          "Please review all transactions carefully before confirming the import.",
+        ].join(" ");
+
+        setOpheliaFallbackWarning(warnings);
+        handleGoToPreview(txs, []);
+      },
+      onError: (err) => setUnknownFormatError(err.message),
     })
   );
 
@@ -232,6 +285,9 @@ export default function ImportPage() {
     // Reset Ophelia state whenever a new file is chosen
     setOpheliaAnalysis(null);
     setOpheliaLoading(false);
+    setIsUnknownFormat(false);
+    setUnknownFormatError(null);
+    setOpheliaFallbackWarning(null);
 
     // ── MT940 ──────────────────────────────────────────────────────────────
     if (name.endsWith(".mt940") || name.endsWith(".sta") || name.endsWith(".940")) {
@@ -300,17 +356,26 @@ export default function ImportPage() {
       return;
     }
 
-    // ── Plain CSV (default) ────────────────────────────────────────────────
-    setFormat("CSV");
-    setDelimiter(",");
+    // ── Plain CSV ──────────────────────────────────────────────────────────
+    if (name.endsWith(".csv") || name.endsWith(".txt")) {
+      setFormat("CSV");
+      setDelimiter(",");
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const content = ev.target?.result as string;
+        setFileContent(content);
+        const result = parseCsvFile(content);
+        setCsvHeaders(result.headers);
+        setCsvRows(result.rows);
+      };
+      reader.readAsText(file);
+      return;
+    }
+
+    // ── Unknown format → Ophelia fallback ────────────────────────────────
+    setIsUnknownFormat(true);
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const content = ev.target?.result as string;
-      setFileContent(content);
-      const result = parseCsvFile(content);
-      setCsvHeaders(result.headers);
-      setCsvRows(result.rows);
-    };
+    reader.onload = (ev) => setFileContent(ev.target?.result as string ?? "");
     reader.readAsText(file);
   }, []);
 
@@ -390,6 +455,8 @@ export default function ImportPage() {
     setDuplicateIndices([]);
     setFuzzyDuplicates([]);
     setImportAnywayIndices(new Set());
+    // Note: opheliaFallbackWarning is intentionally NOT reset here —
+    // extractUnknownMutation sets it before calling handleGoToPreview.
     setStep("preview");
 
     // Kick off duplicate check in the background — badges appear once it resolves
@@ -485,11 +552,11 @@ export default function ImportPage() {
                   Drag and drop or click to upload
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  CSV, TSV, Excel (.xls/.xlsx), MT940 formats supported
+                  CSV, TSV, Excel (.xls/.xlsx), MT940 supported. Other formats? Let Ophelia try!
                 </p>
                 <Input
                   type="file"
-                  accept=".csv,.tsv,.xls,.xlsx,.mt940,.sta,.940,.txt"
+                  accept="*"
                   onChange={handleFileUpload}
                   className="max-w-xs mx-auto"
                 />
@@ -500,35 +567,80 @@ export default function ImportPage() {
               <div className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4" />
                 <span>{fileName}</span>
-                <Badge variant="outline">{format}</Badge>
+                {!isUnknownFormat && <Badge variant="outline">{format}</Badge>}
+                {isUnknownFormat && <Badge variant="outline" className="text-yellow-700 border-yellow-400">Unknown format</Badge>}
               </div>
             )}
 
-            <Button
-              onClick={() => {
-                setStep("mapping");
-                if (format === "CSV") {
-                  // Kick off Ophelia file analysis immediately
-                  const sampleLines = fileContent
-                    .split("\n")
-                    .filter((l) => l.trim().length > 0)
-                    .slice(0, 30)
-                    .join("\n");
-                  setOpheliaLoading(true);
-                  setOpheliaAnalysis(null);
-                  analyzeFileMutation.mutate({
-                    rawContent: sampleLines,
-                    filename: fileName,
-                    delimiter,
-                  });
-                }
-              }}
-              disabled={!fileContent}
-              className="w-full"
-            >
-              Next: Analyse File
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
+            {/* Unknown format — Ophelia fallback flow */}
+            {isUnknownFormat && fileContent && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-950">
+                  <div className="flex items-center gap-2 text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    <Sparkles className="h-4 w-4" />
+                    Unrecognised file format
+                  </div>
+                  <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                    This file isn&apos;t a standard CSV, MT940, or Excel format. Ophelia can try to extract
+                    transactions automatically — results should be reviewed carefully.
+                  </p>
+                </div>
+                {unknownFormatError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
+                    <p className="text-sm text-red-800 dark:text-red-200">{unknownFormatError}</p>
+                  </div>
+                )}
+                <Button
+                  onClick={() => {
+                    setUnknownFormatError(null);
+                    extractUnknownMutation.mutate({ rawContent: fileContent, filename: fileName });
+                  }}
+                  disabled={extractUnknownMutation.isPending}
+                  className="w-full"
+                >
+                  {extractUnknownMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Ophelia is analysing…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Let Ophelia Try
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Normal flow */}
+            {!isUnknownFormat && (
+              <Button
+                onClick={() => {
+                  setStep("mapping");
+                  if (format === "CSV") {
+                    // Kick off Ophelia file analysis immediately
+                    const sampleLines = fileContent
+                      .split("\n")
+                      .filter((l) => l.trim().length > 0)
+                      .slice(0, 30)
+                      .join("\n");
+                    setOpheliaLoading(true);
+                    setOpheliaAnalysis(null);
+                    analyzeFileMutation.mutate({
+                      rawContent: sampleLines,
+                      filename: fileName,
+                      delimiter,
+                    });
+                  }
+                }}
+                disabled={!fileContent}
+                className="w-full"
+              >
+                Next: Analyse File
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1070,6 +1182,17 @@ export default function ImportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {opheliaFallbackWarning && (
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-950">
+                <div className="flex items-center gap-2 text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                  <Sparkles className="h-4 w-4" />
+                  Ophelia extracted these transactions — please review carefully
+                </div>
+                <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                  {opheliaFallbackWarning}
+                </p>
+              </div>
+            )}
             {errors.length > 0 && (
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-950">
                 <div className="flex items-center gap-2 text-sm font-medium text-yellow-800 dark:text-yellow-200">

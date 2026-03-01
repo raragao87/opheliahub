@@ -2,6 +2,7 @@ import { z } from "zod";
 import { householdProcedure, router } from "../init";
 import { analyzeFileStructure, enrichTransactions, isOpheliaEnabled } from "@/lib/ophelia";
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
+import { extractFromUnknown } from "@/lib/ophelia/extractFromUnknown";
 
 export const opheliaRouter = router({
   /**
@@ -136,5 +137,26 @@ export const opheliaRouter = router({
       );
 
       return { ...result, opheliaEnabled: true };
+    }),
+
+  /**
+   * Tries to extract transactions from a file in an unrecognized format.
+   * Called when no built-in parser handles the file extension/content.
+   *
+   * Returns null when Ophelia is disabled, the API call fails, or the
+   * response cannot be parsed — the caller falls back to showing an error.
+   */
+  extractUnknownFormat: householdProcedure
+    .input(
+      z.object({
+        /** First ~100 lines / 8 KB of the file as plain text */
+        rawContent: z.string().max(50_000),
+        /** Original filename — helps the AI identify the format */
+        filename: z.string().max(255),
+      })
+    )
+    .mutation(async ({ input }) => {
+      if (!isOpheliaEnabled()) return null;
+      return extractFromUnknown(input.rawContent, input.filename);
     }),
 });
