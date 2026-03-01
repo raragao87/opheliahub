@@ -496,7 +496,7 @@ function TransactionsContent() {
           toast.error("Ophelia AI is not enabled");
           return;
         }
-        const { processed, skipped, errors } = data;
+        const { processed, skipped, errors, hasMore } = data;
         if (errors > 0 && processed === 0) {
           toast.error(
             `Ophelia encountered ${errors} error${errors !== 1 ? "s" : ""} — check the server logs`
@@ -506,11 +506,12 @@ function TransactionsContent() {
         } else if (processed === 0 && skipped === 0 && errors === 0) {
           toast.success("All transactions are already categorized");
         } else {
-          toast.success(
+          const msg =
             `Ophelia categorized ${processed} transaction${processed !== 1 ? "s" : ""}` +
-              (skipped > 0 ? ` · ${skipped} skipped` : "") +
-              (errors > 0 ? ` · ${errors} errors` : "")
-          );
+            (skipped > 0 ? ` · ${skipped} skipped` : "") +
+            (errors > 0 ? ` · ${errors} errors` : "") +
+            (hasMore ? " · more remaining, click again" : "");
+          toast.success(msg);
         }
         queryClient.invalidateQueries();
       },

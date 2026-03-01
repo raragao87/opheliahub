@@ -3,13 +3,15 @@ import type { PrismaClient } from "@prisma/client";
 import { enrichTransactions } from "./enrichTransactions";
 import { isOpheliaEnabled } from "./provider";
 
-const DEFAULT_BATCH_SIZE = 50;
+const DEFAULT_BATCH_SIZE = 200;
 const REPROCESS_AFTER_DAYS = 7;
 
 export interface CategorizeBatchResult {
   processed: number;
   skipped: number;
   errors: number;
+  /** True when the batch was full — caller should inform the user there are more to process. */
+  hasMore: boolean;
 }
 
 /**
@@ -30,7 +32,7 @@ export async function categorizeTransactionBatch(
 ): Promise<CategorizeBatchResult> {
   const opheliaEnabled = isOpheliaEnabled();
   console.log(`[Ophelia] categorizeTransactionBatch — enabled=${opheliaEnabled}, householdId=${householdId ?? "all"}`);
-  if (!opheliaEnabled) return { processed: 0, skipped: 0, errors: 0 };
+  if (!opheliaEnabled) return { processed: 0, skipped: 0, errors: 0, hasMore: false };
 
   const reprocessBefore = new Date(
     Date.now() - REPROCESS_AFTER_DAYS * 24 * 60 * 60 * 1000
@@ -214,5 +216,8 @@ export async function categorizeTransactionBatch(
     }
   }
 
-  return { processed, skipped, errors };
+  // hasMore: true when the query returned a full batch for at least one household —
+  // means there are likely more transactions that didn't fit in this run.
+  const hasMore = processed > 0 && processed >= batchSize;
+  return { processed, skipped, errors, hasMore };
 }
