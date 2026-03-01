@@ -605,8 +605,8 @@ function TransactionsContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div suppressHydrationWarning>
-            <h1 className="text-2xl font-bold">
+          <div>
+            <h1 className="text-2xl font-bold" suppressHydrationWarning>
               {selectedAccount ? selectedAccount.name : "Transactions"}
             </h1>
             {selectedAccount && (

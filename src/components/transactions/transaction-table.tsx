@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ArrowLeftRight, Trash2, X,
   ChevronDown, ChevronLeft, ChevronRight,
-  CircleSlash, ArrowUp, ArrowDown, ArrowUpDown, Search, MessageSquare,
+  CircleSlash, ArrowUp, ArrowDown, ArrowUpDown, Search, MessageSquare, Sparkles,
 } from "lucide-react";
 import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
 import { InlineTextEdit } from "@/components/shared/inline-text-edit";
@@ -55,6 +55,11 @@ export interface TransactionItem {
   linkedBy?: TransactionLinked | null;
   importBatchId?: string | null;
   notes?: string | null;
+  // Ophelia AI fields
+  opheliaCategoryId?: string | null;
+  opheliaCategory?: { id: string; name: string } | null;
+  opheliaConfidence?: number | null;
+  opheliaDisplayName?: string | null;
 }
 
 interface CategoryOption {
@@ -867,6 +872,19 @@ function TransactionRow({
     <AccountIcon className="h-4 w-4 inline-block text-muted-foreground" />
   ) : null;
 
+  // Ophelia suggestion — only relevant when user hasn't set a category.
+  // Use the pre-loaded opheliaCategory relation directly (avoids visibility mismatch
+  // where a PERSONAL-category suggestion wouldn't be found in the SHARED categoryOptions).
+  const opheliaCatLabel = !txn.category && txn.opheliaCategory
+    ? txn.opheliaCategory.name
+    : null;
+  const opheliaConf = txn.opheliaConfidence ?? null;
+  const opheliaConfColor =
+    opheliaConf == null ? "text-violet-400"
+    : opheliaConf >= 0.8 ? "text-green-500"
+    : opheliaConf >= 0.5 ? "text-yellow-500"
+    : "text-red-400";
+
   return (
     <tr
       className={cn(
@@ -931,14 +949,39 @@ function TransactionRow({
       {/* Category */}
       <td className="py-1.5 px-2">
         {canEditCategory ? (
-          <InlineSelectEdit
-            value={txn.category?.id ?? ""}
-            displayValue={categoryDisplay}
-            options={categoryOptions}
-            onSave={(value) => onUpdate(txn.id, { categoryId: value || null })}
-            emptyLabel="Uncategorized"
-            placeholder="—"
-          />
+          opheliaCatLabel && !txn.category ? (
+            // Ophelia suggestion: no user category set, AI has a candidate
+            <div className="flex items-center gap-1 group/ophelia">
+              <span title={opheliaConf != null ? `Ophelia: ${Math.round(opheliaConf * 100)}% confidence` : "Suggested by Ophelia"}>
+                <Sparkles className={cn("h-3 w-3 shrink-0", opheliaConfColor)} />
+              </span>
+              <InlineSelectEdit
+                value=""
+                displayValue={opheliaCatLabel}
+                options={categoryOptions}
+                onSave={(value) => onUpdate(txn.id, { categoryId: value || null })}
+                emptyLabel="Uncategorized"
+                placeholder="—"
+              />
+              <button
+                type="button"
+                title={`Accept Ophelia's suggestion: ${opheliaCatLabel}`}
+                onClick={() => onUpdate(txn.id, { categoryId: txn.opheliaCategoryId })}
+                className="shrink-0 opacity-0 group-hover/ophelia:opacity-100 text-[10px] text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200 transition-opacity font-medium leading-none"
+              >
+                Accept
+              </button>
+            </div>
+          ) : (
+            <InlineSelectEdit
+              value={txn.category?.id ?? ""}
+              displayValue={categoryDisplay}
+              options={categoryOptions}
+              onSave={(value) => onUpdate(txn.id, { categoryId: value || null })}
+              emptyLabel="Uncategorized"
+              placeholder="—"
+            />
+          )
         ) : (
           <span className="text-sm px-1 py-0.5">{categoryIcon}</span>
         )}
