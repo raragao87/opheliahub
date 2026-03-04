@@ -7,7 +7,7 @@
     - [ ] Ensure **Split Transactions** work correctly (UI & backend).
 - [ ] **Accounts:**
     - [x] Create/Edit/Delete accounts (Verified & Fixed Types).
-    - [ ] Sync account balances with transaction history (auto-calc).
+    - [x] Sync account balances with transaction history (auto-calc) ✅ VERIFIED: Implemented in createTransaction/updateTransaction/deleteTransaction functions.
 - [ ] **Budgeting:**
     - [ ] Create monthly budgets by Category/Tag.
     - [ ] Visual progress bars for budget vs actuals.
