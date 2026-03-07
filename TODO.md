@@ -28,5 +28,5 @@
 ## Bugs / Tech Debt
 - [x] Fix unused variable warnings in `CreateAccountModal.tsx`.
 - [x] Add `notes` field to `Account` interface.
-- [ ] Check console for React warnings/errors.
+- [x] Check console for React warnings/errors (Fixed useEffect dependency warnings, removed 'any' types, cleaned up debug logs).
 - [ ] Audit `firebase/config.ts` for security rules.
