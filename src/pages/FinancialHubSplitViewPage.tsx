@@ -599,7 +599,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
       
       // If this is an initial balance transaction, also update the account's initialBalance
       if (isInitialBalanceTransaction(transaction)) {
-        console.log('🔄 Updating account initial balance to sync with transaction:', amount);
+        // Updating account initial balance to sync with transaction
         
         // Calculate the balance difference
         const balanceDifference = amount - selectedAccount.initialBalance;
@@ -820,15 +820,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
     ? filteredAndSortedTransactions
     : filteredAndSortedTransactions.slice(0, transactionsPerPage);
 
-  // Debug logging
-  console.log('🔍 Pagination Debug:', {
-    totalTransactions: totalTransactionCount,
-    filteredTransactions: filteredAndSortedTransactions.length,
-    transactionsPerPage,
-    totalPages,
-    currentPage,
-    currentTransactionsLength: currentTransactions.length
-  });
+  // Calculate pagination data
 
   // Reset to first page when filters change
   useEffect(() => {
