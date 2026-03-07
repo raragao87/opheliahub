@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { updateAccount, deleteAccount, getAccountTypes, getTransactionsByAccount, updateTransaction, createTransaction, type Account, type AccountType, type Transaction } from '../firebase/config';
@@ -35,6 +35,17 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUpdateAssetBalanceModal, setShowUpdateAssetBalanceModal] = useState(false);
+
+  const loadAccountTypes = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const types = await getAccountTypes(user.uid);
+      setAccountTypes(types);
+    } catch (error) {
+      console.error('Error loading account types:', error);
+    }
+  }, [user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -81,19 +92,7 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       // Load account types
       loadAccountTypes();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, account, user]);
-
-  const loadAccountTypes = async () => {
-    if (!user) return;
-    
-    try {
-      const types = await getAccountTypes(user.uid);
-      setAccountTypes(types);
-    } catch (error) {
-      console.error('Error loading account types:', error);
-    }
-  };
+  }, [isOpen, account, user, loadAccountTypes]);
   
   const getFilteredTypes = () => {
     switch (classification) {
@@ -125,10 +124,10 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
           // Don't update date - keep it atemporal
         }, user.uid);
         
-        console.log('✅ Updated initial balance transaction:', initialBalanceTransaction.id);
+        // Updated initial balance transaction
       } else {
         // Create initial balance transaction if it doesn't exist - ALWAYS create regardless of amount
-        console.log('⚠️ No initial balance transaction found, creating one with amount:', newInitialBalance);
+        // Creating initial balance transaction
         const transactionData: Omit<Transaction, 'id'> = {
           accountId: account.id,
           amount: newInitialBalance, // Use actual amount (can be 0)

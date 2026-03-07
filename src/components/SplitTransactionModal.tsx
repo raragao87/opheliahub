@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { splitTransaction, mergeTransactionSplits, getTransactionSplits, updateTransactionSplit } from '../firebase/config';
@@ -39,14 +39,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    if (isOpen && user) {
-      loadSplits();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, user]);
-
-  const loadSplits = async () => {
+  const loadSplits = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -73,7 +66,13 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
       console.error('Error loading splits:', error);
       setError('Failed to load transaction splits');
     }
-  };
+  }, [user, transaction.id, transaction.amount, transaction.description, transaction.tagIds]);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      loadSplits();
+    }
+  }, [isOpen, user, loadSplits]);
 
 
 
@@ -92,8 +91,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
     setSplits(splits.filter((_, i) => i !== index));
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateSplit = (index: number, field: keyof SplitEntry, value: any) => {
+  const updateSplit = (index: number, field: keyof SplitEntry, value: string | number | string[]) => {
     const updatedSplits = [...splits];
     updatedSplits[index] = { ...updatedSplits[index], [field]: value };
     setSplits(updatedSplits);

@@ -31,9 +31,9 @@ const SharingModal: FC<SharingModalProps> = ({ isOpen, onClose, itemId, itemName
     setLoadingInvitations(true);
     setError('');
     try {
-      console.log(`Loading sent invitations for ${itemType}:`, itemId);
+      // Loading sent invitations
       const allSentInvitations = await getSentInvitations(auth.currentUser.uid);
-      console.log('All sent invitations:', allSentInvitations);
+      // Filtering invitations
       
       // Filter for pending invitations for this specific item only
       const pendingInvitations = allSentInvitations.filter(invitation => 

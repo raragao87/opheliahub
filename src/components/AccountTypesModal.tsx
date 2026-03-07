@@ -76,7 +76,7 @@ const AccountTypesModal: React.FC<AccountTypesModalProps> = ({
       setTypeSign('positive');
       setShowAddForm(false);
 
-      console.log('✅ Custom account type created successfully');
+      // Custom account type created successfully
     } catch (error) {
       console.error('Error creating account type:', error);
       setError('Failed to create account type');
@@ -110,7 +110,7 @@ const AccountTypesModal: React.FC<AccountTypesModalProps> = ({
       setTypeCategory('asset');
       setTypeSign('positive');
 
-      console.log('✅ Account type updated successfully');
+      // Account type updated successfully
     } catch (error) {
       console.error('Error updating account type:', error);
       setError('Failed to update account type');
@@ -126,7 +126,7 @@ const AccountTypesModal: React.FC<AccountTypesModalProps> = ({
       setDeletingType(typeId);
       await deleteAccountType(typeId, user.uid);
       await loadAccountTypes(user.uid);
-      console.log('✅ Account type deleted successfully');
+      // Account type deleted successfully
     } catch (error) {
       console.error('Error deleting account type:', error);
       setError('Failed to delete account type');

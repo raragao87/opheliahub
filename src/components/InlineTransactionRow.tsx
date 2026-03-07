@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { auth } from '../firebase/config';
 import { createTransaction, type Tag } from '../firebase/config';
 import InlineTagInput from './InlineTagInput';
@@ -23,24 +23,7 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  useEffect(() => {
-    const handleGlobalKeyPress = (e: KeyboardEvent) => {
-      // Escape to cancel from anywhere
-      if (e.key === 'Escape') {
-        onCancel();
-      }
-      // Ctrl/Cmd + Enter to save
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        handleSubmit();
-      }
-    };
-
-    document.addEventListener('keydown', handleGlobalKeyPress);
-    return () => document.removeEventListener('keydown', handleGlobalKeyPress);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData]);
-
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!formData.description.trim() || !formData.amount.trim()) {
       return; // Don't save empty transactions
     }
@@ -73,7 +56,23 @@ const InlineTransactionRow: React.FC<InlineTransactionRowProps> = ({
       console.error('Error creating transaction:', error);
       setSaving(false);
     }
-  };
+  }, [accountId, formData, onTransactionCreated]);
+
+  useEffect(() => {
+    const handleGlobalKeyPress = (e: KeyboardEvent) => {
+      // Escape to cancel from anywhere
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+      // Ctrl/Cmd + Enter to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        handleSubmit();
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyPress);
+    return () => document.removeEventListener('keydown', handleGlobalKeyPress);
+  }, [handleSubmit, onCancel]);
 
   const handleKeyPress = (e: React.KeyboardEvent, field: string) => {
     if (e.key === 'Enter') {
