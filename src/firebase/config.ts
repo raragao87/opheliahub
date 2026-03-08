@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User, type Auth } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter, deleteField, type Firestore } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, type FirebaseStorage } from 'firebase/storage';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, type User, type Auth } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, orderBy, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc, where, writeBatch, limit, startAfter, deleteField, type Firestore, type QueryDocumentSnapshot, type DocumentReference } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from 'firebase/storage';
 import { config, getCurrentDomain, isDomainAllowed, getSecurityInfo } from '../config/environment';
 import type { HierarchyItem, HierarchyLevel } from '../types/hierarchy';
 
@@ -147,17 +147,8 @@ export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error signing in with Google:', error);
-    throw error;
-  }
-};
-
-export const signOutUser = async () => {
-  try {
-    await signOut(auth);
-  } catch (error: any) {
-    console.error('Error signing out:', error);
     throw error;
   }
 };
@@ -394,8 +385,7 @@ export interface ImportPreview {
   fileName: string;
   totalRows: number;
   columns: string[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sampleData: any[];
+  sampleData: Record<string, string>[];
   mappings: ImportMapping;
 }
 
@@ -427,7 +417,7 @@ export const getAccessibleChildProfiles = async (userId: string): Promise<(Child
     })) as (ChildProfile & { id: string })[];
     
     return [...ownProfiles, ...sharedProfiles];
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting accessible child profiles:', error);
     throw error;
   }
@@ -486,134 +476,13 @@ export const sendSharingInvitation = async (
     await addDoc(collection(db, 'sharingInvitations'), invitationData);
     console.log('Invitation created successfully');
     console.log('=== END SENDING INVITATION ===');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending sharing invitation:', error);
     throw error;
   }
 };
 
 // Get pending invitations for a user
-export const getPendingInvitations = async (userEmail: string): Promise<SharingInvitation[]> => {
-  try {
-    console.log('=== DEBUGGING PENDING INVITATIONS ===');
-    console.log('Query email:', userEmail);
-    console.log('Query email type:', typeof userEmail);
-    console.log('Query email length:', userEmail.length);
-    
-    // Normalize email to lowercase for consistent comparison
-    const normalizedEmail = userEmail.toLowerCase().trim();
-    console.log('Normalized email:', normalizedEmail);
-    
-    // First, let's get ALL invitations to debug
-    const allInvitationsQuery = query(
-      collection(db, 'sharingInvitations'),
-      orderBy('timestamp', 'desc')
-    );
-    
-    console.log('Fetching all invitations for debugging...');
-    const allInvitationsSnapshot = await getDocs(allInvitationsQuery);
-    console.log('Total invitations in collection:', allInvitationsSnapshot.docs.length);
-    
-    // Log all invitations to see what's in the database
-    allInvitationsSnapshot.docs.forEach((doc, index) => {
-      const data = doc.data();
-      console.log(`Invitation ${index + 1}:`, {
-        id: doc.id,
-        toUserEmail: data.toUserEmail,
-        toUserEmailType: typeof data.toUserEmail,
-        toUserEmailLength: data.toUserEmail?.length,
-        status: data.status,
-        fromUserEmail: data.fromUserEmail,
-        childName: data.childName,
-        timestamp: data.timestamp
-      });
-    });
-    
-    // Now try the actual query with normalized email
-    console.log('Trying query with normalized email:', normalizedEmail);
-    const q = query(
-      collection(db, 'sharingInvitations'),
-      where('toUserEmail', '==', normalizedEmail),
-      where('status', '==', 'pending'),
-      orderBy('timestamp', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    console.log('Query result count:', querySnapshot.docs.length);
-    
-    // If query returns empty, try without status filter
-    if (querySnapshot.docs.length === 0) {
-      console.log('No results with status filter, trying without status...');
-      const qWithoutStatus = query(
-        collection(db, 'sharingInvitations'),
-        where('toUserEmail', '==', normalizedEmail),
-        orderBy('timestamp', 'desc')
-      );
-      
-      const querySnapshotWithoutStatus = await getDocs(qWithoutStatus);
-      console.log('Results without status filter:', querySnapshotWithoutStatus.docs.length);
-      
-      if (querySnapshotWithoutStatus.docs.length > 0) {
-        console.log('Found invitations without status filter:');
-        querySnapshotWithoutStatus.docs.forEach((doc, index) => {
-          const data = doc.data();
-          console.log(`  ${index + 1}. Status: "${data.status}", Email: "${data.toUserEmail}"`);
-        });
-      }
-    }
-    
-    // Also try with original email (case-sensitive)
-    if (querySnapshot.docs.length === 0) {
-      console.log('Trying with original email (case-sensitive):', userEmail);
-      const qOriginal = query(
-        collection(db, 'sharingInvitations'),
-        where('toUserEmail', '==', userEmail),
-        where('status', '==', 'pending'),
-        orderBy('timestamp', 'desc')
-      );
-      
-      const querySnapshotOriginal = await getDocs(qOriginal);
-      console.log('Results with original email:', querySnapshotOriginal.docs.length);
-    }
-    
-    // Client-side filtering as fallback
-    console.log('Performing client-side filtering...');
-    const clientSideFiltered = allInvitationsSnapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .filter((invitation: any) => {
-        const matchesEmail = invitation.toUserEmail?.toLowerCase() === normalizedEmail ||
-                           invitation.toUserEmail === userEmail;
-        const matchesStatus = invitation.status === 'pending';
-        console.log(`Client-side check: Email "${invitation.toUserEmail}" matches "${normalizedEmail}": ${matchesEmail}, Status "${invitation.status}" matches "pending": ${matchesStatus}`);
-        return matchesEmail && matchesStatus;
-      });
-    
-    console.log('Client-side filtered results:', clientSideFiltered.length);
-    
-    // Return client-side filtered results if query failed
-    if (querySnapshot.docs.length === 0 && clientSideFiltered.length > 0) {
-      console.log('Using client-side filtered results');
-      return clientSideFiltered as SharingInvitation[];
-    }
-    
-    const results = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as SharingInvitation[];
-    
-    console.log('Final results:', results.length);
-    console.log('=== END DEBUGGING ===');
-    
-    return results;
-  } catch (error: any) {
-    console.error('Error getting pending invitations:', error);
-    throw error;
-  }
-};
 
 // Get invitations sent by a user
 export const getSentInvitations = async (userId: string): Promise<SharingInvitation[]> => {
@@ -633,84 +502,15 @@ export const getSentInvitations = async (userId: string): Promise<SharingInvitat
       id: doc.id,
       ...doc.data(),
     })) as SharingInvitation[];
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting sent invitations:', error);
     throw error;
   }
 };
 
 // Get invitations received by a user (for future use)
-export const getReceivedInvitations = async (userEmail: string): Promise<SharingInvitation[]> => {
-  try {
-    console.log('Getting received invitations for email:', userEmail);
-    
-    const normalizedEmail = userEmail.toLowerCase().trim();
-    const q = query(
-      collection(db, 'sharingInvitations'),
-      where('toUserEmail', '==', normalizedEmail),
-      where('status', '==', 'pending'),
-      orderBy('timestamp', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    console.log('Found received invitations:', querySnapshot.docs.length);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as SharingInvitation[];
-  } catch (error: any) {
-    console.error('Error getting received invitations:', error);
-    throw error;
-  }
-};
 
 // Accept sharing invitation
-export const acceptSharingInvitation = async (invitationId: string, userId: string): Promise<void> => {
-  try {
-    console.log('Accepting invitation:', invitationId, 'for user:', userId);
-    
-    const batch = writeBatch(db);
-    
-    // Update invitation status
-    const invitationRef = doc(db, 'sharingInvitations', invitationId);
-    batch.update(invitationRef, { status: 'accepted' });
-    
-    // Get invitation details using document reference
-    const invitationSnapshot = await getDocs(query(
-      collection(db, 'sharingInvitations'),
-      where('__name__', '==', invitationId)
-    ));
-    
-    if (!invitationSnapshot.empty) {
-      const invitation = invitationSnapshot.docs[0].data() as SharingInvitation;
-      console.log('Invitation details:', invitation);
-      
-      // Add to shared profiles collection
-      const sharedProfileRef = doc(db, 'sharedProfiles', invitation.childProfileId);
-      batch.set(sharedProfileRef, {
-        childProfileId: invitation.childProfileId,
-        childName: invitation.childName,
-        ownerId: invitation.fromUserId,
-        ownerEmail: invitation.fromUserEmail,
-        sharedWith: [userId],
-        sharedAt: Date.now(),
-      }, { merge: true });
-      
-      // Update child profile to include shared user
-      const childProfileRef = doc(db, 'users', invitation.fromUserId, 'profile', invitation.childProfileId);
-      batch.update(childProfileRef, {
-        sharedWith: [userId],
-      });
-    }
-    
-    await batch.commit();
-    console.log('Invitation accepted successfully');
-  } catch (error: any) {
-    console.error('Error accepting sharing invitation:', error);
-    throw error;
-  }
-};
 
 // Decline sharing invitation
 export const declineSharingInvitation = async (invitationId: string): Promise<void> => {
@@ -718,64 +518,15 @@ export const declineSharingInvitation = async (invitationId: string): Promise<vo
     await updateDoc(doc(db, 'sharingInvitations', invitationId), {
       status: 'declined',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error declining sharing invitation:', error);
     throw error;
   }
 };
 
 // Remove sharing access
-export const removeSharingAccess = async (childProfileId: string, userIdToRemove: string): Promise<void> => {
-  try {
-    const batch = writeBatch(db);
-    
-    // Remove from shared profiles
-    const sharedProfileRef = doc(db, 'sharedProfiles', childProfileId);
-    batch.update(sharedProfileRef, {
-      sharedWith: [userIdToRemove],
-    });
-    
-    // Update child profile
-    const childProfileQuery = query(
-      collection(db, 'users'),
-      where('profile', 'array-contains', childProfileId)
-    );
-    const childProfileSnapshot = await getDocs(childProfileQuery);
-    
-    if (!childProfileSnapshot.empty) {
-      const childProfileDoc = childProfileSnapshot.docs[0];
-      const childProfileRef = doc(db, 'users', childProfileDoc.id, 'profile', childProfileId);
-      batch.update(childProfileRef, {
-        sharedWith: [userIdToRemove],
-      });
-    }
-    
-    await batch.commit();
-  } catch (error: any) {
-    console.error('Error removing sharing access:', error);
-    throw error;
-  }
-};
 
 // Get shared users for a child profile
-export const getSharedUsers = async (childProfileId: string): Promise<string[]> => {
-  try {
-    const sharedProfileDoc = await getDocs(query(
-      collection(db, 'sharedProfiles'),
-      where('childProfileId', '==', childProfileId)
-    ));
-    
-    if (!sharedProfileDoc.empty) {
-      const sharedProfile = sharedProfileDoc.docs[0].data();
-      return sharedProfile.sharedWith || [];
-    }
-    
-    return [];
-  } catch (error: any) {
-    console.error('Error getting shared users:', error);
-    throw error;
-  }
-};
 
 export const saveGrowthRecord = async (userId: string, record: Omit<GrowthRecord, 'timestamp'>) => {
   try {
@@ -784,7 +535,7 @@ export const saveGrowthRecord = async (userId: string, record: Omit<GrowthRecord
       timestamp: Date.now(),
     });
     return docRef;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving growth record:', error);
     throw error;
   }
@@ -801,7 +552,7 @@ export const getGrowthRecords = async (userId: string): Promise<(GrowthRecord & 
       id: doc.id,
       ...doc.data(),
     })) as (GrowthRecord & { id: string })[];
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting growth records:', error);
     throw error;
   }
@@ -810,7 +561,7 @@ export const getGrowthRecords = async (userId: string): Promise<(GrowthRecord & 
 export const deleteGrowthRecord = async (userId: string, recordId: string) => {
   try {
     await deleteDoc(doc(db, 'users', userId, 'growthRecords', recordId));
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting growth record:', error);
     throw error;
   }
@@ -822,7 +573,7 @@ export const updateGrowthRecord = async (userId: string, recordId: string, recor
       ...record,
       timestamp: Date.now(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating growth record:', error);
     throw error;
   }
@@ -868,14 +619,14 @@ export const saveChildProfile = async (
             profileImageUrl,
           });
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error uploading profile image:', error);
         // Don't fail the entire save operation if image upload fails
       }
     }
     
     return { id: finalProfileId, profileImageUrl };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving child profile:', error);
     throw error;
   }
@@ -896,7 +647,7 @@ export const getChildProfile = async (userId: string): Promise<(ChildProfile & {
       id: doc.id,
       ...doc.data(),
     } as ChildProfile & { id: string };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting child profile:', error);
     throw error;
   }
@@ -926,24 +677,9 @@ export const uploadProfileImage = async (userId: string, childProfileId: string,
     console.log('Download URL obtained:', downloadURL);
     
     return downloadURL;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error uploading profile image:', error);
     throw new Error('Failed to upload image');
-  }
-};
-
-export const deleteProfileImage = async (imageUrl: string): Promise<void> => {
-  try {
-    // Extract the file path from the URL
-    const urlParts = imageUrl.split('/');
-    const fileName = urlParts[urlParts.length - 1].split('?')[0];
-    const filePath = `profile-images/${fileName}`;
-    
-    const storageRef = ref(storage, filePath);
-    await deleteObject(storageRef);
-  } catch (error: any) {
-    console.error('Error deleting profile image:', error);
-    // Don't throw error as this is not critical
   }
 };
 
@@ -1050,7 +786,7 @@ export const createAccount = async (userId: string, accountData: Omit<Account, '
     
     console.log('✅ Account created successfully with ID:', accountId);
     return accountId;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error creating account:', error);
     throw error;
   }
@@ -1077,7 +813,7 @@ export const getAccountsByUser = async (userId: string): Promise<Account[]> => {
     
     console.log(`✅ Found ${accounts.length} accounts for user`);
     return accounts;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting accounts:', error);
     throw error;
   }
@@ -1136,7 +872,7 @@ export const getAccessibleAccounts = async (userId: string): Promise<Account[]> 
     console.log(`✅ Total accessible accounts: ${allAccounts.length} (${ownedAccounts.length} owned, ${sharedAccounts.length} shared)`);
     
     return allAccounts;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting accessible accounts:', error);
     throw error;
   }
@@ -1153,7 +889,7 @@ export const updateAccount = async (accountId: string, accountData: Partial<Acco
     
     await updateDoc(doc(db, 'users', accountData.ownerId!, 'accounts', accountId), updateData);
     console.log('✅ Account updated successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error updating account:', error);
     throw error;
   }
@@ -1208,7 +944,7 @@ export const updateAssetAccountBalance = async (
     await createTransaction(userId, transactionData);
     
     console.log('✅ Asset balance updated successfully with auto-transaction');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error updating asset balance:', error);
     throw error;
   }
@@ -1235,7 +971,7 @@ export const deleteAccount = async (accountId: string, userId: string): Promise<
     // Commit the batch
     await batch.commit();
     console.log('✅ Account and all transactions deleted successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error deleting account:', error);
     throw error;
   }
@@ -1279,7 +1015,7 @@ export const getAccountTypes = async (userId: string): Promise<AccountType[]> =>
     console.log(`✅ Found ${allTypes.length} account types (${defaultTypes.length} default, ${customTypes.length} custom)`);
     
     return allTypes;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting account types:', error);
     // Return default types even if there's an error
     console.log('🔄 Falling back to default account types');
@@ -1302,7 +1038,7 @@ export const createAccountType = async (userId: string, typeData: Omit<AccountTy
     console.log('✅ Account type created successfully with ID:', docRef.id);
     
     return docRef.id;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error creating account type:', error);
     throw error;
   }
@@ -1318,7 +1054,7 @@ export const updateAccountType = async (typeId: string, typeData: Partial<Accoun
     });
     
     console.log('✅ Account type updated successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error updating account type:', error);
     throw error;
   }
@@ -1331,7 +1067,7 @@ export const deleteAccountType = async (typeId: string, userId: string): Promise
     await deleteDoc(doc(db, 'users', userId, 'accountTypes', typeId));
     
     console.log('✅ Account type deleted successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error deleting account type:', error);
     throw error;
   }
@@ -1355,7 +1091,7 @@ export const createTransaction = async (userId: string, transactionData: Omit<Tr
     await forceUpdateAccountBalance(userId, transactionData.accountId);
     
     return docRef.id;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error creating transaction:', error);
     throw error;
   }
@@ -1383,7 +1119,7 @@ export const recalculateAccountBalance = async (userId: string, accountId: strin
     })));
     
     return newBalance;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error recalculating account balance:', error);
     throw error;
   }
@@ -1444,7 +1180,7 @@ export const emergencyFixAccountBalances = async (userId: string): Promise<void>
     }
     
     console.log('🎉 Emergency fix completed!');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error during emergency fix:', error);
     throw error;
   }
@@ -1466,7 +1202,7 @@ export const forceUpdateAccountBalance = async (userId: string, accountId: strin
     });
     
     console.log(`✅ Account balance force updated to: ${newBalance}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error force updating account balance:', error);
     throw error;
   }
@@ -1503,7 +1239,7 @@ export const getTransactionsByAccount = async (userId: string, accountId: string
     
     console.log(`✅ Found ${transactions.length} transactions for account`);
     return transactions;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting transactions:', error);
     throw error;
   }
@@ -1528,7 +1264,7 @@ export const updateTransaction = async (transactionId: string, transactionData: 
       // Force update account balance after updating transaction
       await forceUpdateAccountBalance(userId, transaction.accountId);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error updating transaction:', error);
     throw error;
   }
@@ -1558,137 +1294,15 @@ export const deleteTransaction = async (transactionId: string, userId: string): 
     
     // Force update account balance after deleting transaction
     await forceUpdateAccountBalance(userId, accountId);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error deleting transaction:', error);
     throw error;
   }
 };
 
 // Transaction-Tag Management Functions
-export const assignTagsToTransaction = async (transactionId: string, tagIds: string[], userId: string): Promise<void> => {
-  try {
-    console.log('🏷️ Assigning tags to transaction:', transactionId, tagIds);
-    
-    await updateDoc(doc(db, 'users', userId, 'transactions', transactionId), {
-      tagIds: tagIds,
-      updatedAt: Date.now()
-    });
-    
-    console.log('✅ Tags assigned to transaction successfully');
-  } catch (error: any) {
-    console.error('❌ Error assigning tags to transaction:', error);
-    throw error;
-  }
-};
-
-export const removeTagsFromTransaction = async (transactionId: string, tagIds: string[], userId: string): Promise<void> => {
-  try {
-    console.log('🏷️ Removing tags from transaction:', transactionId, tagIds);
-    
-    // Get current transaction
-    const transactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
-    if (!transactionDoc.exists()) {
-      throw new Error('Transaction not found');
-    }
-    
-    const transaction = transactionDoc.data() as Transaction;
-    const currentTagIds = transaction.tagIds || [];
-    const updatedTagIds = currentTagIds.filter(id => !tagIds.includes(id));
-    
-    await updateDoc(doc(db, 'users', userId, 'transactions', transactionId), {
-      tagIds: updatedTagIds,
-      updatedAt: Date.now()
-    });
-    
-    console.log('✅ Tags removed from transaction successfully');
-  } catch (error: any) {
-    console.error('❌ Error removing tags from transaction:', error);
-    throw error;
-  }
-};
-
-export const getTransactionTags = async (transactionId: string, userId: string): Promise<Tag[]> => {
-  try {
-    console.log('🏷️ Getting tags for transaction:', transactionId);
-    
-    const transactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
-    if (!transactionDoc.exists()) {
-      return [];
-    }
-    
-    const transaction = transactionDoc.data() as Transaction;
-    const tagIds = transaction.tagIds || [];
-    
-    if (tagIds.length === 0) {
-      return [];
-    }
-    
-    // Get all tags (default + user tags) with deduplication
-    const userTags = await getTags(userId);
-    const defaultTags = getDefaultTags();
-    
-    // Create a map to deduplicate tags by ID (user tags take precedence)
-    const tagMap = new Map();
-    defaultTags.forEach(tag => tagMap.set(tag.id, tag));
-    userTags.forEach(tag => tagMap.set(tag.id, tag));
-    const allTags = Array.from(tagMap.values());
-    
-    // Filter tags that are assigned to this transaction
-    const transactionTags = allTags.filter(tag => tagIds.includes(tag.id));
-    
-    console.log(`✅ Found ${transactionTags.length} tags for transaction`);
-    return transactionTags;
-  } catch (error: any) {
-    console.error('❌ Error getting transaction tags:', error);
-    throw error;
-  }
-};
-
-export const getTransactionsByTag = async (tagId: string, userId: string): Promise<Transaction[]> => {
-  try {
-    console.log('🏷️ Getting transactions for tag:', tagId);
-    
-    const q = query(
-      collection(db, 'users', userId, 'transactions'),
-      where('tagIds', 'array-contains', tagId)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    const transactions = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Transaction[];
-    
-    console.log(`✅ Found ${transactions.length} transactions for tag`);
-    return transactions;
-  } catch (error: any) {
-    console.error('❌ Error getting transactions by tag:', error);
-    throw error;
-  }
-};
 
 // Tag Functions
-export const createTag = async (userId: string, tagData: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  try {
-    console.log('🏷️ Creating tag:', tagData.name, 'for user:', userId);
-    console.log('📁 Saving to path: users/', userId, '/tags');
-    console.log('📄 Tag data:', tagData);
-    
-    const tagWithTimestamps = {
-      ...tagData,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    
-    const docRef = await addDoc(collection(db, 'users', userId, 'tags'), tagWithTimestamps);
-    console.log('✅ Tag created successfully with ID:', docRef.id);
-    
-    return docRef.id;
-  } catch (error: any) {
-    console.error('❌ Error creating tag:', error);
-    throw error;
-  }
-};
 
 export const getTags = async (userId: string): Promise<Tag[]> => {
   try {
@@ -1709,7 +1323,7 @@ export const getTags = async (userId: string): Promise<Tag[]> => {
       })) as Tag[];
       
       console.log(`✅ Found ${userTags.length} user-created tags`);
-    } catch (error: any) {
+    } catch {
       console.log('⚠️ No user-created tags found (this is normal for new users)');
     }
     
@@ -1720,7 +1334,7 @@ export const getTags = async (userId: string): Promise<Tag[]> => {
       const deletedTagsSnapshot = await getDocs(deletedTagsQuery);
       deletedDefaultTags = deletedTagsSnapshot.docs.map(doc => doc.data().tagId);
       console.log(`✅ Found ${deletedDefaultTags.length} deleted default tags to filter out`);
-    } catch (error: any) {
+    } catch {
       console.log('⚠️ No deleted tags found (this is normal)');
     }
     
@@ -1733,61 +1347,8 @@ export const getTags = async (userId: string): Promise<Tag[]> => {
     console.log(`✅ Total tags: ${allTags.length} (${userTags.length} user + ${defaultTags.length} default)`);
     
     return allTags;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting tags:', error);
-    throw error;
-  }
-};
-
-export const updateTag = async (tagId: string, updates: Partial<Tag>, userId: string): Promise<void> => {
-  try {
-    console.log('🔄 Updating tag:', tagId, updates);
-    
-    await updateDoc(doc(db, 'users', userId, 'tags', tagId), {
-      ...updates,
-      updatedAt: Date.now()
-    });
-    
-    console.log('✅ Tag updated successfully');
-  } catch (error: any) {
-    console.error('❌ Error updating tag:', error);
-    throw error;
-  }
-};
-
-export const deleteTag = async (tagId: string, userId: string): Promise<void> => {
-  try {
-    console.log('🗑️ Deleting tag:', tagId, 'for user:', userId);
-    
-    // Check if tag is in use by transactions
-    const transactionsQuery = query(
-      collection(db, 'users', userId, 'transactions'),
-      where('tagIds', 'array-contains', tagId)
-    );
-    const transactionsSnapshot = await getDocs(transactionsQuery);
-    
-    if (!transactionsSnapshot.empty) {
-      throw new Error('Cannot delete tag that is in use by transactions');
-    }
-    
-    // Check if tag exists in user's tags collection
-    const tagDoc = await getDoc(doc(db, 'users', userId, 'tags', tagId));
-    if (tagDoc.exists()) {
-      // User-created tag - delete from database
-      await deleteDoc(doc(db, 'users', userId, 'tags', tagId));
-      console.log('✅ User-created tag deleted successfully from database');
-    } else {
-      // Default tag - create a "deleted" record to hide it from UI
-      console.log('🗑️ Hiding default tag from UI:', tagId);
-      await setDoc(doc(db, 'users', userId, 'deletedTags', tagId), {
-        tagId,
-        userId,
-        deletedAt: Date.now()
-      });
-      console.log('✅ Default tag hidden from UI');
-    }
-  } catch (error: any) {
-    console.error('❌ Error deleting tag:', error);
     throw error;
   }
 };
@@ -1807,267 +1368,6 @@ export const getDefaultCategories = (): string[] => {
   ];
 };
 
-export const getUserCategories = async (userId: string): Promise<string[]> => {
-  try {
-    console.log('📂 Fetching user categories for user:', userId);
-    
-    // Get default categories
-    const defaultCategories = getDefaultCategories();
-    
-    // Get user custom categories (if we implement this in the future)
-    let customCategories: string[] = [];
-    try {
-      const categoriesQuery = query(collection(db, 'users', userId, 'categories'));
-      const categoriesSnapshot = await getDocs(categoriesQuery);
-      customCategories = categoriesSnapshot.docs.map(doc => doc.data().name);
-      console.log(`✅ Found ${customCategories.length} custom categories`);
-    } catch (error: any) {
-      console.log('⚠️ No custom categories found (this is normal)');
-    }
-    
-    // Combine default and custom categories
-    const allCategories = [...defaultCategories, ...customCategories];
-    console.log(`✅ Total categories: ${allCategories.length}`);
-    
-    return allCategories;
-  } catch (error: any) {
-    console.error('❌ Error getting user categories:', error);
-    return getDefaultCategories();
-  }
-};
-
-export const deleteCategory = async (categoryName: string, userId: string): Promise<void> => {
-  try {
-    console.log('🗑️ Deleting category:', categoryName, 'for user:', userId);
-    
-    // Check if category is in use by tags
-    const tagsQuery = query(
-      collection(db, 'users', userId, 'tags'),
-      where('category', '==', categoryName)
-    );
-    const tagsSnapshot = await getDocs(tagsQuery);
-    
-    if (!tagsSnapshot.empty) {
-      throw new Error(`Cannot delete category "${categoryName}" that is in use by ${tagsSnapshot.size} tags`);
-    }
-    
-    // For now, we'll just log the deletion since categories are predefined
-    // In the future, we could store custom categories in Firestore
-    console.log(`✅ Category "${categoryName}" marked for deletion`);
-  } catch (error: any) {
-    console.error('❌ Error deleting category:', error);
-    throw error;
-  }
-};
-
-// Enhanced Category CRUD Functions
-export const createCategory = async (userId: string, categoryData: Omit<TagCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  try {
-    console.log('📂 Creating category:', categoryData.name, 'for user:', userId);
-    
-    const categoryWithTimestamps = {
-      ...categoryData,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    
-    const docRef = await addDoc(collection(db, 'users', userId, 'categories'), categoryWithTimestamps);
-    console.log('✅ Category created successfully with ID:', docRef.id);
-    
-    return docRef.id;
-  } catch (error: any) {
-    console.error('❌ Error creating category:', error);
-    throw error;
-  }
-};
-
-export const createCategoryWithId = async (userId: string, categoryId: string, categoryData: Omit<TagCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> => {
-  try {
-    console.log('📂 Creating category with specific ID:', categoryId, 'name:', categoryData.name, 'for user:', userId);
-    
-    const categoryWithTimestamps = {
-      ...categoryData,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    
-    await setDoc(doc(db, 'users', userId, 'categories', categoryId), categoryWithTimestamps);
-    console.log('✅ Category created successfully with ID:', categoryId);
-  } catch (error: any) {
-    console.error('❌ Error creating category with ID:', error);
-    throw error;
-  }
-};
-
-export const getCategories = async (userId: string): Promise<TagCategory[]> => {
-  try {
-    console.log('📂 Fetching categories for user:', userId);
-    
-    // Get user-created categories
-    let userCategories: TagCategory[] = [];
-    try {
-      const q = query(
-        collection(db, 'users', userId, 'categories'),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      userCategories = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as TagCategory[];
-      
-      console.log(`✅ Found ${userCategories.length} user-created categories`);
-    } catch (error: any) {
-      console.log('⚠️ No user-created categories found (this is normal for new users)');
-    }
-    
-    return userCategories;
-  } catch (error: any) {
-    console.error('❌ Error fetching categories:', error);
-    return [];
-  }
-};
-
-export const updateCategory = async (categoryId: string, updates: Partial<TagCategory>, userId: string): Promise<void> => {
-  try {
-    console.log('🔄 Updating category:', categoryId, updates);
-    
-    await updateDoc(doc(db, 'users', userId, 'categories', categoryId), {
-      ...updates,
-      updatedAt: Date.now()
-    });
-    
-    console.log('✅ Category updated successfully');
-  } catch (error: any) {
-    console.error('❌ Error updating category:', error);
-    throw error;
-  }
-};
-
-export const deleteCategoryById = async (categoryId: string, userId: string): Promise<void> => {
-  try {
-    console.log('🗑️ Deleting category:', categoryId, 'for user:', userId);
-    
-    // Check if category is in use by tags
-    const tagsQuery = query(
-      collection(db, 'users', userId, 'tags'),
-      where('category', '==', categoryId)
-    );
-    const tagsSnapshot = await getDocs(tagsQuery);
-    
-    if (!tagsSnapshot.empty) {
-      throw new Error(`Cannot delete category that is in use by ${tagsSnapshot.size} tags`);
-    }
-    
-    // Check if category has subcategories
-    const subcategoriesQuery = query(
-      collection(db, 'users', userId, 'subcategories'),
-      where('categoryId', '==', categoryId)
-    );
-    const subcategoriesSnapshot = await getDocs(subcategoriesQuery);
-    
-    if (!subcategoriesSnapshot.empty) {
-      throw new Error(`Cannot delete category that has ${subcategoriesSnapshot.size} subcategories`);
-    }
-    
-    await deleteDoc(doc(db, 'users', userId, 'categories', categoryId));
-    console.log('✅ Category deleted successfully');
-  } catch (error: any) {
-    console.error('❌ Error deleting category:', error);
-    throw error;
-  }
-};
-
-// Subcategory CRUD Functions
-export const createSubcategory = async (userId: string, subcategoryData: Omit<TagSubcategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  try {
-    console.log('📁 Creating subcategory:', subcategoryData.name, 'for user:', userId);
-    
-    const subcategoryWithTimestamps = {
-      ...subcategoryData,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    
-    const docRef = await addDoc(collection(db, 'users', userId, 'subcategories'), subcategoryWithTimestamps);
-    console.log('✅ Subcategory created successfully with ID:', docRef.id);
-    
-    return docRef.id;
-  } catch (error: any) {
-    console.error('❌ Error creating subcategory:', error);
-    throw error;
-  }
-};
-
-export const getSubcategories = async (userId: string): Promise<TagSubcategory[]> => {
-  try {
-    console.log('📁 Fetching subcategories for user:', userId);
-    
-    // Get user-created subcategories
-    let userSubcategories: TagSubcategory[] = [];
-    try {
-      const q = query(
-        collection(db, 'users', userId, 'subcategories'),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      userSubcategories = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as TagSubcategory[];
-      
-      console.log(`✅ Found ${userSubcategories.length} user-created subcategories`);
-    } catch (error: any) {
-      console.log('⚠️ No user-created subcategories found (this is normal for new users)');
-    }
-    
-    return userSubcategories;
-  } catch (error: any) {
-    console.error('❌ Error fetching subcategories:', error);
-    return [];
-  }
-};
-
-export const updateSubcategory = async (subcategoryId: string, updates: Partial<TagSubcategory>, userId: string): Promise<void> => {
-  try {
-    console.log('🔄 Updating subcategory:', subcategoryId, updates);
-    
-    await updateDoc(doc(db, 'users', userId, 'subcategories', subcategoryId), {
-      ...updates,
-      updatedAt: Date.now()
-    });
-    
-    console.log('✅ Subcategory updated successfully');
-  } catch (error: any) {
-    console.error('❌ Error updating subcategory:', error);
-    throw error;
-  }
-};
-
-export const deleteSubcategory = async (subcategoryId: string, userId: string): Promise<void> => {
-  try {
-    console.log('🗑️ Deleting subcategory:', subcategoryId, 'for user:', userId);
-    
-    // Check if subcategory is in use by tags
-    const tagsQuery = query(
-      collection(db, 'users', userId, 'tags'),
-      where('subcategoryId', '==', subcategoryId)
-    );
-    const tagsSnapshot = await getDocs(tagsQuery);
-    
-    if (!tagsSnapshot.empty) {
-      throw new Error(`Cannot delete subcategory that is in use by ${tagsSnapshot.size} tags`);
-    }
-    
-    await deleteDoc(doc(db, 'users', userId, 'subcategories', subcategoryId));
-    console.log('✅ Subcategory deleted successfully');
-  } catch (error: any) {
-    console.error('❌ Error deleting subcategory:', error);
-    throw error;
-  }
-};
 
 // Bulk operations functions
 export const bulkAssignTags = async (
@@ -2113,156 +1413,13 @@ export const bulkAssignTags = async (
     
     await batch.commit();
     console.log('✅ Bulk tag assignment completed');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error bulk assigning tags:', error);
     throw error;
   }
 };
 
-export const bulkRemoveTags = async (
-  transactionIds: string[], 
-  tagIds: string[], 
-  userId: string
-): Promise<void> => {
-  try {
-    console.log('🔄 Bulk removing tags:', {
-      transactionIds,
-      tagIds,
-      userId
-    });
-    
-    const batch = writeBatch(db);
-    
-    for (const transactionId of transactionIds) {
-      const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);
-      const transactionDoc = await getDoc(transactionRef);
-      
-      if (transactionDoc.exists()) {
-        const transaction = transactionDoc.data() as Transaction;
-        const existingTagIds = transaction.tagIds || [];
-        const newTagIds = existingTagIds.filter(id => !tagIds.includes(id));
-        
-        batch.update(transactionRef, {
-          tagIds: newTagIds,
-          updatedAt: Date.now()
-        });
-      }
-    }
-    
-    await batch.commit();
-    console.log('✅ Bulk tag removal completed');
-  } catch (error: any) {
-    console.error('❌ Error bulk removing tags:', error);
-    throw error;
-  }
-};
-
-export const bulkDeleteTransactions = async (
-  transactionIds: string[], 
-  userId: string
-): Promise<void> => {
-  try {
-    console.log('🗑️ Bulk deleting transactions:', {
-      transactionIds,
-      userId
-    });
-    
-    const batch = writeBatch(db);
-    
-    for (const transactionId of transactionIds) {
-      const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);
-      batch.delete(transactionRef);
-    }
-    
-    await batch.commit();
-    console.log('✅ Bulk transaction deletion completed');
-  } catch (error: any) {
-    console.error('❌ Error bulk deleting transactions:', error);
-    throw error;
-  }
-};
-
 // Smart tag suggestions based on transaction description and amount
-export const getSuggestedTags = async (
-  description: string, 
-  amount: number, 
-  userId: string
-): Promise<Tag[]> => {
-  try {
-    console.log('🤖 Getting tag suggestions for:', { description, amount });
-    
-    const allTags = await getTags(userId);
-    const suggestions: Tag[] = [];
-    
-    const lowerDescription = description.toLowerCase();
-    
-    // Description-based suggestions
-    const descriptionPatterns = [
-      { pattern: /mcdonald|burger|kfc|subway|pizza|restaurant|cafe|coffee/, tags: ['Restaurants', 'Food & Dining'] },
-      { pattern: /shell|exxon|bp|gas|fuel|petrol/, tags: ['Gas', 'Transportation'] },
-      { pattern: /netflix|spotify|hulu|disney|streaming/, tags: ['Streaming', 'Entertainment'] },
-      { pattern: /salary|payroll|income|bonus/, tags: ['Salary', 'Income'] },
-      { pattern: /amazon|walmart|target|shopping/, tags: ['Shopping', 'Online Shopping'] },
-      { pattern: /uber|lyft|taxi|transport/, tags: ['Transportation', 'Ride Share'] },
-      { pattern: /gym|fitness|workout/, tags: ['Fitness', 'Personal Care'] },
-      { pattern: /doctor|hospital|medical|pharmacy/, tags: ['Healthcare', 'Medical'] },
-      { pattern: /electric|water|gas|utility/, tags: ['Utilities', 'Bills & Services'] },
-      { pattern: /rent|mortgage|housing/, tags: ['Housing', 'Rent'] }
-    ];
-    
-    for (const pattern of descriptionPatterns) {
-      if (pattern.pattern.test(lowerDescription)) {
-        const matchingTags = allTags.filter(tag => 
-          pattern.tags.some(suggestion => 
-            tag.name.toLowerCase().includes(suggestion.toLowerCase())
-          )
-        );
-        suggestions.push(...matchingTags);
-      }
-    }
-    
-    // Amount-based suggestions
-    if (amount > 0) {
-      // Income suggestions
-      const incomeTags = allTags.filter(tag => 
-        tag.category === 'income' || 
-        tag.name.toLowerCase().includes('salary') ||
-        tag.name.toLowerCase().includes('income')
-      );
-      suggestions.push(...incomeTags);
-    } else {
-      // Expense suggestions based on amount ranges
-      if (Math.abs(amount) > 1000) {
-        // Large expenses - suggest housing, major purchases
-        const largeExpenseTags = allTags.filter(tag => 
-          tag.category === 'housing' || 
-          tag.name.toLowerCase().includes('rent') ||
-          tag.name.toLowerCase().includes('mortgage')
-        );
-        suggestions.push(...largeExpenseTags);
-      } else if (Math.abs(amount) > 100) {
-        // Medium expenses - suggest bills, services
-        const mediumExpenseTags = allTags.filter(tag => 
-          tag.category === 'bills-services' || 
-          tag.name.toLowerCase().includes('utility') ||
-          tag.name.toLowerCase().includes('service')
-        );
-        suggestions.push(...mediumExpenseTags);
-      }
-    }
-    
-    // Remove duplicates
-    const uniqueSuggestions = suggestions.filter((tag, index, self) => 
-      index === self.findIndex(t => t.id === tag.id)
-    );
-    
-    console.log('✅ Tag suggestions:', uniqueSuggestions.map(t => t.name));
-    return uniqueSuggestions.slice(0, 5); // Return top 5 suggestions
-  } catch (error: any) {
-    console.error('❌ Error getting tag suggestions:', error);
-    return [];
-  }
-};
 
 export const getDefaultTags = (): Tag[] => {
   return [
@@ -2687,30 +1844,6 @@ export const getDefaultTags = (): Tag[] => {
 };
 
 // Transaction Split Management Functions
-export const createTransactionSplit = async (
-  userId: string, 
-  splitData: Omit<TransactionSplit, 'id' | 'createdAt' | 'updatedAt'>
-): Promise<string> => {
-  try {
-    console.log('🔧 Creating transaction split:', splitData);
-    const splitDoc = {
-      ...splitData,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    
-    const docRef = await addDoc(
-      collection(db, 'users', userId, 'transactionSplits'),
-      splitDoc
-    );
-    
-    console.log('✅ Transaction split created with ID:', docRef.id);
-    return docRef.id;
-  } catch (error: any) {
-    console.error('❌ Error creating transaction split:', error);
-    throw error;
-  }
-};
 
 export const getTransactionSplits = async (
   transactionId: string, 
@@ -2733,7 +1866,7 @@ export const getTransactionSplits = async (
     
     console.log(`✅ Found ${splits.length} splits for transaction ${transactionId}`);
     return splits;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting transaction splits:', error);
     throw error;
   }
@@ -2754,22 +1887,8 @@ export const updateTransactionSplit = async (
       }
     );
     console.log('✅ Transaction split updated successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error updating transaction split:', error);
-    throw error;
-  }
-};
-
-export const deleteTransactionSplit = async (
-  splitId: string, 
-  userId: string
-): Promise<void> => {
-  try {
-    console.log('🔧 Deleting transaction split:', splitId);
-    await deleteDoc(doc(db, 'users', userId, 'transactionSplits', splitId));
-    console.log('✅ Transaction split deleted successfully');
-  } catch (error: any) {
-    console.error('❌ Error deleting transaction split:', error);
     throw error;
   }
 };
@@ -2833,7 +1952,7 @@ export const splitTransaction = async (
     await batch.commit();
     
     console.log('✅ Transaction split successfully into', splits.length, 'parts');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error splitting transaction:', error);
     throw error;
   }
@@ -2869,80 +1988,13 @@ export const mergeTransactionSplits = async (
     await batch.commit();
     
     console.log('✅ Transaction splits merged successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error merging transaction splits:', error);
     throw error;
   }
 };
 
 // Transaction Linking Functions
-export const createTransactionLink = async (
-  userId: string, 
-  linkData: Omit<TransactionLink, 'id' | 'createdAt'>
-): Promise<string> => {
-  try {
-    console.log('🔗 Creating transaction link:', linkData);
-    
-    // Validate that both transactions exist
-    const sourceTransaction = await getDoc(doc(db, 'users', userId, 'transactions', linkData.sourceTransactionId));
-    const targetTransaction = await getDoc(doc(db, 'users', userId, 'transactions', linkData.targetTransactionId));
-    
-    if (!sourceTransaction.exists()) {
-      throw new Error('Source transaction not found');
-    }
-    if (!targetTransaction.exists()) {
-      throw new Error('Target transaction not found');
-    }
-    
-    // Get transaction data
-    const sourceData = sourceTransaction.data() as Transaction;
-    const targetData = targetTransaction.data() as Transaction;
-
-    // Prevent linking initial balance transactions
-    if (isInitialBalanceTransaction(sourceData) || isInitialBalanceTransaction(targetData)) {
-      throw new Error('Initial balance transactions cannot be linked');
-    }
-    
-    // Check if link already exists
-    const existingLinkQuery = query(
-      collection(db, 'users', userId, 'transactionLinks'),
-      where('sourceTransactionId', '==', linkData.sourceTransactionId),
-      where('targetTransactionId', '==', linkData.targetTransactionId)
-    );
-    const existingLinkSnapshot = await getDocs(existingLinkQuery);
-    
-    if (!existingLinkSnapshot.empty) {
-      throw new Error('Transaction link already exists');
-    }
-    
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cleanLinkData: any = {
-      sourceTransactionId: linkData.sourceTransactionId,
-      targetTransactionId: linkData.targetTransactionId,
-      linkType: linkData.linkType,
-      userId: linkData.userId,
-      createdAt: Date.now()
-    };
-
-    // Only add description if it exists and is not empty
-    if (linkData.description && linkData.description.trim()) {
-      cleanLinkData.description = linkData.description.trim();
-    }
-
-    const linkDoc = cleanLinkData;
-    
-    const docRef = await addDoc(
-      collection(db, 'users', userId, 'transactionLinks'),
-      linkDoc
-    );
-    
-    console.log('✅ Transaction link created with ID:', docRef.id);
-    return docRef.id;
-  } catch (error: any) {
-    console.error('❌ Error creating transaction link:', error);
-    throw error;
-  }
-};
 
 export const getLinkedTransactions = async (
   transactionId: string, 
@@ -2991,121 +2043,8 @@ export const getLinkedTransactions = async (
     
     console.log(`✅ Found ${linkedTransactions.length} linked transactions`);
     return linkedTransactions;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting linked transactions:', error);
-    throw error;
-  }
-};
-
-export const deleteTransactionLink = async (
-  linkId: string, 
-  userId: string
-): Promise<void> => {
-  try {
-    console.log('🔗 Deleting transaction link:', linkId);
-    await deleteDoc(doc(db, 'users', userId, 'transactionLinks', linkId));
-    console.log('✅ Transaction link deleted successfully');
-  } catch (error: any) {
-    console.error('❌ Error deleting transaction link:', error);
-    throw error;
-  }
-};
-
-export const suggestTransactionLinks = async (
-  transactionId: string, 
-  userId: string
-): Promise<Transaction[]> => {
-  try {
-    console.log('🔗 Suggesting transaction links for:', transactionId);
-    
-    // Get the source transaction
-    const sourceTransactionDoc = await getDoc(doc(db, 'users', userId, 'transactions', transactionId));
-    if (!sourceTransactionDoc.exists()) {
-      throw new Error('Source transaction not found');
-    }
-    
-    const sourceTransaction = { id: sourceTransactionDoc.id, ...sourceTransactionDoc.data() } as Transaction;
-    
-    // Get all other transactions for the user
-    const allTransactionsQuery = query(
-      collection(db, 'users', userId, 'transactions'),
-      where('id', '!=', transactionId)
-    );
-    const allTransactionsSnapshot = await getDocs(allTransactionsQuery);
-    
-    const allTransactions = allTransactionsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Transaction[];
-    
-    // Get existing links to exclude already linked transactions
-    const existingLinks = await getLinkedTransactions(transactionId, userId);
-    const linkedTransactionIds = new Set(existingLinks.map(lt => lt.transaction.id));
-    
-    // Filter out already linked transactions
-    const unlinkedTransactions = allTransactions.filter(t => !linkedTransactionIds.has(t.id));
-    
-    // Score transactions based on similarity
-    const scoredTransactions = unlinkedTransactions.map(transaction => {
-      let score = 0;
-      
-      // Amount matching (exact or opposite)
-      if (Math.abs(transaction.amount) === Math.abs(sourceTransaction.amount)) {
-        score += 50; // High score for exact amount match
-      } else if (Math.abs(transaction.amount - sourceTransaction.amount) < 0.01) {
-        score += 30; // Good score for very close amounts
-      }
-      
-      // Date proximity (within 3 days) - only for transactions with dates
-      if (sourceTransaction.date && transaction.date) {
-        const sourceDate = new Date(sourceTransaction.date);
-        const targetDate = new Date(transaction.date);
-        const daysDiff = Math.abs(sourceDate.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24);
-        
-        if (daysDiff <= 1) {
-          score += 40; // High score for same day
-        } else if (daysDiff <= 3) {
-          score += 20; // Medium score for within 3 days
-        } else if (daysDiff <= 7) {
-          score += 10; // Low score for within a week
-        }
-      }
-      
-
-      
-      // Description similarity
-      const sourceDesc = sourceTransaction.description.toLowerCase();
-      const targetDesc = transaction.description.toLowerCase();
-      
-      if (sourceDesc.includes('transfer') && targetDesc.includes('transfer')) {
-        score += 30;
-      }
-      if (sourceDesc.includes('payment') && targetDesc.includes('payment')) {
-        score += 25;
-      }
-      if (sourceDesc.includes('loan') && targetDesc.includes('loan')) {
-        score += 25;
-      }
-      
-      // Account type matching (transfers between different accounts)
-      if (transaction.accountId !== sourceTransaction.accountId) {
-        score += 15; // Bonus for cross-account transactions
-      }
-      
-      return { transaction, score };
-    });
-    
-    // Sort by score and return top 10 suggestions
-    const suggestions = scoredTransactions
-      .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10)
-      .map(item => item.transaction);
-    
-    console.log(`✅ Found ${suggestions.length} transaction link suggestions`);
-    return suggestions;
-  } catch (error: any) {
-    console.error('❌ Error suggesting transaction links:', error);
     throw error;
   }
 };
@@ -3127,7 +2066,7 @@ export const createBudget = async (userId: string, budgetData: Omit<Budget, 'id'
     const docRef = await addDoc(collection(db, 'users', userId, 'budgets'), budgetDoc);
     console.log('✅ Budget created with ID:', docRef.id);
     return docRef.id;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error creating budget:', error);
     throw error;
   }
@@ -3155,7 +2094,7 @@ export const getBudgets = async (userId: string): Promise<(Budget & { id: string
     
     console.log(`✅ Loaded ${budgets.length} budgets`);
     return budgets;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error loading budgets:', error);
     throw error;
   }
@@ -3174,7 +2113,7 @@ export const createBudgetItem = async (userId: string, budgetItemData: Omit<Budg
     const docRef = await addDoc(collection(db, 'users', userId, 'budgetItems'), budgetItemDoc);
     console.log('✅ Budget item created with ID:', docRef.id);
     return docRef.id;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error creating budget item:', error);
     throw error;
   }
@@ -3198,7 +2137,7 @@ export const getBudgetItems = async (budgetId: string, userId: string): Promise<
     
     console.log(`✅ Loaded ${budgetItems.length} budget items`);
     return budgetItems;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error loading budget items:', error);
     throw error;
   }
@@ -3215,7 +2154,7 @@ export const updateBudgetItem = async (budgetItemId: string, updates: Partial<Bu
     });
     
     console.log('✅ Budget item updated successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error updating budget item:', error);
     throw error;
   }
@@ -3229,7 +2168,7 @@ export const deleteBudgetItem = async (budgetItemId: string, userId: string): Pr
     await deleteDoc(budgetItemRef);
     
     console.log('✅ Budget item deleted successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error deleting budget item:', error);
     throw error;
   }
@@ -3320,7 +2259,7 @@ export const getBudgetVsActual = async (budgetId: string, userId: string): Promi
       totalRemaining,
       overallPercentageUsed
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error calculating budget vs actual:', error);
     throw error;
   }
@@ -3375,7 +2314,7 @@ export const getDashboardPreferences = async (userId: string): Promise<Dashboard
       console.log('✅ Created default dashboard preferences:', defaultPreferences);
       return defaultPreferences;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error loading dashboard preferences:', error);
     throw error;
   }
@@ -3393,76 +2332,8 @@ export const saveDashboardPreferences = async (userId: string, preferences: Part
     }, { merge: true });
     
     console.log('✅ Dashboard preferences saved successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error saving dashboard preferences:', error);
-    throw error;
-  }
-};
-
-export const updateCardVisibility = async (userId: string, cardId: string, visible: boolean): Promise<void> => {
-  try {
-    console.log('🎛️ Updating card visibility:', cardId, 'to', visible);
-    
-    const preferencesRef = doc(db, 'users', userId, 'preferences', 'dashboard');
-    
-    // Get current preferences
-    const currentPrefs = await getDoc(preferencesRef);
-    let visibleCards: DashboardPreferences['visibleCards'];
-    
-    if (currentPrefs.exists()) {
-      const data = currentPrefs.data() as DashboardPreferences;
-      visibleCards = data.visibleCards || {
-        familyAccounts: true,
-        familyBudget: true,
-        familyInvestments: true,
-        familyCommitments: true,
-        personalAccounts: true,
-        personalBudget: true,
-        personalInvestments: true,
-        personalCommitments: true,
-        taskManager: true,
-        shoppingLists: true,
-        homeMaintenance: true,
-        familyCalendar: true,
-        growthTracker: true,
-        cloudStorage: true,
-        medicalRecords: true,
-        schoolActivities: true
-      };
-    } else {
-      visibleCards = {
-        familyAccounts: true,
-        familyBudget: true,
-        familyInvestments: true,
-        familyCommitments: true,
-        personalAccounts: true,
-        personalBudget: true,
-        personalInvestments: true,
-        personalCommitments: true,
-        taskManager: true,
-        shoppingLists: true,
-        homeMaintenance: true,
-        familyCalendar: true,
-        growthTracker: true,
-        cloudStorage: true,
-        medicalRecords: true,
-        schoolActivities: true
-      };
-    }
-    
-    // Update the specific card visibility
-    if (cardId in visibleCards) {
-      (visibleCards as any)[cardId] = visible;
-    }
-    
-    await setDoc(preferencesRef, {
-      visibleCards,
-      updatedAt: Date.now()
-    }, { merge: true });
-    
-    console.log('✅ Card visibility updated successfully');
-  } catch (error: any) {
-    console.error('❌ Error updating card visibility:', error);
     throw error;
   }
 };
@@ -3493,7 +2364,7 @@ export const getAccountsByCategory = async (userId: string, category: 'family' |
     
     console.log(`✅ Found ${filteredAccounts.length} ${category} accounts for user (out of ${allAccounts.length} total)`);
     return filteredAccounts;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`❌ Error getting ${category} accounts:`, error);
     throw error;
   }
@@ -3526,14 +2397,14 @@ export const getBudgetsByCategory = async (userId: string, category: 'family' | 
     
     console.log(`✅ Loaded ${filteredBudgets.length} ${category} budgets (out of ${allBudgets.length} total)`);
     return filteredBudgets;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`❌ Error loading ${category} budgets:`, error);
     throw error;
   }
 };
 
 // CSV/Excel Import System Functions
-export const parseImportFile = async (file: File): Promise<any[]> => {
+export const parseImportFile = async (file: File): Promise<Record<string, string>[]> => {
   try {
     console.log('📁 Parsing import file:', file.name);
     
@@ -3544,13 +2415,13 @@ export const parseImportFile = async (file: File): Promise<any[]> => {
     } else {
       throw new Error('Unsupported file type. Please upload a CSV or Excel file (.xls, .xlsx).');
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error parsing import file:', error);
     throw error;
   }
 };
 
-const parseCSVFile = async (file: File): Promise<any[]> => {
+const parseCSVFile = async (file: File): Promise<Record<string, string>[]> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -3570,8 +2441,7 @@ const parseCSVFile = async (file: File): Promise<any[]> => {
         // Parse data rows
         const data = lines.slice(1).map(line => {
           const values = parseCSVLine(line);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const row: any = {};
+          const row: Record<string, string> = {};
           headers.forEach((header, index) => {
             row[header] = values[index] || '';
           });
@@ -3579,7 +2449,7 @@ const parseCSVFile = async (file: File): Promise<any[]> => {
         });
 
         resolve(data);
-      } catch (error: any) {
+      } catch (error: unknown) {
         reject(error);
       }
     };
@@ -3625,7 +2495,7 @@ const parseCSVLine = (line: string): string[] => {
   return result;
 };
 
-const parseExcelFile = async (file: File): Promise<any[]> => {
+const parseExcelFile = async (file: File): Promise<Record<string, string>[]> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -3667,18 +2537,16 @@ const parseExcelFile = async (file: File): Promise<any[]> => {
         const headers = jsonData[0] as string[];
         
         // Convert remaining rows to objects
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = jsonData.slice(1).map((row: any) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const obj: any = {};
+        const result = jsonData.slice(1).map((row: unknown) => {
+          const obj: Record<string, string> = {};
           headers.forEach((header, index) => {
-            obj[header] = row[index] || '';
+            obj[header] = (row as string[])[index] || '';
           });
           return obj;
         });
         
         resolve(result);
-      } catch (error: any) {
+      } catch (error: unknown) {
         reject(error);
       }
     };
@@ -3688,8 +2556,7 @@ const parseExcelFile = async (file: File): Promise<any[]> => {
 };
 
 // Helper function to parse date with specific format
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const parseDateStringWithFormat = (dateStr: any, format: string): string | null => {
+export const parseDateStringWithFormat = (dateStr: string | number | Date, format: string): string | null => {
   if (!dateStr) return null;
   
   try {
@@ -3835,15 +2702,14 @@ export const parseDateStringWithFormat = (dateStr: any, format: string): string 
     }
     
     return null;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.warn('Error parsing date with format:', format, 'value:', dateStr, error);
     return null;
   }
 };
 
 // Helper function to parse various date formats
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const parseDateString = (dateStr: any): string | null => {
+export const parseDateString = (dateStr: string | number | Date): string | null => {
   if (!dateStr) return null;
   
   // If it's already a Date object or timestamp
@@ -3943,8 +2809,7 @@ export const parseDateString = (dateStr: any): string | null => {
 };
 
 // Function to detect date format from sample data
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const detectDateFormat = (dateValues: any[]): DateFormatInfo[] => {
+export const detectDateFormat = (dateValues: (string | number)[]): DateFormatInfo[] => {
   const formatCounts: { [key: string]: { count: number; examples: string[] } } = {};
   
   dateValues.forEach(value => {
@@ -4014,8 +2879,7 @@ export const detectDateFormat = (dateValues: any[]): DateFormatInfo[] => {
 };
 
 export const processImportData = async (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any[], 
+  data: Record<string, string>[],
   mappings: ImportMapping, 
   accountId: string,
   _userId: string,
@@ -4084,7 +2948,7 @@ export const processImportData = async (
         };
         
         transactions.push(transaction);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.warn('⚠️ Error processing row:', row, error);
         continue;
       }
@@ -4092,7 +2956,7 @@ export const processImportData = async (
     
     console.log('✅ Processed', transactions.length, 'valid transactions');
     return transactions;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error processing import data:', error);
     throw error;
   }
@@ -4106,8 +2970,7 @@ export const bulkCreateTransactions = async (
     console.log('📦 Creating', transactions.length, 'transactions in bulk');
     
     const batch = writeBatch(db);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transactionRefs: any[] = [];
+    const transactionRefs: DocumentReference[] = [];
     
     // Create document references and add to batch
     for (const transaction of transactions) {
@@ -4130,7 +2993,7 @@ export const bulkCreateTransactions = async (
     }
     
     return transactionIds;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error creating bulk transactions:', error);
     throw error;
   }
@@ -4195,7 +3058,7 @@ export const suggestTagsForImport = async (
     
     console.log('✅ Suggested', uniqueSuggestions.length, 'tags');
     return uniqueSuggestions;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error suggesting tags for import:', error);
     return [];
   }
@@ -4249,8 +3112,8 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
     
     // Batch load all related data efficiently
     const [allTags, allSplits, allLinks] = await Promise.all([
-      // Get all tags in one query
-      getTags(userId),
+      // Resolve tags from both legacy collection and hierarchy
+      getAllResolvableTags(userId),
       // Get all splits for transactions that are split
       getTransactionSplitsBatch(transactions.filter(t => t.isSplit).map(t => t.id), userId),
       // Get all linked transactions in one query
@@ -4267,8 +3130,7 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       // Build tags map
       if (transaction.tagIds && transaction.tagIds.length > 0) {
         tagsMap[transaction.id] = transaction.tagIds
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map(tagId => allTags.find((tag: any) => tag.id === tagId))
+          .map(tagId => allTags.find((tag: Tag) => tag.id === tagId))
           .filter(Boolean) as Tag[];
       } else {
         tagsMap[transaction.id] = [];
@@ -4276,15 +3138,13 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       
       // Build splits map
       if (transaction.isSplit) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        splitsMap[transaction.id] = allSplits.filter((split: any) => split.transactionId === transaction.id);
+        splitsMap[transaction.id] = allSplits.filter((split: TransactionSplit) => split.transactionId === transaction.id);
       } else {
         splitsMap[transaction.id] = [];
       }
       
       // Build linked map
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      linkedMap[transaction.id] = allLinks.filter((link: any) => link.transaction.id === transaction.id);
+      linkedMap[transaction.id] = allLinks.filter((link: { link: TransactionLink; transaction: Transaction }) => link.transaction.id === transaction.id);
     }
     
     console.log(`✅ Loaded ${transactions.length} transactions with related data`);
@@ -4295,7 +3155,7 @@ export const getTransactionsByAccountWithData = async (userId: string, accountId
       splitsMap,
       linkedMap
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error fetching transactions with data:', error);
     throw error;
   }
@@ -4305,13 +3165,11 @@ export const getTransactionsByAccountPaginated = async (
   userId: string, 
   accountId: string, 
   pageSize: number = 100,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lastDoc?: any
+  lastDoc?: QueryDocumentSnapshot
 ): Promise<{
   transactions: Transaction[];
   hasMore: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lastDoc: any;
+  lastDoc: QueryDocumentSnapshot | undefined;
 }> => {
   try {
     console.log(`💰 Fetching ${pageSize} transactions for account:`, accountId);
@@ -4350,7 +3208,7 @@ export const getTransactionsByAccountPaginated = async (
       hasMore,
       lastDoc: newLastDoc
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting paginated transactions:', error);
     throw error;
   }
@@ -4421,78 +3279,7 @@ export const getTransactionsByAccountPage = async (
       tagsMap,
       splitsMap
     };
-  } catch (error: any) {
-    console.error('❌ Error getting transactions by page:', error);
-    throw error;
-  }
-};
-
-export const getTransactionsByAccountPageCursor = async (
-  userId: string, 
-  accountId: string, 
-  pageSize: number = 100,
-  pageNumber: number = 1
-): Promise<{
-  transactions: Transaction[];
-  tagsMap: Record<string, Tag[]>;
-  splitsMap: Record<string, TransactionSplit[]>;
-}> => {
-  try {
-    console.log(`📄 Fetching page ${pageNumber} with ${pageSize} transactions for account:`, accountId);
-    
-    // For page-based pagination, we need to fetch all transactions up to the desired page
-    // This is not ideal for large datasets, but Firebase doesn't support offset-based pagination
-    // In a production app, you'd implement cursor-based pagination with page tracking
-    
-    const q = query(
-      collection(db, 'users', userId, 'transactions'),
-      where('accountId', '==', accountId),
-      orderBy('createdAt', 'desc'),
-      limit(pageSize * pageNumber)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    const allTransactions = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Transaction[];
-    
-    // Get the transactions for the specific page
-    const startIndex = (pageNumber - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const pageTransactions = allTransactions.slice(startIndex, endIndex);
-    
-    console.log(`📊 Page ${pageNumber}: ${pageTransactions.length} transactions (${startIndex + 1}-${endIndex} of ${allTransactions.length})`);
-    
-    // Get related data for the page transactions
-    const transactionIds = pageTransactions.map(t => t.id);
-    const [tags, splits] = await Promise.all([
-      getTransactionTagsBatch(transactionIds, userId),
-      getTransactionSplitsBatch(transactionIds, userId)
-    ]);
-    
-    // Build maps
-    const tagsMap: Record<string, Tag[]> = {};
-    const splitsMap: Record<string, TransactionSplit[]> = {};
-    
-    pageTransactions.forEach(transaction => {
-      // For tags, filter by the transaction's tagIds
-      if (transaction.tagIds && transaction.tagIds.length > 0) {
-        tagsMap[transaction.id] = tags.filter(tag => transaction.tagIds!.includes(tag.id));
-      } else {
-        tagsMap[transaction.id] = [];
-      }
-      
-      // For splits, filter by the transaction's ID
-      splitsMap[transaction.id] = splits.filter(split => split.transactionId === transaction.id);
-    });
-    
-    return {
-      transactions: pageTransactions,
-      tagsMap,
-      splitsMap
-    };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting transactions by page:', error);
     throw error;
   }
@@ -4530,21 +3317,16 @@ export const getTransactionTagsBatch = async (transactionIds: string[], userId: 
       });
     });
     
-    // Get all tags (default + user tags)
-    const userTags = await getTags(userId);
-    const defaultTags = getDefaultTags();
-    
-    // Create a map to deduplicate tags by ID (user tags take precedence)
-    const tagMap = new Map();
-    defaultTags.forEach(tag => tagMap.set(tag.id, tag));
-    userTags.forEach(tag => tagMap.set(tag.id, tag));
-    
+    // Get all tags from both legacy collection and hierarchy
+    const allTags = await getAllResolvableTags(userId);
+    const tagMap = new Map(allTags.map(tag => [tag.id, tag]));
+
     // Filter tags that are assigned to any of the transactions
-    const relevantTags = Array.from(allTagIds).map(tagId => tagMap.get(tagId)).filter(Boolean);
+    const relevantTags = Array.from(allTagIds).map(tagId => tagMap.get(tagId)).filter((t): t is Tag => t !== undefined);
     
     console.log(`✅ Loaded ${relevantTags.length} relevant tags for ${transactionIds.length} transactions`);
     return relevantTags;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error batch loading tags:', error);
     return [];
   }
@@ -4557,7 +3339,7 @@ export const getTransactionSplitsBatch = async (transactionIds: string[], userId
     console.log(`💰 Batch loading splits for ${transactionIds.length} transactions`);
     
     const splitsQuery = query(
-      collection(db, 'users', userId, 'transactions'),
+      collection(db, 'users', userId, 'transactionSplits'),
       where('transactionId', 'in', transactionIds)
     );
     
@@ -4569,7 +3351,7 @@ export const getTransactionSplitsBatch = async (transactionIds: string[], userId
     
     console.log(`✅ Loaded ${splits.length} splits`);
     return splits;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error batch loading splits:', error);
     return [];
   }
@@ -4671,7 +3453,7 @@ export const getLinkedTransactionsBatch = async (transactionIds: string[], userI
     
     console.log(`✅ Loaded ${linkedMap.length} linked transactions`);
     return linkedMap;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error batch loading linked transactions:', error);
     return [];
   }
@@ -4693,76 +3475,13 @@ export const linkTransactions = async (userId: string, transactionId1: string, t
     });
     
     console.log('✅ Transactions linked successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error linking transactions:', error);
     throw error;
   }
 };
 
 // Migration function to create initial balance transactions for existing accounts
-export const migrateExistingAccountsToInitialBalance = async (userId: string): Promise<void> => {
-  try {
-    console.log('🔄 Starting migration: Creating initial balance transactions for existing accounts');
-    
-    const accounts = await getAccountsByUser(userId);
-    let migratedCount = 0;
-    let skippedCount = 0;
-    let updatedCount = 0;
-    
-    for (const account of accounts) {
-      const transactions = await getTransactionsByAccount(userId, account.id);
-      const initialBalanceTransactions = transactions.filter(t => t.source === 'initial-balance');
-      
-      // Remove duplicates
-      if (initialBalanceTransactions.length > 1) {
-        console.log(`🔧 Removing ${initialBalanceTransactions.length - 1} duplicate initial balance transactions for ${account.name}`);
-        for (let i = 1; i < initialBalanceTransactions.length; i++) {
-          await deleteDoc(doc(db, 'users', userId, 'transactions', initialBalanceTransactions[i].id));
-        }
-      }
-      
-      if (initialBalanceTransactions.length > 0) {
-        // Update existing to correct format
-        const initialTransaction = initialBalanceTransactions[0];
-        const correctDescription = `${account.name}: Initial balance`;
-        
-        if (initialTransaction.description !== correctDescription || initialTransaction.date) {
-          await updateDoc(doc(db, 'users', userId, 'transactions', initialTransaction.id), {
-            description: correctDescription,
-            date: deleteField(), // Remove date field
-            updatedAt: Date.now()
-          });
-          updatedCount++;
-          console.log(`✅ Updated initial balance transaction format for ${account.name}`);
-        }
-        skippedCount++;
-        continue;
-      }
-      
-      // Create new if missing - ALWAYS create, even if initial balance is 0
-      const transactionData: Omit<Transaction, 'id'> = {
-        accountId: account.id,
-        amount: account.initialBalance, // Use actual initial balance (can be 0)
-        description: `${account.name}: Initial balance`, // CORRECT FORMAT
-        // No date field - atemporal
-        isManual: false,
-        source: 'initial-balance',
-        tagIds: [],
-        createdAt: account.createdAt,
-        updatedAt: Date.now()
-      };
-      
-      await createTransaction(userId, transactionData);
-      migratedCount++;
-      console.log(`✅ Created initial balance transaction for ${account.name}: ${account.initialBalance}`);
-    }
-    
-    console.log(`🎉 Migration completed! Created: ${migratedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);
-  } catch (error: any) {
-    console.error('❌ Error during migration:', error);
-    throw error;
-  }
-};
 
 // =====================================
 // HIERARCHY MANAGEMENT FUNCTIONS
@@ -4820,7 +3539,7 @@ export const createHierarchyItem = async (
     console.log('✅ Hierarchy item created with ID:', docRef.id);
     
     return docRef.id;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error creating hierarchy item:', error);
     throw error;
   }
@@ -4840,7 +3559,7 @@ export const updateHierarchyItem = async (
     });
     
     console.log('✅ Hierarchy item updated successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error updating hierarchy item:', error);
     throw error;
   }
@@ -4891,7 +3610,7 @@ export const deleteHierarchyItem = async (userId: string, itemId: string): Promi
     await batch.commit();
     console.log(`✅ Deleted hierarchy item and ${childIds.length} children`);
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error deleting hierarchy item:', error);
     throw error;
   }
@@ -4935,64 +3654,41 @@ export const moveHierarchyItemLevel = async (
       newOrder = (relevantItems[0].order || 0) + 1;
     }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {
+    const updateData = {
       level: newLevel,
       order: newOrder,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      // Handle parentId properly - use deleteField() to remove it if newParentId is undefined
+      ...(newParentId ? { parentId: newParentId } : { parentId: deleteField() })
     };
-    
-    // Handle parentId properly - use deleteField() to remove it if newParentId is undefined
-    if (newParentId) {
-      updateData.parentId = newParentId;
-    } else {
-      updateData.parentId = deleteField();
-    }
 
     console.log('🔍 Firebase move debug:', {
       itemId,
       newLevel,
       newParentId: newParentId || 'undefined (top level)',
-      updateData: {
-        ...updateData,
-        parentId: newParentId || 'deleteField() - will remove from document'
-      },
       relevantItemsCount: relevantItems.length,
       calculatedOrder: newOrder
     });
-    
+
     await updateDoc(doc(db, 'users', userId, 'hierarchy', itemId), updateData);
     
     console.log('✅ Item moved to new level successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error moving hierarchy item:', error);
     throw error;
   }
 };
 
-export const bulkUpdateHierarchyItems = async (
-  userId: string,
-  updates: { id: string; changes: Partial<HierarchyItem> }[]
-): Promise<void> => {
-  try {
-    console.log('📦 Bulk updating hierarchy items:', updates.length);
-    
-    const batch = writeBatch(db);
-    
-    updates.forEach(({ id, changes }) => {
-      batch.update(doc(db, 'users', userId, 'hierarchy', id), {
-        ...changes,
-        updatedAt: Date.now()
-      });
-    });
-    
-    await batch.commit();
-    console.log('✅ Bulk update completed successfully');
-    
-  } catch (error: any) {
-    console.error('❌ Error in bulk update:', error);
-    throw error;
-  }
+// Returns tags from both the legacy `tags` collection and the hierarchy collection,
+// deduplicating by ID. Use this wherever tag IDs on transactions need to be resolved.
+export const getAllResolvableTags = async (userId: string): Promise<Tag[]> => {
+  const [legacyTags, hierarchyTags] = await Promise.all([
+    getTags(userId),
+    getTagsFromHierarchy(userId),
+  ]);
+  const seen = new Set(legacyTags.map(t => t.id));
+  const merged = [...legacyTags, ...hierarchyTags.filter(t => !seen.has(t.id))];
+  return merged;
 };
 
 export const getTagsFromHierarchy = async (userId: string): Promise<Tag[]> => {
@@ -5008,21 +3704,17 @@ export const getTagsFromHierarchy = async (userId: string): Promise<Tag[]> => {
     
     querySnapshot.docs.forEach(doc => {
       const item = doc.data() as HierarchyItem;
-      console.log(`🔍 Checking hierarchy item: ${item.name} (level ${item.level})`);
       if (item.level === 4) { // Only level 4 items are tags
-        console.log(`✅ Adding tag: ${item.name}`);
         tags.push({
-          id: item.id,
+          id: doc.id, // doc.id is the Firestore document ID; item.id is not stored in the document
           name: item.name,
-          color: item.color || '#3B82F6', // Default blue if no color
+          color: item.color || '#3B82F6',
           category: 'custom',
           userId: item.userId,
           isDefault: false,
           createdAt: item.createdAt || Date.now(),
           updatedAt: item.updatedAt || Date.now()
         });
-      } else {
-        console.log(`❌ Skipping non-tag item: ${item.name} (level ${item.level})`);
       }
     });
     
@@ -5032,7 +3724,7 @@ export const getTagsFromHierarchy = async (userId: string): Promise<Tag[]> => {
     console.log(`✅ Found ${tags.length} tags from hierarchy`);
     return tags;
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error fetching tags from hierarchy:', error);
     throw error;
   }
@@ -5067,7 +3759,7 @@ export const getHierarchyItems = async (userId: string): Promise<HierarchyItem[]
     console.log(`✅ Found ${items.length} hierarchy items`);
     return items;
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error fetching hierarchy items:', error);
     throw error;
   }
@@ -5084,7 +3776,7 @@ export const getHierarchyItemUsageCount = async (userId: string, itemId: string)
     const snapshot = await getDocs(transactionsQuery);
     return snapshot.docs.length;
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting item usage count:', error);
     return 0;
   }
@@ -5176,7 +3868,7 @@ export const moveHierarchyItemWithChildren = async (
     await batch.commit();
     console.log('✅ Items moved successfully');
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error moving hierarchy item with children:', error);
     throw error;
   }
@@ -5244,7 +3936,7 @@ export const getTransactionsByAccountPageSimple = async (
       tagsMap,
       splitsMap
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting transactions by page:', error);
     throw error;
   }
@@ -5265,7 +3957,7 @@ export const getTransactionCount = async (userId: string, accountId: string): Pr
     console.log(`✅ Found ${count} total transactions for account`);
     
     return count;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error getting transaction count:', error);
     throw error;
   }

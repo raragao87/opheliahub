@@ -4,8 +4,8 @@
 - [x] **Transactions:**
     - [x] Add ability to *edit* transaction date/description/amount inline (Verified).
     - [x] Verify **Transaction Tagging** (Refactored `InlineTagInput` to support both modes).
-    - [ ] Ensure **Split Transactions** work correctly (UI & backend).
-- [ ] **Accounts:**
+    - [x] **Ensure Split Transactions work correctly (UI & backend)** - Fixed critical bug in getTransactionSplitsBatch function.
+- [x] **Accounts:**
     - [x] Create/Edit/Delete accounts (Verified & Fixed Types).
     - [x] Sync account balances with transaction history (auto-calc) ✅ VERIFIED: Implemented in createTransaction/updateTransaction/deleteTransaction functions.
 - [ ] **Budgeting:**
