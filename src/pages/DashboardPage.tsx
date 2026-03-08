@@ -19,6 +19,7 @@ import {
   PersonalInvestmentsCard,
   PersonalCommitmentsCard,
   FinancialHubSplitTestCard,
+  RecentTransactionsCard,
   TaskManagerCard,
   ShoppingListsCard,
   HomeMaintenanceCard,
@@ -225,6 +226,16 @@ const DashboardPage: React.FC = () => {
             </div>
             <div className="flex items-center space-x-4">
               <button
+                onClick={() => navigate('/reports')}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 flex items-center space-x-2"
+                title="Financial Reports"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span>Reports</span>
+              </button>
+              <button
                 onClick={() => setShowCustomization(true)}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-3 rounded-xl transition-all duration-200"
                 title="Customize Dashboard"
@@ -273,6 +284,14 @@ const DashboardPage: React.FC = () => {
                   {preferences.visibleCards.personalBudget && <PersonalBudgetCard />}
                   {preferences.visibleCards.personalInvestments && <PersonalInvestmentsCard />}
                   {preferences.visibleCards.personalCommitments && <PersonalCommitmentsCard />}
+                </div>
+              </div>
+
+              {/* Dashboard Widgets Section */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">📊 Dashboard Widgets</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <RecentTransactionsCard />
                 </div>
               </div>
 

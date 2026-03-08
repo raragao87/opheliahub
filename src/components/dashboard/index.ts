@@ -13,6 +13,9 @@ export { default as PersonalCommitmentsCard } from './PersonalCommitmentsCard';
 // Financial Hub - Test Features
 export { default as FinancialHubSplitTestCard } from './FinancialHubSplitTestCard';
 
+// Dashboard Widgets
+export { default as RecentTransactionsCard } from './RecentTransactionsCard';
+
 // Household Hub
 export { default as TaskManagerCard } from './TaskManagerCard';
 export { default as ShoppingListsCard } from './ShoppingListsCard';
