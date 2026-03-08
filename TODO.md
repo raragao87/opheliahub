@@ -21,9 +21,9 @@
     - [x] Net Worth tracking (Assets - Liabilities). ✅ COMPLETED: Implemented in FinancialHub and Reports pages
 
 ## Priority 3: Polish & UX
-- [ ] **Mobile Responsiveness:** Ensure finance tables work on mobile.
+- [x] **Mobile Responsiveness:** Ensure finance tables work on mobile. ✅ COMPLETED: Implemented responsive card layout with full functionality
 - [ ] **Dark Mode:** Verify colors for charts/tables.
-- [ ] **Data Import:** CSV import for bank statements (already started?).
+- [x] **Data Import:** CSV import for bank statements (already started?). ✅ COMPLETED: ImportModal with CSV parsing, column mapping, and automatic tag suggestions
 
 ## Bugs / Tech Debt
 - [x] Fix unused variable warnings in `CreateAccountModal.tsx`.
