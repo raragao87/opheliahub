@@ -29,4 +29,4 @@
 - [x] Fix unused variable warnings in `CreateAccountModal.tsx`.
 - [x] Add `notes` field to `Account` interface.
 - [x] Check console for React warnings/errors (Fixed useEffect dependency warnings, removed 'any' types, cleaned up debug logs).
-- [ ] Audit `firebase/config.ts` for security rules.
+- [x] **Audit `firebase/config.ts` for security rules** ✅ COMPLETED: Removed dangerous fallback rule, implemented explicit granular rules for all collections, added data validation and comprehensive security documentation.
