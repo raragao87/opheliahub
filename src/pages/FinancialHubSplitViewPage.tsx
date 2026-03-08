@@ -28,6 +28,7 @@ import EnhancedLinkTransactionsModal from '../components/EnhancedLinkTransaction
 import ImportModal from '../components/ImportModal';
 import InlineTransactionRow from '../components/InlineTransactionRow';
 import InlineAddTransactionButton from '../components/InlineAddTransactionButton';
+import ResponsiveTransactionList from '../components/ResponsiveTransactionList';
 import UpdateAssetBalanceModal from '../components/UpdateAssetBalanceModal';
 import SplitTransactionModal from '../components/SplitTransactionModal';
 import AccountTypesModal from '../components/AccountTypesModal';
@@ -1096,8 +1097,10 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
         </div>
       )}
 
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      {/* Desktop Table View */}
+      <div className="hidden md:block">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
           <tr>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               <input
@@ -1483,6 +1486,153 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
           </div>
         </div>
       )}
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="block md:hidden space-y-3">
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <span className="text-sm text-gray-600">
+            {currentTransactions.length} transactions
+          </span>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleSort('date')}
+              className="text-xs font-medium text-gray-500 px-2 py-1 rounded hover:bg-gray-200"
+            >
+              Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+            </button>
+            <button
+              onClick={() => handleSort('amount')}
+              className="text-xs font-medium text-gray-500 px-2 py-1 rounded hover:bg-gray-200"
+            >
+              Amount {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Transaction Cards */}
+        {currentTransactions.map((transaction) => {
+          const isSelected = selectedTransactions.has(transaction.id);
+          const transactionTagList = transactionTags[transaction.id] || [];
+          const splits = transactionSplits[transaction.id] || [];
+          
+          return (
+            <div
+              key={transaction.id}
+              className={`bg-white rounded-lg border shadow-sm p-4 ${
+                isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-start space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={(e) => handleSelectTransaction(transaction.id, e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1"
+                  />
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900">{transaction.description}</h4>
+                    <p className="text-xs text-gray-500">
+                      {new Date(transaction.date).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className={`text-base font-bold ${
+                    transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getCurrencySymbol(selectedAccount.currency)}{Math.abs(transaction.amount).toLocaleString()}
+                  </span>
+                  {splits.length > 0 && (
+                    <div className="mt-1">
+                      <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
+                        Split
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {transactionTagList.length > 0 && (
+                <div className="mb-2">
+                  <div className="flex flex-wrap gap-1">
+                    {transactionTagList.map(tag => (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ 
+                          backgroundColor: tag.color + '20',
+                          color: tag.color
+                        }}
+                      >
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile Action Buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => handleEditTransaction(transaction)}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSplittingTransaction(transaction);
+                      setShowSplitModal(true);
+                    }}
+                    className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+                  >
+                    Split
+                  </button>
+                  <button
+                    onClick={() => handleLinkTransaction(transaction)}
+                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                  >
+                    Link
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleDeleteTransaction(transaction.id)}
+                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Mobile Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+            <button
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              className="text-sm font-medium text-gray-600 disabled:opacity-50"
+            >
+              ← Prev
+            </button>
+            <span className="text-sm text-gray-600">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className="text-sm font-medium text-gray-600 disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Bulk Tag Modal */}
       <BulkTagModal
@@ -1824,10 +1974,10 @@ const FinancialHubSplitViewPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content - Split View */}
-      <div className="flex h-[calc(100vh-4rem)]">
-        {/* Left Sidebar (30% width) */}
-        <div className="w-[30%] bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
+      {/* Main Content - Responsive Split View */}
+      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)]">
+        {/* Left Sidebar - Mobile: collapsible, Desktop: 30% width */}
+        <div className="w-full lg:w-[30%] bg-gray-50 border-b lg:border-b-0 lg:border-r border-gray-200 p-4 overflow-y-auto">
           {/* Net Worth Header */}
           <div className="mb-6 p-4 bg-white rounded-lg shadow-sm">
             <h3 className="text-sm font-medium text-gray-600">Total Net Worth</h3>
@@ -2130,8 +2280,8 @@ const FinancialHubSplitViewPage: React.FC = () => {
           )}
         </div>
 
-        {/* Right Panel (70% width) */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        {/* Right Panel - Mobile: full width, Desktop: 70% width */}
+        <div className="flex-1 p-4 lg:p-6 overflow-y-auto">
           {selectedAccount ? (
             <div>
               {/* Account Header */}
