@@ -22,7 +22,7 @@
 
 ## Priority 3: Polish & UX
 - [x] **Mobile Responsiveness:** Ensure finance tables work on mobile. ✅ COMPLETED: Implemented responsive card layout with full functionality
-- [ ] **Dark Mode:** Verify colors for charts/tables.
+- [x] **Dark Mode:** Verify colors for charts/tables. ✅ COMPLETED: Implemented comprehensive dark mode support with toggle, enhanced chart colors, table styling, and proper contrast for all components
 - [x] **Data Import:** CSV import for bank statements (already started?). ✅ COMPLETED: ImportModal with CSV parsing, column mapping, and automatic tag suggestions
 
 ## Bugs / Tech Debt
