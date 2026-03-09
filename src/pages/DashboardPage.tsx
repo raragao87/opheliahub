@@ -7,6 +7,7 @@ import {
   type DashboardPreferences 
 } from '../firebase/config';
 import CustomizationModal from '../components/CustomizationModal';
+import useDarkMode from '../hooks/useDarkMode';
 
 // Import all dashboard cards
 import {
@@ -40,6 +41,7 @@ interface FamilyMember {
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const [user, setUser] = useState<User | null>(null);
   const [preferences, setPreferences] = useState<DashboardPreferences | null>(null);
   const [loading, setLoading] = useState(true);
@@ -211,20 +213,35 @@ const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                 Welcome to OpheliaHub
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">
                 Manage your family's important information and track what matters most.
               </p>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={toggleDarkMode}
+                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 p-3 rounded-xl transition-all duration-200"
+                title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              >
+                {isDarkMode ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
               <button
                 onClick={() => navigate('/reports')}
                 className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 flex items-center space-x-2"
@@ -237,7 +254,7 @@ const DashboardPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowCustomization(true)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-3 rounded-xl transition-all duration-200"
+                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 p-3 rounded-xl transition-all duration-200"
                 title="Customize Dashboard"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,7 +264,7 @@ const DashboardPage: React.FC = () => {
               </button>
               <button
                 onClick={handleLogout}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center space-x-2"
+                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center space-x-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

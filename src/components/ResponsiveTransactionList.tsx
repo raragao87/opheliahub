@@ -51,19 +51,19 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
     <>
       {/* Desktop Table View (hidden on mobile) */}
       <div className="hidden md:block">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 <input
                   type="checkbox"
                   checked={transactions.length > 0 && transactions.every(t => selectedTransactions.has(t.id))}
                   onChange={(e) => onSelectAll(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800"
                 />
               </th>
               <th 
-                className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                 onClick={() => onSortChange('date')}
               >
                 <div className="flex items-center justify-between">
@@ -72,7 +72,7 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
                 </div>
               </th>
               <th 
-                className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                 onClick={() => onSortChange('description')}
               >
                 <div className="flex items-center justify-between">
@@ -80,11 +80,11 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
                   {renderSortIcon('description')}
                 </div>
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Tags
               </th>
               <th 
-                className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                 onClick={() => onSortChange('amount')}
               >
                 <div className="flex items-center justify-end">
@@ -92,17 +92,17 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
                   {renderSortIcon('amount')}
                 </div>
               </th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             {transactions.map((transaction) => (
               <tr 
                 key={transaction.id}
-                className={`transition-all duration-200 hover:bg-gray-50 ${
-                  selectedTransactions.has(transaction.id) ? 'bg-blue-50' : ''
+                className={`transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                  selectedTransactions.has(transaction.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                 } ${
                   isTransactionDragging(transaction.id) ? 'opacity-50' : ''
                 }`}
@@ -181,20 +181,20 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-900">
+                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
                       {new Date(transaction.date).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center">
-                        <span className="text-sm text-gray-900">{transaction.description}</span>
+                        <span className="text-sm text-gray-900 dark:text-gray-100">{transaction.description}</span>
                         {transaction.splits && transaction.splits.length > 0 && (
-                          <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
+                          <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full">
                             Split
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-500">
+                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
                       {getTagNames(transaction.tagIds || [])}
                     </td>
                     <td className="px-4 py-2 text-right">

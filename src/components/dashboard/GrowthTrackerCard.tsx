@@ -6,7 +6,7 @@ const GrowthTrackerCard: React.FC = () => {
 
   return (
     <div 
-      className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group"
+      className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group"
       onClick={() => navigate('/growth-tracker')}
     >
       <div className="flex items-center justify-between mb-6">
@@ -15,12 +15,12 @@ const GrowthTrackerCard: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
           </svg>
         </div>
-        <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </div>
-      <h3 className="text-xl font-semibold text-gray-900 mb-3">Growth Tracker</h3>
-      <p className="text-gray-600 leading-relaxed mb-4">
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Growth Tracker</h3>
+      <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
         Track your child's growth and development with detailed charts and milestone tracking.
       </p>
       <div className="flex items-center text-pink-600 font-medium text-sm">

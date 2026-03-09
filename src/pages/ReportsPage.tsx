@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import useDarkMode from '../hooks/useDarkMode';
 import { 
   getTags,
   type Transaction,
@@ -26,6 +27,7 @@ interface MonthlySpendingData {
 
 const ReportsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isDarkMode } = useDarkMode();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +37,14 @@ const ReportsPage: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
-  // Color palette for categories
-  const colors = [
+  // Color palette for categories (enhanced for dark mode compatibility)
+  const colors = isDarkMode ? [
+    '#f87171', '#fb923c', '#fbbf24', '#facc15',
+    '#a3e635', '#4ade80', '#34d399', '#2dd4bf',
+    '#22d3ee', '#38bdf8', '#60a5fa', '#818cf8',
+    '#a78bfa', '#c084fc', '#e879f9', '#f472b6',
+    '#fb7185', '#94a3b8', '#9ca3af', '#6b7280'
+  ] : [
     '#ef4444', '#f97316', '#f59e0b', '#eab308', 
     '#84cc16', '#22c55e', '#10b981', '#14b8a6',
     '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
@@ -196,11 +204,11 @@ const ReportsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-gray-600">Loading reports...</span>
+            <span className="ml-2 text-gray-600 dark:text-gray-400">Loading reports...</span>
           </div>
         </div>
       </div>
@@ -208,18 +216,18 @@ const ReportsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Financial Reports</h1>
-              <p className="text-gray-600 mt-2">Analyze your spending patterns and financial trends</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Financial Reports</h1>
+              <p className="text-gray-600 dark:text-gray-300 mt-2">Analyze your spending patterns and financial trends</p>
             </div>
             <button
               onClick={() => navigate('/dashboard')}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
             >
               ← Back to Dashboard
             </button>
@@ -228,11 +236,11 @@ const ReportsPage: React.FC = () => {
           {/* Date Selection */}
           <div className="mt-6 flex items-center space-x-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Month</label>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {Array.from({ length: 12 }, (_, i) => (
                   <option key={i + 1} value={i + 1}>
@@ -242,11 +250,11 @@ const ReportsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Year</label>
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {Array.from({ length: 5 }, (_, i) => {
                   const year = new Date().getFullYear() - 2 + i;
@@ -262,38 +270,38 @@ const ReportsPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-600">{error}</p>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+            <p className="text-red-600 dark:text-red-400">{error}</p>
           </div>
         )}
 
         {/* Monthly Spending Overview */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Monthly Spending - {getMonthName(selectedMonth)} {selectedYear}
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-red-600">{formatCurrency(totalSpending)}</p>
-              <p className="text-gray-600">Total Spending</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalSpending)}</p>
+              <p className="text-gray-600 dark:text-gray-400">Total Spending</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">{transactions.length}</p>
-              <p className="text-gray-600">Transactions</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{transactions.length}</p>
+              <p className="text-gray-600 dark:text-gray-400">Transactions</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">{spendingData.length}</p>
-              <p className="text-gray-600">Categories</p>
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{spendingData.length}</p>
+              <p className="text-gray-600 dark:text-gray-400">Categories</p>
             </div>
           </div>
 
           {/* Spending Breakdown Chart */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Spending by Category</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Spending by Category</h3>
             
             {spendingData.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <p>No spending data found for {getMonthName(selectedMonth)} {selectedYear}</p>
               </div>
             ) : (
@@ -306,13 +314,13 @@ const ReportsPage: React.FC = () => {
                       <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: item.color }}></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{item.tagName}</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{item.tagName}</p>
                           <div className="text-right">
-                            <p className="text-sm font-semibold text-gray-900">{formatCurrency(item.totalAmount)}</p>
-                            <p className="text-xs text-gray-500">{percentage.toFixed(1)}%</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(item.totalAmount)}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{percentage.toFixed(1)}%</p>
                           </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                           <div
                             className="h-2 rounded-full transition-all duration-300"
                             style={{ 
@@ -321,7 +329,7 @@ const ReportsPage: React.FC = () => {
                             }}
                           ></div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">{item.transactionCount} transactions</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{item.transactionCount} transactions</p>
                       </div>
                     </div>
                   );
@@ -332,20 +340,20 @@ const ReportsPage: React.FC = () => {
         </div>
 
         {/* Coming Soon Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">More Reports Coming Soon</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">More Reports Coming Soon</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="font-medium text-gray-900 mb-2">Net Worth Tracking</h3>
-              <p className="text-sm text-gray-600">Track your assets minus liabilities over time</p>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-2">
+            <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+              <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Net Worth Tracking</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Track your assets minus liabilities over time</p>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 mt-2">
                 Coming Soon
               </span>
             </div>
-            <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="font-medium text-gray-900 mb-2">Income vs Expense Trends</h3>
-              <p className="text-sm text-gray-600">Monthly comparison of income and expenses</p>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-2">
+            <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+              <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Income vs Expense Trends</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Monthly comparison of income and expenses</p>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 mt-2">
                 Coming Soon
               </span>
             </div>
