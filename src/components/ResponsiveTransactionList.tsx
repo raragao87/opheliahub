@@ -2,11 +2,18 @@ import React from 'react';
 import { type Transaction, type TransactionSplit } from '../firebase/config';
 import InlineTagInput from './InlineTagInput';
 
+interface EditFormData {
+  date: string;
+  description: string;
+  amount: number;
+  tagIds: string[];
+}
+
 interface ResponsiveTransactionListProps {
   transactions: (Transaction & { id: string; splits?: TransactionSplit[] })[];
   selectedTransactions: Set<string>;
   editingTransaction: string | null;
-  editFormData: any;
+  editFormData: EditFormData;
   isTransactionDragging: (transactionId: string) => boolean;
   onSelectTransaction: (transactionId: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
@@ -19,9 +26,7 @@ interface ResponsiveTransactionListProps {
   onSortChange: (field: string) => void;
   formatCurrency: (amount: number) => string;
   getTagNames: (tagIds: string[]) => string;
-  updateEditFormData: (field: string, value: any) => void;
-  sortField: string;
-  sortDirection: 'asc' | 'desc';
+  updateEditFormData: (field: keyof EditFormData, value: string | number | string[]) => void;
   renderSortIcon: (field: string) => React.ReactNode;
 }
 
@@ -43,8 +48,6 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
   formatCurrency,
   getTagNames,
   updateEditFormData,
-  sortField,
-  sortDirection,
   renderSortIcon
 }) => {
   return (

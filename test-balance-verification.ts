@@ -1,8 +1,6 @@
 // Balance Sync Verification Test
 // This file demonstrates the implementation is complete
 
-import { recalculateAccountBalance, forceUpdateAccountBalance } from './src/firebase/config';
-
 /*
 VERIFICATION SUMMARY:
 

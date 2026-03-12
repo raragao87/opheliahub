@@ -28,7 +28,6 @@ import EnhancedLinkTransactionsModal from '../components/EnhancedLinkTransaction
 import ImportModal from '../components/ImportModal';
 import InlineTransactionRow from '../components/InlineTransactionRow';
 import InlineAddTransactionButton from '../components/InlineAddTransactionButton';
-import ResponsiveTransactionList from '../components/ResponsiveTransactionList';
 import UpdateAssetBalanceModal from '../components/UpdateAssetBalanceModal';
 import SplitTransactionModal from '../components/SplitTransactionModal';
 import AccountTypesModal from '../components/AccountTypesModal';

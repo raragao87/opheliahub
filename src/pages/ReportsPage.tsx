@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -12,8 +12,7 @@ import {
   collection, 
   query, 
   orderBy, 
-  getDocs,
-  where 
+  getDocs
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -28,17 +27,15 @@ interface MonthlySpendingData {
 const ReportsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDarkMode } = useDarkMode();
-  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
   const [spendingData, setSpendingData] = useState<MonthlySpendingData[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   // Color palette for categories (enhanced for dark mode compatibility)
-  const colors = isDarkMode ? [
+  const colors = useMemo(() => isDarkMode ? [
     '#f87171', '#fb923c', '#fbbf24', '#facc15',
     '#a3e635', '#4ade80', '#34d399', '#2dd4bf',
     '#22d3ee', '#38bdf8', '#60a5fa', '#818cf8',
@@ -50,11 +47,10 @@ const ReportsPage: React.FC = () => {
     '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
     '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
     '#f43f5e', '#64748b', '#6b7280', '#374151'
-  ];
+  ], [isDarkMode]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
       if (user) {
         try {
           setLoading(true);
@@ -68,21 +64,19 @@ const ReportsPage: React.FC = () => {
         }
       } else {
         setTransactions([]);
-        setTags([]);
         setSpendingData([]);
         setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [selectedMonth, selectedYear]);
+  }, [loadReportData]);
 
-  const loadReportData = async (user: User) => {
+  const loadReportData = useCallback(async (user: User) => {
     console.log('📊 Loading reports data for user:', user.uid);
     
     // Load tags first
     const userTags = await getTags(user.uid);
-    setTags(userTags);
     
     // Calculate date range for the selected month
     const startDate = new Date(selectedYear, selectedMonth - 1, 1);
@@ -98,7 +92,7 @@ const ReportsPage: React.FC = () => {
     // Calculate spending breakdown by category/tag
     const spending = calculateSpendingBreakdown(monthlyTransactions, userTags);
     setSpendingData(spending);
-  };
+  }, [selectedYear, selectedMonth, calculateSpendingBreakdown]);
 
   const getMonthlyTransactions = async (userId: string, year: number, month: number): Promise<Transaction[]> => {
     try {
@@ -130,7 +124,7 @@ const ReportsPage: React.FC = () => {
     }
   };
 
-  const calculateSpendingBreakdown = (transactions: Transaction[], userTags: Tag[]): MonthlySpendingData[] => {
+  const calculateSpendingBreakdown = useCallback((transactions: Transaction[], userTags: Tag[]): MonthlySpendingData[] => {
     const spendingMap = new Map<string, { amount: number; count: number; tagName: string }>();
     
     transactions.forEach(transaction => {
@@ -183,7 +177,7 @@ const ReportsPage: React.FC = () => {
     }));
 
     return spending.sort((a, b) => b.totalAmount - a.totalAmount);
-  };
+  }, [colors]);
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-US', {
@@ -306,7 +300,7 @@ const ReportsPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {spendingData.map((item, index) => {
+                {spendingData.map((item) => {
                   const percentage = totalSpending > 0 ? (item.totalAmount / totalSpending) * 100 : 0;
                   
                   return (

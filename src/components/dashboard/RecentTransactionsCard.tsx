@@ -8,8 +8,7 @@ import {
   orderBy, 
   limit, 
   getDocs,
-  where,
-  type User
+  where
 } from 'firebase/firestore';
 import { db, getAccounts, getTags, type Transaction, type Account, type Tag } from '../../firebase/config';
 
@@ -21,13 +20,11 @@ interface TransactionWithAccountName extends Transaction {
 
 const RecentTransactionsCard: React.FC = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<TransactionWithAccountName[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
       if (user) {
         await loadRecentTransactions(user.uid);
       } else {
