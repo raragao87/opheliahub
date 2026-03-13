@@ -1,6 +1,6 @@
 import React from 'react';
 import { type Transaction, type TransactionSplit } from '../firebase/config';
-import InlineTagInput from './InlineTagInput';
+import TagSelector from './TagSelector';
 
 interface EditFormData {
   date: string;
@@ -139,10 +139,9 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
                       />
                     </td>
                     <td className="px-4 py-2">
-                      <InlineTagInput
+                      <TagSelector
                         selectedTagIds={editFormData.tagIds || []}
-                        onTagChange={(tagIds) => updateEditFormData('tagIds', tagIds)}
-                        mode="inline"
+                        onTagChange={(tagIds: string[]) => updateEditFormData('tagIds', tagIds)}
                       />
                     </td>
                     <td className="px-4 py-2 text-right">
@@ -185,7 +184,7 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
                       />
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
-                      {new Date(transaction.date).toLocaleDateString()}
+                      {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'No Date'}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center">
@@ -352,10 +351,9 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
 
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Tags</label>
-                    <InlineTagInput
+                    <TagSelector
                       selectedTagIds={editFormData.tagIds || []}
-                      onTagChange={(tagIds) => updateEditFormData('tagIds', tagIds)}
-                      mode="inline"
+                      onTagChange={(tagIds: string[]) => updateEditFormData('tagIds', tagIds)}
                     />
                   </div>
                 </div>
@@ -374,7 +372,7 @@ const ResponsiveTransactionList: React.FC<ResponsiveTransactionListProps> = ({
                     <div>
                       <h4 className="text-sm font-medium text-gray-900">{transaction.description}</h4>
                       <p className="text-xs text-gray-500">
-                        {new Date(transaction.date).toLocaleDateString()}
+                        {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'No Date'}
                       </p>
                     </div>
                   </div>

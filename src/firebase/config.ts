@@ -819,6 +819,9 @@ export const getAccountsByUser = async (userId: string): Promise<Account[]> => {
   }
 };
 
+// Alias for backward compatibility
+export const getAccounts = getAccountsByUser;
+
 // Get all accessible accounts (owned + shared) for a user
 export const getAccessibleAccounts = async (userId: string): Promise<Account[]> => {
   try {

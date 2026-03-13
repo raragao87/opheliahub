@@ -517,6 +517,7 @@ interface TransactionTableProps {
   selectedAccount: Account;
   totalTransactionCount: number;
   onTransactionUpdate: () => void;
+  onEditTransaction: (transaction: Transaction & { id: string }) => void;
   onLinkTransaction: (transaction: Transaction & { id: string }) => void;
   splittingTransaction: Transaction & { id: string } | null;
   setSplittingTransaction: (transaction: Transaction & { id: string } | null) => void;
@@ -530,6 +531,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
   selectedAccount,
   totalTransactionCount,
   onTransactionUpdate,
+  onEditTransaction,
   onLinkTransaction,
   setSplittingTransaction,
   setShowSplitModal
@@ -1534,7 +1536,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                   <div>
                     <h4 className="text-sm font-medium text-gray-900">{transaction.description}</h4>
                     <p className="text-xs text-gray-500">
-                      {new Date(transaction.date).toLocaleDateString()}
+                      {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'No Date'}
                     </p>
                   </div>
                 </div>
@@ -1577,7 +1579,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                 <div className="flex items-center space-x-3">
                   <button
-                    onClick={() => handleEditTransaction(transaction)}
+                    onClick={() => onEditTransaction(transaction)}
                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
                     Edit
@@ -1592,7 +1594,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                     Split
                   </button>
                   <button
-                    onClick={() => handleLinkTransaction(transaction)}
+                    onClick={() => onLinkTransaction(transaction)}
                     className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
                   >
                     Link
@@ -1832,6 +1834,13 @@ const FinancialHubSplitViewPage: React.FC = () => {
   const handleLinkTransaction = (transaction: Transaction & { id: string }) => {
     setSelectedTransactionForLinking(transaction);
     setShowLinkTransactionsModal(true);
+  };
+
+  const handleEditTransaction = (transaction: Transaction & { id: string }) => {
+    // TODO: Implement inline editing functionality
+    console.log('Edit transaction:', transaction);
+    // For now, just refresh to simulate edit completion
+    handleTransactionUpdate();
   };
 
   const handleImportComplete = () => {
@@ -2332,6 +2341,7 @@ const FinancialHubSplitViewPage: React.FC = () => {
                 selectedAccount={selectedAccount}
                 totalTransactionCount={totalTransactionCount}
                 onTransactionUpdate={handleTransactionUpdate}
+                onEditTransaction={handleEditTransaction}
                 onLinkTransaction={handleLinkTransaction}
                 splittingTransaction={splittingTransaction}
                 setSplittingTransaction={setSplittingTransaction}

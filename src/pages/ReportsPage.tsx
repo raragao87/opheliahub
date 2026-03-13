@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import useDarkMode from '../hooks/useDarkMode';
+// Removed unused useDarkMode import
 import { 
   getTags,
   type Transaction,
@@ -22,11 +22,11 @@ interface MonthlySpendingData {
   totalAmount: number;
   transactionCount: number;
   color: string;
+  percentage: number;
 }
 
 const ReportsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isDarkMode } = useDarkMode();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -34,43 +34,71 @@ const ReportsPage: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
-  // Color palette for categories (enhanced for dark mode compatibility)
-  const colors = useMemo(() => isDarkMode ? [
-    '#f87171', '#fb923c', '#fbbf24', '#facc15',
-    '#a3e635', '#4ade80', '#34d399', '#2dd4bf',
-    '#22d3ee', '#38bdf8', '#60a5fa', '#818cf8',
-    '#a78bfa', '#c084fc', '#e879f9', '#f472b6',
-    '#fb7185', '#94a3b8', '#9ca3af', '#6b7280'
-  ] : [
-    '#ef4444', '#f97316', '#f59e0b', '#eab308', 
-    '#84cc16', '#22c55e', '#10b981', '#14b8a6',
-    '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
-    '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
-    '#f43f5e', '#64748b', '#6b7280', '#374151'
-  ], [isDarkMode]);
+  // Colors are now generated dynamically in calculateSpendingBreakdown
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          setLoading(true);
-          setError(null);
-          await loadReportData(user);
-        } catch (error) {
-          console.error('❌ Error loading reports data:', error);
-          setError('Failed to load reports data');
-        } finally {
-          setLoading(false);
-        }
+  // useEffect moved below function definitions to avoid hoisting issues
+
+  const calculateSpendingBreakdown = useCallback((transactions: Transaction[], userTags: Tag[]): MonthlySpendingData[] => {
+    const spendingMap = new Map<string, { amount: number; count: number; tagName: string }>();
+    
+    transactions.forEach(transaction => {
+      // Only include expense transactions (negative amounts for expense accounts)
+      if (transaction.amount >= 0) return; // Skip income/positive transactions
+      
+      const absAmount = Math.abs(transaction.amount);
+      
+      if (transaction.tagIds && transaction.tagIds.length > 0) {
+        // Group by tag
+        transaction.tagIds.forEach(tagId => {
+          const tag = userTags.find(t => t.id === tagId);
+          if (tag) {
+            const existing = spendingMap.get(tagId);
+            if (existing) {
+              existing.amount += absAmount / transaction.tagIds!.length; // Split amount across tags
+              existing.count += 1 / transaction.tagIds!.length;
+            } else {
+              spendingMap.set(tagId, { 
+                amount: absAmount / transaction.tagIds!.length, 
+                count: 1 / transaction.tagIds!.length,
+                tagName: tag.name 
+              });
+            }
+          }
+        });
       } else {
-        setTransactions([]);
-        setSpendingData([]);
-        setLoading(false);
+        // Untagged transactions
+        const existing = spendingMap.get('untagged');
+        if (existing) {
+          existing.amount += absAmount;
+          existing.count += 1;
+        } else {
+          spendingMap.set('untagged', { 
+            amount: absAmount, 
+            count: 1,
+            tagName: 'Untagged'
+          });
+        }
       }
     });
 
-    return () => unsubscribe();
-  }, [loadReportData]);
+    // Convert to array and sort by amount
+    const spending: MonthlySpendingData[] = Array.from(spendingMap.entries()).map(([key, data], index) => ({
+      category: key,
+      tagName: data.tagName,
+      totalAmount: data.amount,
+      transactionCount: Math.round(data.count),
+      color: `hsl(${(index * 360) / 10}, 70%, 50%)`, // Generate colors
+      percentage: 0 // Will be calculated after we have the total
+    }));
+
+    // Calculate percentages
+    const totalSpending = spending.reduce((sum, item) => sum + item.totalAmount, 0);
+    spending.forEach(item => {
+      item.percentage = totalSpending > 0 ? (item.totalAmount / totalSpending) * 100 : 0;
+    });
+
+    return spending.sort((a, b) => b.totalAmount - a.totalAmount);
+  }, []);
 
   const loadReportData = useCallback(async (user: User) => {
     console.log('📊 Loading reports data for user:', user.uid);
@@ -124,60 +152,7 @@ const ReportsPage: React.FC = () => {
     }
   };
 
-  const calculateSpendingBreakdown = useCallback((transactions: Transaction[], userTags: Tag[]): MonthlySpendingData[] => {
-    const spendingMap = new Map<string, { amount: number; count: number; tagName: string }>();
-    
-    transactions.forEach(transaction => {
-      // Only include expense transactions (negative amounts for expense accounts)
-      if (transaction.amount >= 0) return; // Skip income/positive transactions
-      
-      const absAmount = Math.abs(transaction.amount);
-      
-      if (transaction.tagIds && transaction.tagIds.length > 0) {
-        // Group by tag
-        transaction.tagIds.forEach(tagId => {
-          const tag = userTags.find(t => t.id === tagId);
-          if (tag) {
-            const existing = spendingMap.get(tagId);
-            if (existing) {
-              existing.amount += absAmount / transaction.tagIds!.length; // Split amount across tags
-              existing.count += 1 / transaction.tagIds!.length;
-            } else {
-              spendingMap.set(tagId, { 
-                amount: absAmount / transaction.tagIds!.length, 
-                count: 1 / transaction.tagIds!.length,
-                tagName: tag.name 
-              });
-            }
-          }
-        });
-      } else {
-        // Untagged transactions
-        const existing = spendingMap.get('untagged');
-        if (existing) {
-          existing.amount += absAmount;
-          existing.count += 1;
-        } else {
-          spendingMap.set('untagged', { 
-            amount: absAmount, 
-            count: 1,
-            tagName: 'Untagged'
-          });
-        }
-      }
-    });
-
-    // Convert to array and sort by amount
-    const spending: MonthlySpendingData[] = Array.from(spendingMap.entries()).map(([key, data], index) => ({
-      category: key,
-      tagName: data.tagName,
-      totalAmount: data.amount,
-      transactionCount: Math.round(data.count),
-      color: colors[index % colors.length]
-    }));
-
-    return spending.sort((a, b) => b.totalAmount - a.totalAmount);
-  }, [colors]);
+  // Duplicate function removed - moved earlier in the file
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-US', {
@@ -193,6 +168,30 @@ const ReportsPage: React.FC = () => {
     ];
     return months[month - 1];
   };
+
+  // Auth effect - placed after function definitions to avoid hoisting issues
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          setLoading(true);
+          setError(null);
+          await loadReportData(user);
+        } catch (error) {
+          console.error('❌ Error loading reports data:', error);
+          setError('Failed to load reports data');
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setTransactions([]);
+        setSpendingData([]);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [loadReportData]);
 
   const totalSpending = spendingData.reduce((sum, item) => sum + item.totalAmount, 0);
 

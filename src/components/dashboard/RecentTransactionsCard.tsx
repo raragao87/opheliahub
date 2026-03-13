@@ -14,7 +14,7 @@ import { db, getAccounts, getTags, type Transaction, type Account, type Tag } fr
 
 interface TransactionWithAccountName extends Transaction {
   accountName: string;
-  accountType: 'asset' | 'liability';
+  accountType: string;
   tagNames: string[];
 }
 
@@ -53,22 +53,22 @@ const RecentTransactionsCard: React.FC = () => {
         getTags(userId)
       ]);
       
-      const transactions = transactionsSnapshot.docs.map(doc => ({
+      const transactions = transactionsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data()
       })) as Transaction[];
       
       // Create maps for quick lookup
       const accountsMap = new Map<string, Account & { id: string }>();
-      accounts.forEach(account => accountsMap.set(account.id, account));
+      accounts.forEach((account: Account & { id: string }) => accountsMap.set(account.id, account));
       
       const tagsMap = new Map<string, Tag>();
-      tags.forEach(tag => tagsMap.set(tag.id, tag));
+      tags.forEach((tag: Tag) => tagsMap.set(tag.id, tag));
       
       // Enrich transactions with account names and tag names
-      const enrichedTransactions: TransactionWithAccountName[] = transactions.map(transaction => {
+      const enrichedTransactions: TransactionWithAccountName[] = transactions.map((transaction) => {
         const account = accountsMap.get(transaction.accountId);
-        const tagNames = transaction.tagIds?.map(tagId => tagsMap.get(tagId)?.name).filter(Boolean) || [];
+        const tagNames = transaction.tagIds?.map((tagId: string) => tagsMap.get(tagId)?.name).filter(Boolean) || [];
         
         return {
           ...transaction,
