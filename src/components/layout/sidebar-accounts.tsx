@@ -11,7 +11,7 @@ import { MoneyDisplay } from "@/components/shared/money-display";
 import { groupAccountsForSidebar, ACCOUNT_TYPE_META } from "@/lib/account-types";
 import type { SidebarGroupKey } from "@/lib/account-types";
 import { fromCents, parseToCents } from "@/lib/money";
-import { ChevronDown, ChevronRight, Pencil, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, Upload } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -175,14 +175,24 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
         >
           Accounts
         </Link>
-        <Link
-          href="/accounts/new"
-          onClick={onNavigate}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-          title="Add account"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/transactions/import"
+            onClick={onNavigate}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            title="Import transactions"
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </Link>
+          <Link
+            href="/accounts/new"
+            onClick={onNavigate}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            title="Add account"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </div>
 
       {/* Loading skeleton */}

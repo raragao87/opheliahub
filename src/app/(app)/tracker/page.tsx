@@ -156,6 +156,8 @@ export default function TrackerPage() {
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupIcon, setNewGroupIcon] = useState("");
+  const [newGroupType, setNewGroupType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
+  const [editingGroupType, setEditingGroupType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [editingIcon, setEditingIcon] = useState("");
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(period.year);
@@ -800,10 +802,10 @@ export default function TrackerPage() {
 
       {/* ── Tracker Grid ────────────────────────────────────────── */}
       <DndContext
-        sensors={isEditing ? [] : sensors}
+        sensors={sensors}
         collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
+        onDragStart={isEditing ? undefined : handleDragStart}
+        onDragEnd={isEditing ? undefined : handleDragEnd}
       >
       <div className="rounded-lg border bg-card overflow-x-clip">
         <table className="w-full text-sm min-w-[600px]">
@@ -925,6 +927,7 @@ export default function TrackerPage() {
                                   id: group.id,
                                   name: editingName.trim(),
                                   icon: editingIcon.trim() || undefined,
+                                  type: editingGroupType,
                                 });
                               }
                             }}
@@ -948,6 +951,18 @@ export default function TrackerPage() {
                               }}
                               className="bg-transparent border-0 border-b border-primary/50 outline-none font-semibold text-sm py-0 px-1 w-full max-w-[200px]"
                             />
+                            <button
+                              type="button"
+                              onClick={() => setEditingGroupType((t) => t === "INCOME" ? "EXPENSE" : "INCOME")}
+                              className={cn(
+                                "text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0",
+                                editingGroupType === "INCOME"
+                                  ? "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
+                                  : "border-muted text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              {editingGroupType === "INCOME" ? "Income" : "Expense"}
+                            </button>
                             <button
                               type="submit"
                               className="text-muted-foreground hover:text-foreground"
@@ -1003,6 +1018,7 @@ export default function TrackerPage() {
                                   setEditingCategoryId(group.id);
                                   setEditingName(group.name);
                                   setEditingIcon(group.icon ?? "");
+                                  setEditingGroupType(group.type);
                                 }}
                                 className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
                                 title="Rename group"
@@ -1387,7 +1403,7 @@ export default function TrackerPage() {
                           name: newGroupName.trim(),
                           parentId: null,
                           visibility,
-                          type: "EXPENSE",
+                          type: newGroupType,
                           icon: newGroupIcon.trim() || undefined,
                         });
                       }
@@ -1410,10 +1426,23 @@ export default function TrackerPage() {
                           setShowAddGroup(false);
                           setNewGroupName("");
                           setNewGroupIcon("");
+                          setNewGroupType("EXPENSE");
                         }
                       }}
                       className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm font-semibold py-0 px-1 flex-1 max-w-[300px]"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setNewGroupType((t) => t === "INCOME" ? "EXPENSE" : "INCOME")}
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0",
+                        newGroupType === "INCOME"
+                          ? "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
+                          : "border-muted text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {newGroupType === "INCOME" ? "Income" : "Expense"}
+                    </button>
                     <button
                       type="submit"
                       disabled={!newGroupName.trim() || createCategoryMutation.isPending}
@@ -1427,6 +1456,7 @@ export default function TrackerPage() {
                         setShowAddGroup(false);
                         setNewGroupName("");
                         setNewGroupIcon("");
+                        setNewGroupType("EXPENSE");
                       }}
                       className="text-muted-foreground hover:text-foreground"
                     >

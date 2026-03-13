@@ -154,20 +154,40 @@ export const trackerRouter = router({
         ],
       });
 
-      // Get actual income received this month
+      // Fetch leaf category IDs by type (used to scope actual income/expense to correct category types)
+      const leafCategories = await ctx.prisma.category.findMany({
+        where: { householdId: ctx.householdId, parentId: { not: null }, visibility: input.visibility },
+        select: { id: true, type: true },
+      });
+      const incomeCategoryIds = leafCategories.filter((c) => c.type === "INCOME").map((c) => c.id);
+      const expenseCategoryIds = leafCategories.filter((c) => c.type === "EXPENSE").map((c) => c.id);
+
+      // Get actual income received this month — only from INCOME-type categories
       const incomeAgg = await ctx.prisma.transaction.aggregate({
         where: {
-          AND: [visibilityFilter, liquidFilter, effectiveDateFilter(start, end), { type: "INCOME" }],
+          AND: [
+            visibilityFilter,
+            liquidFilter,
+            effectiveDateFilter(start, end),
+            { type: "INCOME" },
+            { categoryId: { in: incomeCategoryIds } },
+          ],
         },
         _sum: { amount: true },
       });
       const actualIncome = incomeAgg._sum.amount ?? 0;
 
-      // Get actual spending per category for this month
+      // Get actual spending per category for this month — only EXPENSE-type categories
       const spending = await ctx.prisma.transaction.groupBy({
         by: ["categoryId"],
         where: {
-          AND: [visibilityFilter, liquidFilter, effectiveDateFilter(start, end), { type: "EXPENSE" }],
+          AND: [
+            visibilityFilter,
+            liquidFilter,
+            effectiveDateFilter(start, end),
+            { type: "EXPENSE" },
+            { OR: [{ categoryId: { in: expenseCategoryIds } }, { categoryId: null }] },
+          ],
         },
         _sum: { amount: true },
       });
@@ -176,11 +196,17 @@ export const trackerRouter = router({
         spending.map((s) => [s.categoryId, Math.abs(s._sum.amount ?? 0)])
       );
 
-      // Get actual income per category for this month
+      // Get actual income per category for this month (only INCOME-type categories)
       const incomeByCategory = await ctx.prisma.transaction.groupBy({
         by: ["categoryId"],
         where: {
-          AND: [visibilityFilter, liquidFilter, effectiveDateFilter(start, end), { type: "INCOME" }],
+          AND: [
+            visibilityFilter,
+            liquidFilter,
+            effectiveDateFilter(start, end),
+            { type: "INCOME" },
+            { categoryId: { in: incomeCategoryIds } },
+          ],
         },
         _sum: { amount: true },
       });

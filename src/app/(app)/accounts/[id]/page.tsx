@@ -125,6 +125,16 @@ function AccountDetailContent() {
     })
   );
 
+  const [flipConfirm, setFlipConfirm] = useState(false);
+  const flipMutation = useMutation(
+    trpc.account.flipTransactionSigns.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        setFlipConfirm(false);
+      },
+    })
+  );
+
   if (accountQuery.isLoading) {
     return <div className="text-muted-foreground">Loading...</div>;
   }
@@ -422,6 +432,51 @@ function AccountDetailContent() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              {/* Fix Transaction Signs — only for liability accounts (credit cards, loans) */}
+              {ACCOUNT_TYPE_META[account.type]?.isLiability && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Fix Transaction Signs</p>
+                      <p className="text-xs text-muted-foreground">
+                        Flip all transaction amounts. Use if expenses were imported as positive
+                        numbers (common with credit card CSV exports).
+                      </p>
+                    </div>
+                    {!flipConfirm ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setFlipConfirm(true)}
+                      >
+                        Fix Signs
+                      </Button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Are you sure?</span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={flipMutation.isPending}
+                          onClick={() => flipMutation.mutate({ id: accountId })}
+                        >
+                          {flipMutation.isPending ? "Fixing..." : "Yes, flip all"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFlipConfirm(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t" />
+                </>
+              )}
+
               {/* Archive / Reactivate */}
               <div className="flex items-center justify-between">
                 <div>

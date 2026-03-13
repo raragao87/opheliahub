@@ -29,6 +29,7 @@ const detectedFieldSchema = z.object({
   mappedTo: z.enum(MAPPED_FIELD_NAMES),
   confidence: z.number().min(0).max(1),
   sampleValues: z.array(z.string()),
+  signConvention: z.enum(["positive", "negative"]).optional(),
 });
 
 const fileStructureAnalysisSchema = z.object({
@@ -37,6 +38,7 @@ const fileStructureAnalysisSchema = z.object({
   decimalSeparator: z.enum([".", ","]),
   hasHeaderRow: z.boolean(),
   additionalNotes: z.string(),
+  detectedInstitution: z.string().nullable(),
 });
 
 // ── System prompt ───────────────────────────────────────────────────────────
@@ -55,8 +57,8 @@ For each column, identify which semantic field it represents. Valid mappedTo val
 - "date": transaction date
 - "description": transaction description or merchant name
 - "amount": a single amount column (positive = credit, negative = debit)
-- "debit": debit-only amount column (money out, usually positive numbers)
-- "credit": credit-only amount column (money in, usually positive numbers)
+- "debit": debit-only amount column (money out)
+- "credit": credit-only amount column (money in)
 - "balance": running account balance (NOT the transaction amount)
 - "currency": currency code (EUR, USD, etc.)
 - "counterpartyName": name of the other party
@@ -64,6 +66,11 @@ For each column, identify which semantic field it represents. Valid mappedTo val
 - "reference": payment reference or transaction ID
 - "transactionType": category or type code from the bank
 - "unknown": cannot determine
+
+For "debit" and "credit" columns, also set "signConvention":
+- "positive": values are stored as positive numbers (most common, e.g. "87.17" in a Money Out column)
+- "negative": values are stored as negative numbers for outflows (e.g. eToro's "Money Out" column stores "-87.17" instead of "87.17")
+Omit signConvention for non-amount columns (date, description, balance, currency, etc.).
 
 For date format, use date-fns format strings (e.g. "dd-MM-yyyy", "yyyyMMdd", "yyyy-MM-dd", "d MMM yyyy").
 For decimalSeparator: European format uses comma (1.234,56), US/international uses period (1,234.56).
@@ -77,14 +84,18 @@ The JSON must match this exact structure:
       "sourceColumn": "column header or 0-based index",
       "mappedTo": "one of the valid values above",
       "confidence": 0.95,
-      "sampleValues": ["val1", "val2", "val3"]
+      "sampleValues": ["val1", "val2", "val3"],
+      "signConvention": "positive"
     }
   ],
   "dateFormat": "dd-MM-yyyy",
   "decimalSeparator": ",",
   "hasHeaderRow": true,
-  "additionalNotes": "Any extra observations about this file format"
-}`;
+  "additionalNotes": "Any extra observations about this file format",
+  "detectedInstitution": "ING"
+}
+
+For "detectedInstitution": set to the bank or broker name if you can identify it from the filename, column headers, or data values (e.g. "ING", "ABN AMRO", "Revolut", "eToro", "Millennium BCP", "American Express"). Set to null if the institution cannot be determined.`;
 
 // ── Main function ───────────────────────────────────────────────────────────
 

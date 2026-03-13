@@ -29,6 +29,18 @@ export interface CsvTransformResult {
   errors: { row: number; message: string }[];
 }
 
+export interface AmountColumnHints {
+  /** Whether the debit column stores values as positive or negative numbers */
+  debitSignConvention?: "positive" | "negative";
+  /** Whether the credit column stores values as positive or negative numbers */
+  creditSignConvention?: "positive" | "negative";
+  /**
+   * Invert the sign of single-column amounts after parsing.
+   * Use for credit card exports where expenses appear as positive numbers.
+   */
+  invertAmounts?: boolean;
+}
+
 // Non-English month abbreviations → English equivalents
 const MONTH_MAP: Record<string, string> = {
   // Dutch
@@ -77,7 +89,8 @@ export function parseCsvFile(
 export function transformCsvToTransactions(
   rows: Record<string, string>[],
   mapping: ColumnMapping,
-  dateFormat: string = "dd/MM/yyyy"
+  dateFormat: string = "dd/MM/yyyy",
+  amountHints?: AmountColumnHints
 ): CsvTransformResult {
   const transactions: ParsedTransaction[] = [];
   const errors: { row: number; message: string }[] = [];
@@ -142,8 +155,14 @@ export function transformCsvToTransactions(
           continue;
         }
 
-        const debit = debitStr ? parseAmountString(debitStr) : 0;
-        const credit = creditStr ? parseAmountString(creditStr) : 0;
+        let debit = debitStr ? parseAmountString(debitStr) : 0;
+        let credit = creditStr ? parseAmountString(creditStr) : 0;
+
+        // Normalize sign: if a column stores outflows as negative numbers
+        // (e.g. eToro's Money Out = -87.17), flip to positive before computing
+        // credit - debit so the resulting amount has the correct sign.
+        if (amountHints?.debitSignConvention === "negative") debit = -debit;
+        if (amountHints?.creditSignConvention === "negative") credit = -credit;
 
         amountCents = credit - debit;
       } else {
@@ -157,6 +176,9 @@ export function transformCsvToTransactions(
         if (isNaN(amountCents)) {
           errors.push({ row: rowNum, message: `Could not parse amount: '${amountStr}'` });
           continue;
+        }
+        if (amountHints?.invertAmounts) {
+          amountCents = -amountCents;
         }
       }
 

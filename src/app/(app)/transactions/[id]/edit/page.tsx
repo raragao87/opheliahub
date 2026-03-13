@@ -14,7 +14,7 @@ import { MoneyDisplay } from "@/components/shared/money-display";
 import { CategorySelect } from "@/components/shared/category-select";
 import { fromCents, toCents } from "@/lib/money";
 import { formatDate } from "@/lib/date";
-import { ArrowLeft, ArrowLeftRight, Trash2, Save } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Trash2, Save, Sparkles } from "lucide-react";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 
 export default function EditTransactionPage({
@@ -285,6 +285,34 @@ export default function EditTransactionPage({
             {!isTransfer && !isIlliquid && (
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
+
+                {/* Ophelia suggestion banner — shown when AI has a suggestion and no user category is set */}
+                {txn.opheliaCategoryId && !form.categoryId && txn.opheliaCategory && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800">
+                    <Sparkles className="h-4 w-4 text-violet-500 dark:text-violet-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-violet-900 dark:text-violet-100">
+                        <span className="font-medium">Ophelia suggests:</span>{" "}
+                        {txn.opheliaCategory.name}
+                        {txn.opheliaConfidence != null && (
+                          <span className="ml-1 text-xs text-violet-600 dark:text-violet-400">
+                            ({Math.round(txn.opheliaConfidence * 100)}% confidence)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900"
+                      onClick={() => setForm({ ...form, categoryId: txn.opheliaCategoryId! })}
+                    >
+                      Accept
+                    </Button>
+                  </div>
+                )}
+
                 <CategorySelect
                   id="category"
                   value={form.categoryId}

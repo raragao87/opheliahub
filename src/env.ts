@@ -17,6 +17,7 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((v) => v === "true"),
+  OPHELIA_CRON_SECRET: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

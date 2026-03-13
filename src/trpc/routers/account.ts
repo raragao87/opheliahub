@@ -215,6 +215,58 @@ export const accountRouter = router({
       });
     }),
 
+  /**
+   * Flip the sign of all imported transactions in an account.
+   * Use to correct credit card accounts where expenses were imported as positive amounts.
+   * The "Initial Balance" transaction is excluded — it was set correctly by the user.
+   */
+  flipTransactionSigns: householdProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify the user owns this account
+      const account = await ctx.prisma.financialAccount.findFirst({
+        where: { id: input.id, ownerId: ctx.userId },
+      });
+
+      if (!account) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Account not found or you don't have permission.",
+        });
+      }
+
+      // Fetch all transactions except Initial Balance
+      const transactions = await ctx.prisma.transaction.findMany({
+        where: { accountId: input.id, isInitialBalance: false },
+        select: { id: true, amount: true },
+      });
+
+      // Flip amount and rederive type for each transaction, then recalculate balance
+      await ctx.prisma.$transaction(async (tx) => {
+        for (const t of transactions) {
+          const newAmount = -t.amount;
+          const newType =
+            newAmount > 0 ? "INCOME" : newAmount < 0 ? "EXPENSE" : "TRANSFER";
+          await tx.transaction.update({
+            where: { id: t.id },
+            data: { amount: newAmount, type: newType },
+          });
+        }
+
+        // Recalculate account balance from all transactions (including Initial Balance)
+        const agg = await tx.transaction.aggregate({
+          where: { accountId: input.id },
+          _sum: { amount: true },
+        });
+        await tx.financialAccount.update({
+          where: { id: input.id },
+          data: { balance: agg._sum.amount ?? 0 },
+        });
+      });
+
+      return { flipped: transactions.length };
+    }),
+
   /** Reconcile: set the new total balance and auto-create an adjustment transaction */
   reconcile: householdProcedure
     .input(

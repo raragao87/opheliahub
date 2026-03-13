@@ -137,6 +137,12 @@ describe.skipIf(!HAS_API_KEY)(
             bySource(r, "Money In")?.mappedTo === "credit";
           expect(hasAmount || hasDebitCredit).toBe(true);
 
+          // When using debit/credit split, Money Out values are negative
+          // (e.g. -87.17), so signConvention must be "negative"
+          if (hasDebitCredit) {
+            expect(bySource(r, "Money Out")?.signConvention).toBe("negative");
+          }
+
           // Currency column
           expect(bySource(r, "Currency")?.mappedTo).toBe("currency");
 
