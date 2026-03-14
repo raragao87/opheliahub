@@ -200,6 +200,7 @@ model FinancialAccount {
 
   @@index([ownerId])
   @@index([householdId])
+  @@index([householdId, isActive])
   @@map("financial_accounts")
 }
 
@@ -260,6 +261,10 @@ model Transaction {
   @@index([date])
   @@index([externalId])
   @@index([importBatchId])
+  @@index([accountId, date])
+  @@index([opheliaProcessedAt])
+  @@index([visibility, userId])
+  @@index([categoryId, date])
   @@map("transactions")
 }
 
