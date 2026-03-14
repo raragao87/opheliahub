@@ -59,6 +59,14 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   // Fetch all accounts (including migrated assets/debts)
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
   const allAccounts = accountsQuery.data ?? [];
+
+  // Fetch per-account pending Ophelia counts (poll every 30s)
+  const pendingByAccountQuery = useQuery({
+    ...trpc.ophelia.pendingByAccount.queryOptions(),
+    refetchInterval: 30_000,
+  });
+  const pendingByAccount = pendingByAccountQuery.data?.byAccount ?? {};
+
   const visibleAccounts = allAccounts.filter(
     (a) =>
       a.isActive &&
@@ -288,6 +296,11 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
+                        {(pendingByAccount[item.id] ?? 0) > 0 && (
+                          <span className="rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none">
+                            {pendingByAccount[item.id]}
+                          </span>
+                        )}
                       </span>
 
                       {isEditingThis ? (

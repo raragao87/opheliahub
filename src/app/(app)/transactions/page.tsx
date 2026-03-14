@@ -19,7 +19,6 @@ import {
   X,
   Receipt,
   Loader2,
-  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -536,37 +535,6 @@ function TransactionsContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions, autoCategorizeMutation.isPending]);
 
-  // ── Ophelia categorization ─────────────────────────────────────────
-  const categorizeMutation = useMutation(
-    trpc.ophelia.runCategorization.mutationOptions({
-      onSuccess: (data) => {
-        if (!data.opheliaEnabled) {
-          toast.error("Ophelia AI is not enabled");
-          return;
-        }
-        const { processed, skipped, errors, hasMore } = data;
-        if (errors > 0 && processed === 0) {
-          toast.error(
-            `Ophelia encountered ${errors} error${errors !== 1 ? "s" : ""} — check the server logs`
-          );
-        } else if (processed === 0 && skipped > 0) {
-          toast.success("All transactions are already up to date");
-        } else if (processed === 0 && skipped === 0 && errors === 0) {
-          toast.success("All transactions are already categorized");
-        } else {
-          const msg =
-            `Ophelia categorized ${processed} transaction${processed !== 1 ? "s" : ""}` +
-            (skipped > 0 ? ` · ${skipped} skipped` : "") +
-            (errors > 0 ? ` · ${errors} errors` : "") +
-            (hasMore ? " · more remaining, click again" : "");
-          toast.success(msg);
-        }
-        queryClient.invalidateQueries();
-      },
-      onError: (err) => toast.error(err.message),
-    })
-  );
-
   const selectedIdsArray = useMemo(() => Array.from(selectedIds), [selectedIds]);
 
   // ── Derived data for filters ───────────────────────────────────────
@@ -681,20 +649,6 @@ function TransactionsContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => categorizeMutation.mutate(undefined)}
-            disabled={categorizeMutation.isPending}
-            title="Run Ophelia AI categorization on uncategorized transactions"
-          >
-            {categorizeMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4 mr-1.5" />
-            )}
-            <span className="hidden sm:inline">Categorize</span>
-          </Button>
           <Button variant="outline" size="sm" onClick={() => router.push("/transactions/import")}>
             <Upload className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Import</span>

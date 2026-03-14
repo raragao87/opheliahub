@@ -157,6 +157,28 @@ export const opheliaRouter = router({
   }),
 
   /**
+   * Returns pending Ophelia count grouped by accountId.
+   * Used by the sidebar to show per-account uncategorized badges.
+   */
+  pendingByAccount: householdProcedure.query(async ({ ctx }) => {
+    if (!isOpheliaEnabled()) return { byAccount: {} as Record<string, number>, enabled: false };
+    const groups = await ctx.prisma.transaction.groupBy({
+      by: ["accountId"],
+      where: {
+        account: { householdId: ctx.householdId },
+        opheliaProcessedAt: null,
+        isInitialBalance: false,
+      },
+      _count: { _all: true },
+    });
+    const byAccount: Record<string, number> = {};
+    for (const g of groups) {
+      byAccount[g.accountId] = g._count._all;
+    }
+    return { byAccount, enabled: true };
+  }),
+
+  /**
    * Acceptance rate and top corrections from OpheliaFeedback.
    * Returns null fields when there is not enough data yet.
    */
