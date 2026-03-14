@@ -239,21 +239,24 @@ export async function categorizeTransactionBatch(
       const validCategoryIds = new Set(categories.map((c) => c.id));
       const resultMap = new Map(results.map((r) => [r.index, r]));
 
+      // Track transactions where AI returned an invalid category ID — these get a retry pass.
+      const retryNeeded: Array<{ tx: (typeof transactions)[number]; localIndex: number }> = [];
+
       for (let i = 0; i < transactions.length; i++) {
         const tx = transactions[i];
         const result = resultMap.get(i);
 
         // Validate the suggested category ID — AI sometimes returns hallucinated IDs.
-        // If the ID isn't in our fetched list, null it out to avoid FK constraint failures.
-        const safeCategoryId =
-          result?.suggestedCategoryId && validCategoryIds.has(result.suggestedCategoryId)
-            ? result.suggestedCategoryId
-            : null;
+        // Write null for now; invalid ones are collected for a focused retry.
+        const hasInvalidCategory =
+          !!result?.suggestedCategoryId && !validCategoryIds.has(result.suggestedCategoryId);
+        const safeCategoryId = hasInvalidCategory ? null : (result?.suggestedCategoryId ?? null);
 
-        if (result?.suggestedCategoryId && !safeCategoryId) {
+        if (hasInvalidCategory) {
           console.warn(
-            `[Ophelia] Discarding invalid suggestedCategoryId "${result.suggestedCategoryId}" for tx ${tx.id} — not in household category list`
+            `[Ophelia] Invalid suggestedCategoryId "${result!.suggestedCategoryId}" for tx ${tx.id} — queuing retry`
           );
+          retryNeeded.push({ tx, localIndex: retryNeeded.length });
         }
 
         try {
@@ -277,6 +280,67 @@ export async function categorizeTransactionBatch(
           errors++;
         }
       }
+
+      // ── Retry pass for invalid category suggestions ──────────────────────────
+      // Re-runs enrichment for the subset that got hallucinated IDs and patches
+      // just the opheliaCategoryId field if the retry returns a valid ID.
+      if (retryNeeded.length > 0) {
+        console.log(`[Ophelia] Retrying categorization for ${retryNeeded.length} transaction(s) with invalid category suggestions`);
+        const retryResults = await enrichTransactions({
+          transactions: retryNeeded.map(({ tx }) => ({
+            date: tx.date.toISOString().slice(0, 10),
+            description: tx.description,
+            amount: tx.amount,
+          })),
+          categories: categories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            parentName: c.parent?.name ?? undefined,
+          })),
+          tags: tags.map((t) => ({
+            id: t.id,
+            name: t.name,
+            groupName: t.group?.name ?? undefined,
+          })),
+          recentExamples: [
+            ...correctionExamples,
+            ...recentExamples
+              .filter((t) => t.category !== null)
+              .map((t) => ({
+                description: t.description,
+                categoryName: t.category!.name,
+                displayName: t.displayName ?? t.description,
+                tags: t.tags.map((tt) => tt.tag.name),
+              })),
+          ].slice(0, 20),
+        });
+
+        if (retryResults) {
+          for (const { tx, localIndex } of retryNeeded) {
+            const retryResult = retryResults.find((r) => r.index === localIndex);
+            const retryId = retryResult?.suggestedCategoryId;
+            if (retryId && validCategoryIds.has(retryId)) {
+              try {
+                await prisma.transaction.update({
+                  where: { id: tx.id },
+                  data: {
+                    opheliaCategoryId: retryId,
+                    opheliaConfidence: retryResult?.categoryConfidence ?? null,
+                  },
+                });
+                console.log(`[Ophelia] Retry success for tx ${tx.id} — category: ${retryId}`);
+              } catch (retryErr) {
+                console.error(`[Ophelia] Retry update failed for tx ${tx.id}:`, retryErr);
+              }
+            } else if (retryId) {
+              console.warn(`[Ophelia] Retry also returned invalid category "${retryId}" for tx ${tx.id} — leaving uncategorized`);
+            }
+          }
+        } else {
+          console.warn(`[Ophelia] Retry enrichment failed — ${retryNeeded.length} transaction(s) remain uncategorized`);
+        }
+      }
+
       // ── Feedback cleanup ────────────────────────────────────────────
       // Keep only the most recent 500 feedback records per household
       // to prevent unbounded table growth.
