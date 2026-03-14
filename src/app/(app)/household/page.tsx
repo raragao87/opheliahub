@@ -27,15 +27,19 @@ import {
   X,
   Users,
 } from "lucide-react";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { t } from "@/lib/translations";
 
 export default function HouseholdPage() {
   const trpc = useTRPC();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   const sessionQuery = useQuery(trpc.auth.getSession.queryOptions());
   const session = sessionQuery.data;
 
   if (sessionQuery.isLoading) {
-    return <div className="text-muted-foreground">Loading...</div>;
+    return <div className="text-muted-foreground">{t(lang, "common.loading")}</div>;
   }
 
   if (!session?.household) {
@@ -50,17 +54,18 @@ function CreateHouseholdView() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   const createMutation = useMutation(
     trpc.household.create.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
-        router.refresh(); // Refresh server components (layout banner)
+        router.refresh();
       },
     })
   );
 
-  // Check for pending invite
   const acceptMutation = useMutation(
     trpc.household.acceptInvite.mutationOptions({
       onSuccess: () => {
@@ -81,14 +86,12 @@ function CreateHouseholdView() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Set Up Your Household</h1>
+      <h1 className="text-3xl font-bold">{t(lang, "household.setupTitle")}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Create a Household</CardTitle>
-          <CardDescription>
-            Create a household to start managing your finances together.
-          </CardDescription>
+          <CardTitle>{t(lang, "household.createTitle")}</CardTitle>
+          <CardDescription>{t(lang, "household.createDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -99,7 +102,7 @@ function CreateHouseholdView() {
             className="space-y-4"
           >
             <div className="space-y-2">
-              <Label htmlFor="name">Household Name</Label>
+              <Label htmlFor="name">{t(lang, "household.householdName")}</Label>
               <Input
                 id="name"
                 placeholder="e.g., The Johnson Family"
@@ -112,7 +115,7 @@ function CreateHouseholdView() {
               disabled={!name.trim() || createMutation.isPending}
               className="w-full"
             >
-              {createMutation.isPending ? "Creating..." : "Create Household"}
+              {createMutation.isPending ? t(lang, "household.creating") : t(lang, "household.createBtn")}
             </Button>
             {createMutation.error && (
               <p className="text-sm text-red-600">{createMutation.error.message}</p>
@@ -123,10 +126,8 @@ function CreateHouseholdView() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Pending Invitation?</CardTitle>
-          <CardDescription>
-            If your partner has invited you, accept the invitation here.
-          </CardDescription>
+          <CardTitle>{t(lang, "household.pendingCard")}</CardTitle>
+          <CardDescription>{t(lang, "household.pendingCardDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="flex gap-2">
           <Button
@@ -135,7 +136,7 @@ function CreateHouseholdView() {
             className="flex-1"
           >
             <Check className="h-4 w-4 mr-1" />
-            Accept Invite
+            {t(lang, "household.acceptInvite")}
           </Button>
           <Button
             variant="outline"
@@ -144,7 +145,7 @@ function CreateHouseholdView() {
             className="flex-1"
           >
             <X className="h-4 w-4 mr-1" />
-            Reject
+            {t(lang, "household.reject")}
           </Button>
         </CardContent>
       </Card>
@@ -165,6 +166,8 @@ function HouseholdManageView() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   const householdQuery = useQuery(trpc.household.get.queryOptions());
   const household = householdQuery.data;
@@ -181,7 +184,7 @@ function HouseholdManageView() {
       onSuccess: () => {
         setEditingName(false);
         queryClient.invalidateQueries();
-        toast.success("Household name updated.");
+        toast.success(t(lang, "common.saved"));
       },
       onError: (err) => {
         toast.error(err.message);
@@ -194,7 +197,7 @@ function HouseholdManageView() {
       onSuccess: () => {
         setEmail("");
         queryClient.invalidateQueries();
-        toast.success("Invitation sent!");
+        toast.success(t(lang, "household.invite") + "!");
       },
       onError: (err) => {
         toast.error(err.message);
@@ -207,7 +210,7 @@ function HouseholdManageView() {
       onSuccess: () => {
         setRemoveTarget(null);
         queryClient.invalidateQueries();
-        toast.success("Member removed.");
+        toast.success(t(lang, "household.remove") + "d.");
       },
       onError: (err) => {
         toast.error(err.message);
@@ -220,7 +223,7 @@ function HouseholdManageView() {
       onSuccess: () => {
         setTransferTarget(null);
         queryClient.invalidateQueries();
-        toast.success("Ownership transferred.");
+        toast.success(t(lang, "household.transfer") + "red.");
       },
       onError: (err) => {
         toast.error(err.message);
@@ -268,11 +271,11 @@ function HouseholdManageView() {
     if (member.inviteStatus === "PENDING") {
       return (
         <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
-          Pending invite
+          {t(lang, "household.pendingInviteTag")}
         </Badge>
       );
     }
-    const roleLabel = member.role === "OWNER" ? "Owner" : "Member";
+    const roleLabel = member.role === "OWNER" ? t(lang, "common.owner") : t(lang, "common.member");
     const since = member.joinedAt
       ? new Date(member.joinedAt).toLocaleDateString("en-GB", {
           month: "short",
@@ -285,7 +288,7 @@ function HouseholdManageView() {
           {roleLabel}
         </Badge>
         {since && (
-          <span className="text-xs text-muted-foreground">Member since {since}</span>
+          <span className="text-xs text-muted-foreground">{t(lang, "common.memberSince")} {since}</span>
         )}
       </div>
     );
@@ -315,16 +318,16 @@ function HouseholdManageView() {
                 disabled={updateMutation.isPending}
               >
                 <Check className="h-4 w-4" />
-                Save
+                {t(lang, "common.save")}
               </Button>
               <Button size="sm" variant="ghost" onClick={cancelEditName}>
                 <X className="h-4 w-4" />
-                Cancel
+                {t(lang, "common.cancel")}
               </Button>
             </div>
           ) : (
             <>
-              <h1 className="text-3xl font-bold">{household?.name ?? "Loading..."}</h1>
+              <h1 className="text-3xl font-bold">{household?.name ?? t(lang, "common.loading")}</h1>
               {isOwner && (
                 <button
                   onClick={startEditName}
@@ -342,8 +345,8 @@ function HouseholdManageView() {
       {/* Members Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Members</CardTitle>
-          <CardDescription>People who are part of your household.</CardDescription>
+          <CardTitle>{t(lang, "household.members")}</CardTitle>
+          <CardDescription>{t(lang, "household.membersDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {household?.members.map((member) => {
@@ -397,7 +400,7 @@ function HouseholdManageView() {
                           }
                         >
                           <ArrowRightLeft className="h-3 w-3 mr-1" />
-                          Transfer ownership
+                          {t(lang, "household.transferOwnership")}
                         </Button>
                         <Button
                           size="sm"
@@ -408,12 +411,12 @@ function HouseholdManageView() {
                           }
                         >
                           <Trash2 className="h-3 w-3 mr-1" />
-                          Remove
+                          {t(lang, "household.remove")}
                         </Button>
                       </>
                     )}
                     {isPending && (
-                      <span className="text-xs text-muted-foreground">Waiting</span>
+                      <span className="text-xs text-muted-foreground">{t(lang, "household.pendingWaiting")}</span>
                     )}
                   </div>
                 )}
@@ -427,10 +430,8 @@ function HouseholdManageView() {
       {isOwner && (
         <Card>
           <CardHeader>
-            <CardTitle>Invite Someone</CardTitle>
-            <CardDescription>
-              Invite someone to join your household. They'll need to sign in with this Google account.
-            </CardDescription>
+            <CardTitle>{t(lang, "household.inviteTitle")}</CardTitle>
+            <CardDescription>{t(lang, "household.inviteDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <form
@@ -442,14 +443,14 @@ function HouseholdManageView() {
             >
               <Input
                 type="email"
-                placeholder="partner@email.com"
+                placeholder={t(lang, "household.invitePlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="flex-1"
               />
               <Button type="submit" disabled={!email.trim() || inviteMutation.isPending}>
                 <Mail className="h-4 w-4 mr-1" />
-                {inviteMutation.isPending ? "Sending..." : "Invite"}
+                {inviteMutation.isPending ? t(lang, "household.inviting") : t(lang, "household.invite")}
               </Button>
             </form>
             {inviteMutation.error && (
@@ -463,11 +464,8 @@ function HouseholdManageView() {
       {!isOwner && (
         <Card className="border-red-200">
           <CardHeader>
-            <CardTitle className="text-red-700">Leave Household</CardTitle>
-            <CardDescription>
-              Once you leave, you'll lose access to all shared data. Your personal accounts and
-              transactions are unaffected.
-            </CardDescription>
+            <CardTitle className="text-red-700">{t(lang, "household.leaveTitle")}</CardTitle>
+            <CardDescription>{t(lang, "household.leaveDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button
@@ -475,7 +473,7 @@ function HouseholdManageView() {
               onClick={() => setShowLeaveDialog(true)}
             >
               <UserMinus className="h-4 w-4 mr-2" />
-              Leave Household
+              {t(lang, "household.leaveBtn")}
             </Button>
           </CardContent>
         </Card>
@@ -484,15 +482,14 @@ function HouseholdManageView() {
       {/* Remove Member Dialog */}
       <Dialog open={!!removeTarget} onClose={() => setRemoveTarget(null)}>
         <DialogHeader onClose={() => setRemoveTarget(null)}>
-          <DialogTitle>Remove {removeTarget?.name}?</DialogTitle>
+          <DialogTitle>{t(lang, "household.remove")} {removeTarget?.name}?</DialogTitle>
           <DialogDescription>
-            Remove {removeTarget?.name} from this household? They will lose access to all shared
-            data. Their personal data is unaffected.
+            {t(lang, "household.remove")} {removeTarget?.name} from this household? They will lose access to all shared data. Their personal data is unaffected.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => setRemoveTarget(null)}>
-            Cancel
+            {t(lang, "common.cancel")}
           </Button>
           <Button
             variant="destructive"
@@ -501,7 +498,7 @@ function HouseholdManageView() {
               if (removeTarget) removeMutation.mutate({ userId: removeTarget.id });
             }}
           >
-            {removeMutation.isPending ? "Removing..." : "Remove"}
+            {removeMutation.isPending ? t(lang, "household.removing") : t(lang, "household.remove")}
           </Button>
         </DialogFooter>
       </Dialog>
@@ -509,14 +506,14 @@ function HouseholdManageView() {
       {/* Transfer Ownership Dialog */}
       <Dialog open={!!transferTarget} onClose={() => setTransferTarget(null)}>
         <DialogHeader onClose={() => setTransferTarget(null)}>
-          <DialogTitle>Transfer ownership to {transferTarget?.name}?</DialogTitle>
+          <DialogTitle>{t(lang, "household.transferOwnership")} to {transferTarget?.name}?</DialogTitle>
           <DialogDescription>
             You will become a regular member and {transferTarget?.name} will be the new owner.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => setTransferTarget(null)}>
-            Cancel
+            {t(lang, "common.cancel")}
           </Button>
           <Button
             disabled={transferMutation.isPending}
@@ -524,7 +521,7 @@ function HouseholdManageView() {
               if (transferTarget) transferMutation.mutate({ newOwnerId: transferTarget.id });
             }}
           >
-            {transferMutation.isPending ? "Transferring..." : "Transfer"}
+            {transferMutation.isPending ? t(lang, "household.transferring") : t(lang, "household.transfer")}
           </Button>
         </DialogFooter>
       </Dialog>
@@ -532,22 +529,21 @@ function HouseholdManageView() {
       {/* Leave Household Dialog */}
       <Dialog open={showLeaveDialog} onClose={() => setShowLeaveDialog(false)}>
         <DialogHeader onClose={() => setShowLeaveDialog(false)}>
-          <DialogTitle>Leave {household?.name}?</DialogTitle>
+          <DialogTitle>{t(lang, "household.leaveTitle")} — {household?.name}?</DialogTitle>
           <DialogDescription>
-            You will lose access to all shared data. Your personal accounts and transactions are
-            unaffected.
+            {t(lang, "household.leaveDesc")}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => setShowLeaveDialog(false)}>
-            Cancel
+            {t(lang, "common.cancel")}
           </Button>
           <Button
             variant="destructive"
             disabled={leaveMutation.isPending}
             onClick={() => leaveMutation.mutate()}
           >
-            {leaveMutation.isPending ? "Leaving..." : "Leave"}
+            {leaveMutation.isPending ? t(lang, "household.leaving") : t(lang, "household.leaveBtn")}
           </Button>
         </DialogFooter>
       </Dialog>

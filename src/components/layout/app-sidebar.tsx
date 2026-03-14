@@ -8,10 +8,21 @@ import { cn } from "@/lib/utils";
 import { useOwnership } from "@/lib/ownership-context";
 import { navSections } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { t } from "@/lib/translations";
+
+// Map nav item href → translation key
+const NAV_ITEM_KEYS: Record<string, "nav.dashboard" | "nav.tracker" | "nav.planner"> = {
+  "/dashboard": "nav.dashboard",
+  "/tracker": "nav.tracker",
+  "/planner": "nav.planner",
+};
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { visibility, setVisibility } = useOwnership();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   const isActive = (href: string) =>
     pathname === href ||
@@ -33,7 +44,7 @@ export function AppSidebar() {
         {/* Ownership filter */}
         <div className="px-3 pt-4 pb-2">
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
-            Showing
+            {t(lang, "sidebar.showing")}
           </p>
           <div className="flex gap-1.5">
             <button
@@ -47,7 +58,7 @@ export function AppSidebar() {
               )}
             >
               <Users className="h-3.5 w-3.5" />
-              Shared
+              {t(lang, "common.shared")}
             </button>
             <button
               type="button"
@@ -60,7 +71,7 @@ export function AppSidebar() {
               )}
             >
               <User className="h-3.5 w-3.5" />
-              Personal
+              {t(lang, "common.personal")}
             </button>
           </div>
         </div>
@@ -70,24 +81,28 @@ export function AppSidebar() {
           {navSections.map((section) => (
             <div key={section.label} className="mb-4">
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 mb-1">
-                {section.label}
+                {t(lang, "nav.sectionMain")}
               </p>
               <div className="space-y-0.5">
-                {section.items.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
-                      "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                      isActive(item.href)
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    )}
-                  >
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
-                    {item.name}
-                  </Link>
-                ))}
+                {section.items.map((item) => {
+                  const nameKey = NAV_ITEM_KEYS[item.href];
+                  const name = nameKey ? t(lang, nameKey) : item.name;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={cn(
+                        "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        isActive(item.href)
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      {name}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           ))}

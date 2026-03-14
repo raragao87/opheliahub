@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Use class-based dark mode so next-themes can control it */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-background: #ffffff;
   --color-foreground: #0a0a0a;
@@ -46,8 +49,8 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  @theme {
+.dark {
+  @theme inline {
     --color-background: #0a0a0a;
     --color-foreground: #fafafa;
     --color-muted: #262626;

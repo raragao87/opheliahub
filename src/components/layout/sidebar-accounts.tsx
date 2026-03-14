@@ -12,6 +12,8 @@ import { groupAccountsForSidebar, ACCOUNT_TYPE_META } from "@/lib/account-types"
 import type { SidebarGroupKey } from "@/lib/account-types";
 import { fromCents, parseToCents } from "@/lib/money";
 import { ChevronDown, ChevronRight, Pencil, Plus, Upload } from "lucide-react";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { t } from "@/lib/translations";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -46,6 +48,8 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { isVisible } = useOwnership();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   // Detect which account(s) are active from the URL
   const isOnTransactions = pathname === "/transactions";
@@ -91,15 +95,16 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
       });
 
       const groupAccountIds = items.map((i) => i.id).join(",");
+      const labelKey = ag.key === "LIQUID" ? "sidebar.liquid" : "sidebar.illiquid";
       return {
         key: ag.key,
-        label: ag.label,
+        label: t(lang, labelKey),
         items,
         totalBalance: items.reduce((s, i) => s + i.balance, 0),
         href: items.length > 0 ? `/transactions?accountIds=${groupAccountIds}` : "/transactions",
       } satisfies SidebarGroup;
     });
-  }, [visibleAccounts, allAccounts]);
+  }, [visibleAccounts, allAccounts, lang]);
 
   // Collapse state per group (all start expanded)
   const [collapsed, setCollapsed] = useState<
@@ -183,7 +188,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
             onClick={onNavigate}
             className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
           >
-            Accounts
+            {t(lang, "nav.accounts")}
           </Link>
           {totalPending > 0 && (
             <span className="rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none">

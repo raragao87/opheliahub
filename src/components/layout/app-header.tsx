@@ -19,6 +19,15 @@ import { useOwnership } from "@/lib/ownership-context";
 import { navSections } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
 import { FeedbackDialog } from "@/components/shared/feedback-dialog";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { t } from "@/lib/translations";
+
+// Map nav item href → translation key
+const NAV_ITEM_KEYS: Record<string, "nav.dashboard" | "nav.tracker" | "nav.planner"> = {
+  "/dashboard": "nav.dashboard",
+  "/tracker": "nav.tracker",
+  "/planner": "nav.planner",
+};
 
 interface AppHeaderProps {
   userName?: string | null;
@@ -32,6 +41,8 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { visibility, setVisibility } = useOwnership();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   const isActive = (href: string) =>
     pathname === href ||
@@ -112,18 +123,18 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
 
             <DropdownMenuItem onClick={() => router.push("/household")}>
               <Home className="h-4 w-4" />
-              Household
+              {t(lang, "nav.household")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/settings")}>
               <Settings className="h-4 w-4" />
-              Settings
+              {t(lang, "nav.settings")}
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
 
             <DropdownMenuItem onClick={() => setFeedbackOpen(true)}>
               <MessageSquarePlus className="h-4 w-4" />
-              Give Feedback
+              {t(lang, "nav.giveFeedback")}
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -133,7 +144,7 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
               className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
             >
               <LogOut className="h-4 w-4" />
-              Sign out
+              {t(lang, "nav.signOut")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -166,7 +177,7 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
             {/* Ownership filter */}
             <div className="px-3 pt-4 pb-2">
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
-                Showing
+                {t(lang, "sidebar.showing")}
               </p>
               <div className="flex gap-1.5">
                 <button
@@ -180,7 +191,7 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
                   )}
                 >
                   <Users className="h-3.5 w-3.5" />
-                  Shared
+                  {t(lang, "common.shared")}
                 </button>
                 <button
                   type="button"
@@ -193,7 +204,7 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
                   )}
                 >
                   <User className="h-3.5 w-3.5" />
-                  Personal
+                  {t(lang, "common.personal")}
                 </button>
               </div>
             </div>
@@ -203,25 +214,29 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
               {navSections.map((section) => (
                 <div key={section.label} className="mb-4">
                   <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 mb-1">
-                    {section.label}
+                    {t(lang, "nav.sectionMain")}
                   </p>
                   <div className="space-y-0.5">
-                    {section.items.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={cn(
-                          "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                          isActive(item.href)
-                            ? "bg-primary text-primary-foreground"
-                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                        )}
-                      >
-                        <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {item.name}
-                      </Link>
-                    ))}
+                    {section.items.map((item) => {
+                      const nameKey = NAV_ITEM_KEYS[item.href];
+                      const name = nameKey ? t(lang, nameKey) : item.name;
+                      return (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                            isActive(item.href)
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          )}
+                        >
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
+                          {name}
+                        </Link>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -230,7 +245,7 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
               <Suspense
                 fallback={
                   <div className="px-3 py-2 text-xs text-muted-foreground">
-                    Loading accounts...
+                    {t(lang, "common.loading")}
                   </div>
                 }
               >

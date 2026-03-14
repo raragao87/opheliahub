@@ -18,10 +18,15 @@ import {
 } from "@/components/ui/dialog";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { t } from "@/lib/translations";
 
 export function DangerZone({ userEmail }: { userEmail: string }) {
   const trpc = useTRPC();
   const router = useRouter();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
+
   const [open, setOpen] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
   const [serverError, setServerError] = useState("");
@@ -35,7 +40,6 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
   const deleteMutation = useMutation(
     trpc.auth.deleteAccount.mutationOptions({
       onSuccess: async () => {
-        // Sign out on the client side via the next-auth signout endpoint
         await fetch("/api/auth/signout", { method: "POST" });
         router.push("/login?deleted=true");
       },
@@ -65,19 +69,15 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
         <CardHeader>
           <CardTitle className="text-red-700 dark:text-red-400 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
-            Danger Zone
+            {t(lang, "danger.title")}
           </CardTitle>
-          <CardDescription>
-            Irreversible actions. Proceed with extreme caution.
-          </CardDescription>
+          <CardDescription>{t(lang, "danger.desc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Delete my account</p>
-              <p className="text-sm text-muted-foreground">
-                Permanently delete your account and all personal data.
-              </p>
+              <p className="text-sm font-medium">{t(lang, "danger.deleteAccount")}</p>
+              <p className="text-sm text-muted-foreground">{t(lang, "danger.deleteDesc")}</p>
             </div>
             <Button
               variant="outline"
@@ -85,7 +85,7 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
               onClick={() => setOpen(true)}
             >
               <Trash2 className="h-4 w-4 mr-1.5" />
-              Delete account
+              {t(lang, "danger.deleteBtn")}
             </Button>
           </div>
         </CardContent>
@@ -93,10 +93,8 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
 
       <Dialog open={open} onClose={handleClose} className="max-w-lg">
         <DialogHeader onClose={handleClose}>
-          <DialogTitle>Delete your account</DialogTitle>
-          <DialogDescription>
-            This action is permanent and cannot be undone.
-          </DialogDescription>
+          <DialogTitle>{t(lang, "danger.dialogTitle")}</DialogTitle>
+          <DialogDescription>{t(lang, "danger.dialogDesc")}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
@@ -112,7 +110,7 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
                   {/* What will be deleted */}
                   <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-4 space-y-2">
                     <p className="text-sm font-semibold text-red-800 dark:text-red-400">
-                      Will be permanently deleted:
+                      {t(lang, "danger.willDelete")}
                     </p>
                     <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
                       {stats.personalAccounts > 0 && (
@@ -147,7 +145,7 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
                     !stats.isOnlyMember && (
                       <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900 p-4 space-y-2">
                         <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                          Will NOT be affected:
+                          {t(lang, "danger.willNotAffect")}
                         </p>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
                           {stats.sharedAccounts} shared account
@@ -167,7 +165,7 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
                     <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
                       <p className="text-sm text-amber-800 dark:text-amber-300">
                         <span className="font-semibold">
-                          You are the last household member.
+                          {t(lang, "danger.lastMemberWarning")}
                         </span>{" "}
                         The household &ldquo;{stats.householdName}&rdquo; and ALL
                         its data — including shared accounts, transactions, and
@@ -228,7 +226,7 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
               onClick={handleClose}
               disabled={deleteMutation.isPending}
             >
-              Cancel
+              {t(lang, "danger.cancel")}
             </Button>
             <Button
               type="submit"
@@ -238,12 +236,12 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
               {deleteMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
+                  {t(lang, "danger.deleting")}
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4 mr-1.5" />
-                  Delete my account
+                  {t(lang, "danger.confirmDelete")}
                 </>
               )}
             </Button>
