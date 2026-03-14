@@ -171,18 +171,26 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
     groupKey === "ILLIQUID";
 
   const isLoading = accountsQuery.isLoading;
+  const totalPending = Object.values(pendingByAccount).reduce((sum, n) => sum + n, 0);
 
   return (
     <div className="mt-2">
       {/* Section header with add account button */}
       <div className="flex items-center justify-between px-3 mb-1">
-        <Link
-          href="/transactions"
-          onClick={onNavigate}
-          className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-        >
-          Accounts
-        </Link>
+        <div className="flex items-center gap-1.5">
+          <Link
+            href="/transactions"
+            onClick={onNavigate}
+            className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+          >
+            Accounts
+          </Link>
+          {totalPending > 0 && (
+            <span className="rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none">
+              {totalPending}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <Link
             href="/transactions/import"

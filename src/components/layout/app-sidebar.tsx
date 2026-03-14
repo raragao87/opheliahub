@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useOwnership } from "@/lib/ownership-context";
 import { navSections, bottomNavItems } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
-import { OpheliaStatus } from "./ophelia-status";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -20,7 +19,7 @@ export function AppSidebar() {
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-      <div className="flex flex-col flex-grow border-r bg-card">
+      <div className="flex flex-col h-full overflow-hidden border-r bg-card">
         {/* Logo */}
         <div className="flex items-center h-16 flex-shrink-0 px-4 border-b">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -67,7 +66,7 @@ export function AppSidebar() {
         </div>
 
         {/* Main navigation — grouped sections */}
-        <nav className="flex-1 overflow-y-auto px-2 py-2">
+        <nav className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
           {navSections.map((section) => (
             <div key={section.label} className="mb-4">
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 mb-1">
@@ -98,9 +97,6 @@ export function AppSidebar() {
             <SidebarAccounts />
           </Suspense>
         </nav>
-
-        {/* Ophelia status */}
-        <OpheliaStatus />
 
         {/* Bottom-anchored items */}
         <div className="border-t px-2 py-2 space-y-0.5">
