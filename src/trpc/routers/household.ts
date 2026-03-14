@@ -174,4 +174,74 @@ export const householdRouter = router({
       data: { inviteStatus: "REJECTED" },
     });
   }),
+
+  update: householdProcedure
+    .input(z.object({ name: z.string().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.householdRole !== "OWNER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the owner can rename the household." });
+      }
+      return ctx.prisma.household.update({
+        where: { id: ctx.householdId },
+        data: { name: input.name },
+      });
+    }),
+
+  removeMember: householdProcedure
+    .input(z.object({ userId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.householdRole !== "OWNER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the owner can remove members." });
+      }
+      if (input.userId === ctx.userId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot remove yourself. Transfer ownership or delete your account." });
+      }
+      const member = await ctx.prisma.householdMember.findFirst({
+        where: { householdId: ctx.householdId, userId: input.userId },
+      });
+      if (!member) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Member not found." });
+      }
+      await ctx.prisma.householdMember.delete({ where: { id: member.id } });
+      return { success: true };
+    }),
+
+  transferOwnership: householdProcedure
+    .input(z.object({ newOwnerId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.householdRole !== "OWNER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the owner can transfer ownership." });
+      }
+      const newOwnerMember = await ctx.prisma.householdMember.findFirst({
+        where: { householdId: ctx.householdId, userId: input.newOwnerId, inviteStatus: "ACCEPTED" },
+      });
+      if (!newOwnerMember) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Target user is not an accepted member." });
+      }
+      await ctx.prisma.$transaction([
+        ctx.prisma.householdMember.updateMany({
+          where: { householdId: ctx.householdId, userId: ctx.userId },
+          data: { role: "PARTNER" },
+        }),
+        ctx.prisma.householdMember.updateMany({
+          where: { householdId: ctx.householdId, userId: input.newOwnerId },
+          data: { role: "OWNER" },
+        }),
+      ]);
+      return { success: true };
+    }),
+
+  leave: protectedProcedure.mutation(async ({ ctx }) => {
+    const membership = await ctx.prisma.householdMember.findFirst({
+      where: { userId: ctx.userId, inviteStatus: "ACCEPTED" },
+    });
+    if (!membership) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "You are not a member of any household." });
+    }
+    if (membership.role === "OWNER") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Owners cannot leave. Transfer ownership first." });
+    }
+    await ctx.prisma.householdMember.delete({ where: { id: membership.id } });
+    return { success: true };
+  }),
 });
