@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
+import { chatCompletion, extractJSON, isOpheliaEnabled } from "@/lib/ophelia";
 
 export const categoryRouter = router({
   /** Flat list of leaf categories (for dropdowns — grouped by parent) */
@@ -169,6 +170,58 @@ export const categoryRouter = router({
       }
 
       return ctx.prisma.category.delete({ where: { id: input.id } });
+    }),
+
+  /** Ophelia: suggest emoji icons for a category name */
+  suggestIcon: householdProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(100),
+        parentName: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      console.log(`[Ophelia] suggestIcon called for: "${input.name}"`);
+      if (!isOpheliaEnabled()) return { emojis: [] };
+
+      const context = input.parentName
+        ? ` in the "${input.parentName}" budget group`
+        : "";
+      const result = await chatCompletion({
+        systemPrompt:
+          'You are a budgeting assistant. Respond with ONLY a raw JSON array of 5 emoji strings. No markdown, no explanation, no code fences. Just the array. Example output: ["🛒","🏪","🍎","🧺","💳"]',
+        userMessage: `Suggest 5 emoji icons for this budget category: "${input.name}"${context}`,
+        temperature: 0.7,
+        maxTokens: 100,
+      });
+
+      if (!result) return { emojis: [] };
+
+      // Try content after </think> first (clean output)
+      const afterThink = result.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      if (afterThink) {
+        try {
+          const direct = JSON.parse(afterThink);
+          if (Array.isArray(direct) && direct.length > 0) {
+            return { emojis: direct.filter((e) => typeof e === "string").slice(0, 5) };
+          }
+        } catch { /* fall through */ }
+        const arr = extractJSON<string[]>(afterThink);
+        if (Array.isArray(arr) && arr.length > 0) {
+          return { emojis: arr.filter((e) => typeof e === "string").slice(0, 5) };
+        }
+      }
+
+      // Fallback: extract emojis from the full response (model puts them in <think>)
+      // Use Extended_Pictographic to capture all emoji types including ZWJ sequences
+      const emojiMatches = [
+        ...new Set(
+          (result.match(/\p{Extended_Pictographic}(\u200D\p{Extended_Pictographic})*/gu) ?? [])
+            .filter((e) => e.codePointAt(0)! > 0x00FF) // exclude ASCII-range symbols
+        ),
+      ];
+      console.log(`[Ophelia] suggestIcon extracted from thinking for "${input.name}":`, emojiMatches);
+      return { emojis: emojiMatches.slice(0, 5) };
     }),
 
   /** Bulk reorder categories and/or groups */

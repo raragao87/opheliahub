@@ -2,7 +2,14 @@ import { signIn } from "@/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string }>;
+}) {
+  const params = await searchParams;
+  const wasDeleted = params.deleted === "true";
+
   return (
     <Card className="w-full max-w-md mx-4">
       <CardHeader className="text-center">
@@ -14,7 +21,14 @@ export default function LoginPage() {
           Manage your family and personal finances in one place.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {wasDeleted && (
+          <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-center">
+            <p className="text-sm text-slate-600">
+              Your account has been deleted. We&apos;re sorry to see you go.
+            </p>
+          </div>
+        )}
         <form
           action={async () => {
             "use server";

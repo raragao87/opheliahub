@@ -67,6 +67,7 @@ model User {
 
   // Domain relations
   householdMembers      HouseholdMember[]
+  pendingInvitesSent    PendingInvite[]
   financialAccounts     FinancialAccount[]
   transactions          Transaction[]
   trackers              Tracker[]
@@ -79,6 +80,7 @@ model User {
   auditLogs             AuditLog[]
   recurringRules        RecurringRule[]
   dismissedPatterns     DismissedRecurringPattern[]
+  feedback              Feedback[]
 
   @@map("users")
 }
@@ -90,6 +92,7 @@ model Household {
   updatedAt DateTime @updatedAt
 
   members               HouseholdMember[]
+  pendingInvites        PendingInvite[]
   categories            Category[]
   tagGroups             TagGroup[]
   financialAccounts     FinancialAccount[]
@@ -99,6 +102,20 @@ model Household {
   opheliaFeedback       OpheliaFeedback[]
 
   @@map("households")
+}
+
+model PendingInvite {
+  id          String   @id @default(cuid())
+  householdId String
+  email       String
+  invitedById String
+  createdAt   DateTime @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, email])
+  @@map("pending_invites")
 }
 
 enum HouseholdRole {
@@ -577,4 +594,35 @@ model OpheliaFeedback {
 
   @@index([householdId, createdAt])
   @@map("ophelia_feedback")
+}
+
+// ─── USER FEEDBACK ───────────────────────────────────────────────────
+
+model Feedback {
+  id          String   @id @default(cuid())
+  type        String   // "bug" | "feedback" | "idea"
+  title       String
+  description String   @db.Text
+  status      String   @default("new") // "new" | "seen" | "resolved"
+
+  // Automatic context
+  pageUrl    String?
+  userAgent  String?
+  screenSize String?
+  errorLogs  String?  @db.Text
+
+  // User info (denormalized)
+  userId    String
+  userEmail String?
+  userName  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("feedback")
 }

@@ -12,6 +12,8 @@ import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
 import { getCurrentYearMonth, getPreviousMonth, getNextMonth, formatShortDate } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { EmojiPickerButton } from "@/components/ui/emoji-picker";
 import { extractDisplayName } from "@/lib/recurring";
 import {
   DndContext,
@@ -159,6 +161,8 @@ export default function TrackerPage() {
   const [newGroupType, setNewGroupType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [editingGroupType, setEditingGroupType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [editingIcon, setEditingIcon] = useState("");
+  const [iconSuggestions, setIconSuggestions] = useState<string[]>([]);
+  const suggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(period.year);
   const monthPickerRef = useRef<HTMLDivElement>(null);
@@ -248,6 +252,29 @@ export default function TrackerPage() {
     })
   );
 
+  const suggestIconMutation = useMutation(
+    trpc.category.suggestIcon.mutationOptions({
+      onSuccess: (data) => {
+        console.log("[suggestIcon] success:", data);
+        setIconSuggestions(data.emojis);
+      },
+      onError: (err) => {
+        console.error("[suggestIcon] error:", err);
+        toast.error(`Ophelia error: ${err.message}`);
+      },
+    })
+  );
+
+  function triggerIconSuggestion(name: string) {
+    if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
+    if (!name.trim() || name.trim().length < 2) {
+      setIconSuggestions([]);
+      return;
+    }
+    suggestDebounceRef.current = setTimeout(() => {
+      suggestIconMutation.mutate({ name: name.trim() });
+    }, 600);
+  }
 
   // Recurring queries & mutations
   const recurringQuery = useQuery(
@@ -929,24 +956,23 @@ export default function TrackerPage() {
                                   icon: editingIcon.trim() || undefined,
                                   type: editingGroupType,
                                 });
+                                setIconSuggestions([]);
                               }
                             }}
                           >
-                            <input
+                            <EmojiPickerButton
                               value={editingIcon}
-                              onChange={(e) => setEditingIcon(e.target.value)}
-                              placeholder="🏷"
-                              maxLength={2}
-                              className="w-8 text-center bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0"
+                              onChange={(emoji) => setEditingIcon(emoji)}
                             />
                             <input
                               autoFocus
                               value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
+                              onChange={(e) => { setEditingName(e.target.value); triggerIconSuggestion(e.target.value); }}
                               onKeyDown={(e) => {
                                 if (e.key === "Escape") {
                                   setEditingCategoryId(null);
                                   setEditingName("");
+                                  setIconSuggestions([]);
                                 }
                               }}
                               className="bg-transparent border-0 border-b border-primary/50 outline-none font-semibold text-sm py-0 px-1 w-full max-w-[200px]"
@@ -974,6 +1000,7 @@ export default function TrackerPage() {
                               onClick={() => {
                                 setEditingCategoryId(null);
                                 setEditingName("");
+                                setIconSuggestions([]);
                               }}
                               className="text-muted-foreground hover:text-foreground"
                             >
@@ -1019,6 +1046,10 @@ export default function TrackerPage() {
                                   setEditingName(group.name);
                                   setEditingIcon(group.icon ?? "");
                                   setEditingGroupType(group.type);
+                                  setIconSuggestions([]);
+                                  if (group.name.trim().length >= 2) {
+                                    suggestIconMutation.mutate({ name: group.name.trim() });
+                                  }
                                 }}
                                 className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
                                 title="Rename group"
@@ -1105,6 +1136,37 @@ export default function TrackerPage() {
                     )}
                   </>)}
                   </SortableTr>
+                  {/* Ophelia icon suggestions row for group edit */}
+                  {editingCategoryId === group.id && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
+                    <tr className="border-b border-border/50 bg-muted/5">
+                      <td className="py-1 px-3 pl-10" colSpan={4}>
+                        <div className="flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                          {suggestIconMutation.isPending ? (
+                            <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
+                          ) : (
+                            <>
+                              <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
+                              {iconSuggestions.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingIcon(emoji);
+                                    setIconSuggestions([]);
+                                  }}
+                                  className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                  title={`Use ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
 
                   {/* Category rows */}
                   {!isCollapsed &&
@@ -1112,12 +1174,14 @@ export default function TrackerPage() {
                       const isEditingCat = editingCategoryId === cat.id;
 
                       return (
+                        <React.Fragment key={cat.id}>
                         <SortableTr
-                          key={cat.id}
                           id={`cat-${cat.id}`}
                           className={cn(
                             "border-b border-border/50 hover:bg-muted/20 group/catrow",
-                            getRowBorder(cat.remaining, cat.allocated, cat.spent)
+                            isEditingCat && (iconSuggestions.length > 0 || suggestIconMutation.isPending)
+                              ? "border-b-0"
+                              : getRowBorder(cat.remaining, cat.allocated, cat.spent)
                           )}
                         >
                           {(catDragHandleProps) => (<>
@@ -1133,24 +1197,26 @@ export default function TrackerPage() {
                                       name: editingName.trim(),
                                       icon: editingIcon.trim() || undefined,
                                     });
+                                    setIconSuggestions([]);
                                   }
                                 }}
                               >
-                                <input
+                                <EmojiPickerButton
                                   value={editingIcon}
-                                  onChange={(e) => setEditingIcon(e.target.value)}
-                                  placeholder="🏷"
-                                  maxLength={2}
-                                  className="w-8 text-center bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0"
+                                  onChange={(emoji) => setEditingIcon(emoji)}
                                 />
+                                {suggestIconMutation.isPending && isEditingCat && (
+                                  <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
+                                )}
                                 <input
                                   autoFocus
                                   value={editingName}
-                                  onChange={(e) => setEditingName(e.target.value)}
+                                  onChange={(e) => { setEditingName(e.target.value); triggerIconSuggestion(e.target.value); }}
                                   onKeyDown={(e) => {
                                     if (e.key === "Escape") {
                                       setEditingCategoryId(null);
                                       setEditingName("");
+                                      setIconSuggestions([]);
                                     }
                                   }}
                                   className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 w-full max-w-[200px]"
@@ -1166,6 +1232,7 @@ export default function TrackerPage() {
                                   onClick={() => {
                                     setEditingCategoryId(null);
                                     setEditingName("");
+                                    setIconSuggestions([]);
                                   }}
                                   className="text-muted-foreground hover:text-foreground"
                                 >
@@ -1195,6 +1262,10 @@ export default function TrackerPage() {
                                       setEditingCategoryId(cat.id);
                                       setEditingName(cat.name);
                                       setEditingIcon(cat.icon ?? "");
+                                      setIconSuggestions([]);
+                                      if (cat.name.trim().length >= 2) {
+                                        suggestIconMutation.mutate({ name: cat.name.trim() });
+                                      }
                                     }}
                                     className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
                                     title="Rename"
@@ -1270,12 +1341,45 @@ export default function TrackerPage() {
                           </td>
                         </>)}
                         </SortableTr>
+                        {/* Ophelia icon suggestions row for category edit */}
+                        {isEditingCat && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
+                          <tr className="border-b border-border/50 bg-muted/5">
+                            <td className="py-1 px-3 pl-10" colSpan={4}>
+                              <div className="flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                                {suggestIconMutation.isPending ? (
+                                  <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
+                                    {iconSuggestions.map((emoji) => (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingIcon(emoji);
+                                          setIconSuggestions([]);
+                                        }}
+                                        className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                        title={`Use ${emoji}`}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       );
                     })}
 
                   {/* Add category inline row */}
                   {!isCollapsed && addingCategoryToGroup === group.id && (
-                    <tr className="border-b border-border/50 bg-muted/10">
+                    <>
+                    <tr className={cn("bg-muted/10", iconSuggestions.length > 0 || suggestIconMutation.isPending ? "" : "border-b border-border/50")}>
                       <td className="py-1.5 px-3 pl-10" colSpan={4}>
                         <form
                           className="flex items-center gap-2"
@@ -1288,26 +1392,28 @@ export default function TrackerPage() {
                                 visibility,
                                 icon: newCategoryIcon.trim() || undefined,
                               });
+                              setIconSuggestions([]);
                             }
                           }}
                         >
-                          <input
+                          <EmojiPickerButton
                             value={newCategoryIcon}
-                            onChange={(e) => setNewCategoryIcon(e.target.value)}
-                            placeholder="🏷"
-                            maxLength={2}
-                            className="w-8 text-center bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0"
+                            onChange={(emoji) => setNewCategoryIcon(emoji)}
                           />
+                          {suggestIconMutation.isPending && addingCategoryToGroup === group.id && (
+                            <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
+                          )}
                           <input
                             autoFocus
                             placeholder="New category name..."
                             value={newCategoryName}
-                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            onChange={(e) => { setNewCategoryName(e.target.value); triggerIconSuggestion(e.target.value); }}
                             onKeyDown={(e) => {
                               if (e.key === "Escape") {
                                 setAddingCategoryToGroup(null);
                                 setNewCategoryName("");
                                 setNewCategoryIcon("");
+                                setIconSuggestions([]);
                               }
                             }}
                             className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 flex-1 max-w-[250px]"
@@ -1327,6 +1433,7 @@ export default function TrackerPage() {
                               setAddingCategoryToGroup(null);
                               setNewCategoryName("");
                               setNewCategoryIcon("");
+                              setIconSuggestions([]);
                             }}
                             className="text-muted-foreground hover:text-foreground"
                           >
@@ -1335,6 +1442,38 @@ export default function TrackerPage() {
                         </form>
                       </td>
                     </tr>
+                    {/* Ophelia icon suggestions row for new category */}
+                    {(iconSuggestions.length > 0 || suggestIconMutation.isPending) && addingCategoryToGroup === group.id && (
+                      <tr className="border-b border-border/50 bg-muted/5">
+                        <td className="py-1 px-3 pl-10" colSpan={4}>
+                          <div className="flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                            {suggestIconMutation.isPending ? (
+                              <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
+                            ) : (
+                              <>
+                                <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
+                                {iconSuggestions.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    onClick={() => {
+                                      setNewCategoryIcon(emoji);
+                                      setIconSuggestions([]);
+                                    }}
+                                    className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                    title={`Use ${emoji}`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </>
                   )}
                 </GroupRows>
               );

@@ -1,6 +1,7 @@
 import { auth, signOut } from "@/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DangerZone } from "@/components/shared/danger-zone";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -41,6 +42,8 @@ export default async function SettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      <DangerZone userEmail={session?.user?.email ?? ""} />
     </div>
   );
 }

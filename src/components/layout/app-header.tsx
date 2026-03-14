@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, Users, User, Home, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Menu, X, Users, User, Home, Settings, LogOut, ChevronDown, MessageSquarePlus } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { useOwnership } from "@/lib/ownership-context";
 import { navSections } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
+import { FeedbackDialog } from "@/components/shared/feedback-dialog";
 
 interface AppHeaderProps {
   userName?: string | null;
@@ -27,6 +28,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { visibility, setVisibility } = useOwnership();
@@ -119,6 +121,13 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
 
             <DropdownMenuSeparator />
 
+            <DropdownMenuItem onClick={() => setFeedbackOpen(true)}>
+              <MessageSquarePlus className="h-4 w-4" />
+              Give Feedback
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
             <DropdownMenuItem
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
@@ -128,6 +137,8 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       </header>
 
       {/* Mobile navigation overlay */}

@@ -56,13 +56,6 @@ export const householdRouter = router({
   invite: householdProcedure
     .input(z.object({ email: z.email() }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.householdRole !== "OWNER") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Only the household owner can invite members.",
-        });
-      }
-
       // Check if already invited or member
       const existingMember = await ctx.prisma.householdMember.findFirst({
         where: {
@@ -98,15 +91,44 @@ export const householdRouter = router({
         });
       }
 
-      // User doesn't exist yet — they'll be linked when they sign up
-      // For now, we cannot create a HouseholdMember without a userId
-      // Return a pending invite message
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message:
-          "No account found with this email. Ask your partner to sign up first, then try inviting again.",
+      // User doesn't exist yet — create a pending invite record
+      // When they sign up, auth.ts will link it to their account
+      return ctx.prisma.pendingInvite.create({
+        data: {
+          householdId: ctx.householdId,
+          email: input.email,
+          invitedById: ctx.userId,
+        },
       });
     }),
+
+  getPendingInviteInfo: protectedProcedure.query(async ({ ctx }) => {
+    const pending = await ctx.prisma.householdMember.findFirst({
+      where: { userId: ctx.userId, inviteStatus: "PENDING" },
+      include: {
+        household: {
+          include: {
+            members: {
+              where: { role: "OWNER" },
+              include: {
+                user: { select: { name: true, email: true, image: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!pending) return null;
+
+    const owner = pending.household.members[0]?.user;
+    return {
+      householdName: pending.household.name,
+      invitedByName: owner?.name ?? "Someone",
+      invitedByEmail: owner?.email ?? "",
+      invitedByImage: owner?.image ?? null,
+    };
+  }),
 
   acceptInvite: protectedProcedure.mutation(async ({ ctx }) => {
     const pending = await ctx.prisma.householdMember.findFirst({

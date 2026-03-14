@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
 import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight } from "lucide-react";
+import { GettingStartedChecklist } from "@/components/shared/getting-started-checklist";
 
 export default function DashboardPage() {
   const trpc = useTRPC();
@@ -59,6 +60,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <GettingStartedChecklist />
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <span className="text-muted-foreground">

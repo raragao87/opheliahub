@@ -63,8 +63,10 @@ export async function chatCompletion({
  * Returns null if no valid JSON is found.
  */
 export function extractJSON<T = unknown>(raw: string): T | null {
+  // Strip <think>...</think> reasoning blocks (MiniMax-M2.5 reasoning model)
   // Strip markdown code fences (```json ... ``` or ``` ... ```)
   const stripped = raw
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
     .replace(/```(?:json)?\s*/gi, "")
     .replace(/```\s*/g, "")
     .trim();

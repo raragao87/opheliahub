@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { initErrorCapture } from "@/lib/error-capture";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { TRPCProvider } from "@/trpc/client";
@@ -15,6 +16,8 @@ function getBaseUrl() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  useEffect(() => { initErrorCapture(); }, []);
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
