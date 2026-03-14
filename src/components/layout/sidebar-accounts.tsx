@@ -284,8 +284,8 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                       )}
                     >
-                      <span className="truncate text-xs flex items-center gap-1">
-                        {item.name}
+                      <span className="min-w-0 flex-1 flex items-center gap-1">
+                        <span className="truncate text-xs">{item.name}</span>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -305,7 +305,12 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                           <Pencil className="h-3 w-3" />
                         </button>
                         {(pendingByAccount[item.id] ?? 0) > 0 && (
-                          <span className="rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none">
+                          <span className={cn(
+                            "shrink-0 rounded-full text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none",
+                            isActive
+                              ? "bg-primary-foreground/20 text-primary-foreground"
+                              : "bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400"
+                          )}>
                             {pendingByAccount[item.id]}
                           </span>
                         )}
