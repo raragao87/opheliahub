@@ -2,22 +2,33 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Menu, X, Users, User } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Menu, X, Users, User, Home, Settings, LogOut, ChevronDown } from "lucide-react";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useOwnership } from "@/lib/ownership-context";
-import { navSections, bottomNavItems } from "@/lib/nav-config";
+import { navSections } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
 
 interface AppHeaderProps {
   userName?: string | null;
   userImage?: string | null;
+  userEmail?: string | null;
 }
 
-export function AppHeader({ userName, userImage }: AppHeaderProps) {
+export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const { visibility, setVisibility } = useOwnership();
 
   const isActive = (href: string) =>
@@ -46,19 +57,77 @@ export function AppHeader({ userName, userImage }: AppHeaderProps) {
 
         <div className="flex-1" />
 
-        {/* User info */}
-        <div className="flex items-center gap-3">
-          {userImage && (
-            <img
-              src={userImage}
-              alt={userName ?? "User"}
-              className="h-8 w-8 rounded-full"
-            />
-          )}
-          <span className="text-sm font-medium hidden sm:block">
-            {userName ?? "User"}
-          </span>
-        </div>
+        {/* User menu dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent transition-colors outline-none"
+            >
+              {userImage ? (
+                <img
+                  src={userImage}
+                  alt={userName ?? "User"}
+                  className="h-7 w-7 rounded-full shrink-0"
+                />
+              ) : (
+                <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center shrink-0">
+                  <span className="text-primary-foreground font-semibold text-xs">
+                    {userName?.charAt(0)?.toUpperCase() ?? "U"}
+                  </span>
+                </div>
+              )}
+              <span className="text-sm font-medium hidden sm:block">{userName ?? "User"}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
+            </button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-56">
+            {/* User identity */}
+            <div className="flex items-center gap-2 px-2 py-2">
+              {userImage ? (
+                <img
+                  src={userImage}
+                  alt={userName ?? "User"}
+                  className="h-8 w-8 rounded-full shrink-0"
+                />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+                  <span className="text-primary-foreground font-semibold text-xs">
+                    {userName?.charAt(0)?.toUpperCase() ?? "U"}
+                  </span>
+                </div>
+              )}
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-medium truncate">{userName ?? "User"}</span>
+                {userEmail && (
+                  <span className="text-xs text-muted-foreground truncate">{userEmail}</span>
+                )}
+              </div>
+            </div>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem onClick={() => router.push("/household")}>
+              <Home className="h-4 w-4" />
+              Household
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/settings")}>
+              <Settings className="h-4 w-4" />
+              Settings
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
       {/* Mobile navigation overlay */}
@@ -68,7 +137,7 @@ export function AppHeader({ userName, userImage }: AppHeaderProps) {
             className="fixed inset-0 bg-black/50"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-64 bg-card shadow-lg flex flex-col">
+          <div className="fixed inset-y-0 left-0 w-64 bg-card shadow-lg flex flex-col overflow-hidden">
             {/* Logo */}
             <div className="flex items-center h-16 px-4 border-b flex-shrink-0">
               <Link
@@ -119,7 +188,7 @@ export function AppHeader({ userName, userImage }: AppHeaderProps) {
             </div>
 
             {/* Grouped navigation sections */}
-            <nav className="flex-1 overflow-y-auto px-2 py-2">
+            <nav className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
               {navSections.map((section) => (
                 <div key={section.label} className="mb-4">
                   <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 mb-1">
@@ -157,26 +226,6 @@ export function AppHeader({ userName, userImage }: AppHeaderProps) {
                 <SidebarAccounts onNavigate={() => setMobileMenuOpen(false)} />
               </Suspense>
             </nav>
-
-            {/* Bottom-anchored items */}
-            <div className="border-t px-2 py-2 space-y-0.5">
-              {bottomNavItems.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    isActive(item.href)
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5 flex-shrink-0" />
-                  {item.name}
-                </Link>
-              ))}
-            </div>
           </div>
         </div>
       )}

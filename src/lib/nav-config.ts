@@ -2,8 +2,6 @@ import {
   LayoutDashboard,
   PiggyBank,
   ClipboardList,
-  Home,
-  Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -29,7 +27,3 @@ export const navSections: NavSection[] = [
   },
 ];
 
-export const bottomNavItems: NavItem[] = [
-  { name: "Household", href: "/household", icon: Home },
-  { name: "Settings", href: "/settings", icon: Settings },
-];

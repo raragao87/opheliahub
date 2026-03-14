@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Users, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOwnership } from "@/lib/ownership-context";
-import { navSections, bottomNavItems } from "@/lib/nav-config";
+import { navSections } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
 
 export function AppSidebar() {
@@ -98,24 +98,6 @@ export function AppSidebar() {
           </Suspense>
         </nav>
 
-        {/* Bottom-anchored items */}
-        <div className="border-t px-2 py-2 space-y-0.5">
-          {bottomNavItems.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive(item.href)
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
-              {item.name}
-            </Link>
-          ))}
-        </div>
       </div>
     </aside>
   );
