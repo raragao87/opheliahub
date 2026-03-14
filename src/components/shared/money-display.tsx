@@ -1,5 +1,8 @@
+"use client";
+
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { useUserPreferences } from "@/lib/user-preferences-context";
 
 interface MoneyDisplayProps {
   amount: number; // cents
@@ -16,7 +19,8 @@ export function MoneyDisplay({
   colorize = true,
   showSign = false,
 }: MoneyDisplayProps) {
-  const formatted = formatMoney(Math.abs(amount), currency);
+  const { preferences } = useUserPreferences();
+  const formatted = formatMoney(Math.abs(amount), currency, preferences.locale);
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
   const display = showSign ? `${sign}${formatted}` : (amount < 0 ? `-${formatted}` : formatted);
 

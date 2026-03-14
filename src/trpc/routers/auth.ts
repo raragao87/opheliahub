@@ -101,6 +101,33 @@ export const authRouter = router({
     };
   }),
 
+  updateProfile: protectedProcedure
+    .input(z.object({
+      name: z.string().optional(),
+      locale: z.string().optional(),
+      language: z.string().optional(),
+      defaultVisibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+      theme: z.enum(["light", "dark", "system"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const data: Record<string, unknown> = {};
+      if (input.name !== undefined) data.name = input.name;
+      if (input.locale !== undefined) data.locale = input.locale;
+      if (input.language !== undefined) data.language = input.language;
+      if (input.defaultVisibility !== undefined) data.defaultVisibility = input.defaultVisibility;
+      if (input.theme !== undefined) data.theme = input.theme;
+      const user = await ctx.prisma.user.update({ where: { id: ctx.userId }, data });
+      return user;
+    }),
+
+  getPreferences: protectedProcedure.query(async ({ ctx }) => {
+    const user = await ctx.prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { locale: true, language: true, defaultVisibility: true, theme: true, name: true, email: true, image: true },
+    });
+    return user ?? { locale: "nl-NL", language: "en", defaultVisibility: "SHARED" as const, theme: "system", name: null, email: null, image: null };
+  }),
+
   deleteAccount: protectedProcedure
     .input(z.object({ confirmEmail: z.string() }))
     .mutation(async ({ ctx, input }) => {

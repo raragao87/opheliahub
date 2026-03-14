@@ -61,6 +61,12 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // User preferences
+  locale            String     @default("nl-NL")
+  language          String     @default("en")
+  defaultVisibility Visibility @default(SHARED)
+  theme             String     @default("system")
+
   // Auth.js relations
   oauthAccounts Account[]
   sessions      Session[]

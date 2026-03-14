@@ -1,49 +1,294 @@
-import { auth, signOut } from "@/auth";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
+import { useTRPC } from "@/trpc/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { DangerZone } from "@/components/shared/danger-zone";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { formatMoney } from "@/lib/money";
+import { t, type Language } from "@/lib/translations";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { signOut } from "next-auth/react";
 
-export default async function SettingsPage() {
-  const session = await auth();
+const LOCALE_OPTIONS = [
+  { value: "nl-NL", label: "Netherlands (nl-NL)" },
+  { value: "pt-BR", label: "Brazil (pt-BR)" },
+  { value: "ro-RO", label: "Romania (ro-RO)" },
+  { value: "en-US", label: "United States (en-US)" },
+  { value: "en-GB", label: "United Kingdom (en-GB)" },
+  { value: "de-DE", label: "Germany (de-DE)" },
+  { value: "fr-FR", label: "France (fr-FR)" },
+];
+
+const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "pt", label: "Português" },
+  { value: "ro", label: "Română" },
+  { value: "nl", label: "Nederlands" },
+];
+
+export default function SettingsPage() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const { preferences, updatePreferences } = useUserPreferences();
+  const { setTheme } = useTheme();
+
+  const { data, isLoading } = useQuery(trpc.auth.getPreferences.queryOptions());
+
+  const mutation = useMutation(
+    trpc.auth.updateProfile.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries(trpc.auth.getPreferences.queryOptions());
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    })
+  );
+
+  // Name editing
+  const [nameValue, setNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+
+  useEffect(() => {
+    if (data?.name != null) {
+      setNameValue(data.name);
+    }
+  }, [data?.name]);
+
+  const language = preferences.language;
+
+  async function handleSaveName() {
+    if (nameValue === data?.name) return;
+    setNameSaving(true);
+    try {
+      await mutation.mutateAsync({ name: nameValue });
+      toast.success(t(language, "common.saved"));
+    } finally {
+      setNameSaving(false);
+    }
+  }
+
+  function handleLocaleChange(locale: string) {
+    updatePreferences({ locale });
+  }
+
+  function handleLanguageChange(lang: Language) {
+    updatePreferences({ language: lang });
+  }
+
+  function handleVisibilityChange(vis: "SHARED" | "PERSONAL") {
+    updatePreferences({ defaultVisibility: vis });
+  }
+
+  function handleThemeChange(theme: "light" | "dark" | "system") {
+    setTheme(theme);
+    updatePreferences({ theme });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="max-w-lg mx-auto flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const selectedLocale = preferences.locale;
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Settings</h1>
+      <h1 className="text-3xl font-bold">{t(language, "settings.title")}</h1>
 
+      {/* Profile Section */}
       <Card>
         <CardHeader>
-          <CardTitle>Account</CardTitle>
-          <CardDescription>Your account information.</CardDescription>
+          <CardTitle>{t(language, "settings.profile")}</CardTitle>
+          <CardDescription>{t(language, "settings.profileDesc")}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
+          {/* Avatar */}
           <div className="flex items-center gap-4">
-            {session?.user?.image && (
+            {data?.image ? (
               <img
-                src={session.user.image}
-                alt={session.user.name ?? ""}
-                className="h-16 w-16 rounded-full"
+                src={data.image}
+                alt={data.name ?? ""}
+                className="h-16 w-16 rounded-full object-cover"
               />
+            ) : (
+              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center text-xl font-semibold text-muted-foreground">
+                {data?.name?.charAt(0)?.toUpperCase() ?? "?"}
+              </div>
             )}
-            <div>
-              <p className="text-lg font-medium">{session?.user?.name}</p>
-              <p className="text-sm text-muted-foreground">{session?.user?.email}</p>
+            <p className="text-xs text-muted-foreground">{t(language, "settings.avatarNote")}</p>
+          </div>
+
+          {/* Display Name */}
+          <div className="space-y-2">
+            <Label htmlFor="displayName">{t(language, "settings.editName")}</Label>
+            <div className="flex gap-2">
+              <Input
+                id="displayName"
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                placeholder="Your name"
+                className="flex-1"
+              />
+              {nameValue !== (data?.name ?? "") && (
+                <Button
+                  onClick={handleSaveName}
+                  disabled={nameSaving}
+                  size="sm"
+                >
+                  {nameSaving ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                      {t(language, "common.saving")}
+                    </>
+                  ) : (
+                    t(language, "common.save")
+                  )}
+                </Button>
+              )}
             </div>
           </div>
 
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
+          {/* Email (read-only) */}
+          <div className="space-y-2">
+            <Label htmlFor="email">{t(language, "settings.emailReadOnly")}</Label>
+            <Input
+              id="email"
+              value={data?.email ?? ""}
+              readOnly
+              disabled
+              className="bg-muted text-muted-foreground"
+            />
+          </div>
+
+          {/* Sign Out */}
+          <Button
+            variant="outline"
+            onClick={() => signOut({ callbackUrl: "/login" })}
           >
-            <Button type="submit" variant="outline">
-              Sign Out
-            </Button>
-          </form>
+            {t(language, "nav.signOut")}
+          </Button>
         </CardContent>
       </Card>
 
-      <DangerZone userEmail={session?.user?.email ?? ""} />
+      {/* Preferences Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t(language, "settings.preferences")}</CardTitle>
+          <CardDescription>{t(language, "settings.preferencesDesc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Region & Format */}
+          <div className="space-y-2">
+            <Label htmlFor="locale">{t(language, "settings.locale")}</Label>
+            <p className="text-xs text-muted-foreground">{t(language, "settings.localeDesc")}</p>
+            <Select
+              id="locale"
+              value={selectedLocale}
+              onChange={(e) => handleLocaleChange(e.target.value)}
+            >
+              {LOCALE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t(language, "settings.localePreview")}:{" "}
+              <span className="font-mono font-medium">
+                {formatMoney(123456, "EUR", selectedLocale)}
+              </span>
+            </p>
+          </div>
+
+          {/* Language */}
+          <div className="space-y-2">
+            <Label htmlFor="language">{t(language, "settings.language")}</Label>
+            <p className="text-xs text-muted-foreground">{t(language, "settings.languageDesc")}</p>
+            <Select
+              id="language"
+              value={preferences.language}
+              onChange={(e) => handleLanguageChange(e.target.value as Language)}
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground italic">
+              {t(language, "settings.languageNote")}
+            </p>
+          </div>
+
+          {/* Default Visibility */}
+          <div className="space-y-2">
+            <Label>{t(language, "settings.defaultVisibility")}</Label>
+            <p className="text-xs text-muted-foreground">{t(language, "settings.defaultVisibilityDesc")}</p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  preferences.defaultVisibility === "SHARED" &&
+                    "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                )}
+                onClick={() => handleVisibilityChange("SHARED")}
+              >
+                {t(language, "common.shared")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  preferences.defaultVisibility === "PERSONAL" &&
+                    "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                )}
+                onClick={() => handleVisibilityChange("PERSONAL")}
+              >
+                {t(language, "common.personal")}
+              </Button>
+            </div>
+          </div>
+
+          {/* Theme */}
+          <div className="space-y-2">
+            <Label>{t(language, "settings.theme")}</Label>
+            <p className="text-xs text-muted-foreground">{t(language, "settings.themeDesc")}</p>
+            <div className="flex gap-2">
+              {(["light", "dark", "system"] as const).map((themeOption) => (
+                <Button
+                  key={themeOption}
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    preferences.theme === themeOption &&
+                      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                  )}
+                  onClick={() => handleThemeChange(themeOption)}
+                >
+                  {t(language, `theme.${themeOption}` as "theme.light" | "theme.dark" | "theme.system")}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone */}
+      <DangerZone userEmail={data?.email ?? ""} />
     </div>
   );
 }
