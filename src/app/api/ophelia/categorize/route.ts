@@ -15,6 +15,14 @@ import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
  * Returns 200 with { skipped: true } when Ophelia is disabled.
  * Returns 200 with { processed, skipped, errors } on success.
  * Returns 401 when the secret is missing or incorrect.
+ *
+ * For local Mac hosting with PM2, add a cron job:
+ *   chmod +x ophelia-cron.sh
+ *   pm2 start ./ophelia-cron.sh --name ophelia-cron --cron-restart "every 15 minutes" --no-autorestart
+ *   (cron expression: 0,15,30,45 * * * *)
+ *   pm2 save
+ *
+ * For Vercel, configure the cron in vercel.json.
  */
 export async function POST(req: Request) {
   // Verify the cron secret.

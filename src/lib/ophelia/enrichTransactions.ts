@@ -84,7 +84,7 @@ The JSON must be an array where each element matches this exact structure:
 
 // ── Batching helper ───────────────────────────────────────────────────────────
 
-const BATCH_SIZE = 80;
+const BATCH_SIZE = 40;
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -145,13 +145,15 @@ ${JSON.stringify(
   2
 )}`;
 
-    const raw = await chatCompletion({ systemPrompt, userMessage });
+    // Large token budget: thinking block eats tokens, JSON for 80 txns needs ~4000
+    const raw = await chatCompletion({ systemPrompt, userMessage, maxTokens: 12000 });
     if (!raw) return null;
 
-    // Strip any <think>...</think> reasoning block
+    // Strip <think>...</think> reasoning block, then extract JSON
     const withoutThink = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    console.log(`[Ophelia] enrichTransactions batch ${batchIdx} after stripping think: ${withoutThink.slice(0, 200)}`);
 
-    const parsed = extractJSON<unknown>(withoutThink);
+    const parsed = extractJSON<unknown>(withoutThink.length > 0 ? withoutThink : raw);
     if (!parsed) {
       console.error(
         `[Ophelia] enrichTransactions: could not extract JSON from response (batch ${batchIdx})`
@@ -177,11 +179,19 @@ ${JSON.stringify(
 
   const batchResults = await Promise.all(batchPromises);
 
-  // If any batch failed, return null
-  if (batchResults.some((r) => r === null)) return null;
+  // Filter out failed batches — return partial results rather than discarding everything.
+  // categorize-batch.ts handles missing indices by stamping those transactions as failed.
+  const successfulResults = batchResults.filter((r): r is EnrichmentResult[] => r !== null);
+  if (successfulResults.length === 0) return null; // all batches failed
+
+  if (successfulResults.length < batchResults.length) {
+    console.warn(
+      `[Ophelia] enrichTransactions: ${batchResults.length - successfulResults.length}/${batchResults.length} batch(es) failed — returning partial results`
+    );
+  }
 
   // Merge and sort by original index
-  const merged = (batchResults as EnrichmentResult[][]).flat();
+  const merged = successfulResults.flat();
   merged.sort((a, b) => a.index - b.index);
 
   return merged;

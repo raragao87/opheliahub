@@ -73,16 +73,17 @@ export async function categorizeTransactionBatch(
       //
       // A transaction needs (re)processing if ANY of these are true:
       //   1. opheliaProcessedAt IS NULL           → never processed
-      //   2. opheliaProcessedAt IS NOT NULL AND opheliaCategoryId IS NULL
-      //                                           → processed but got no suggestion → retry immediately
-      //   3. opheliaProcessedAt < reprocessBefore → processed > 7 days ago → refresh suggestion
+      //   2. opheliaProcessedAt < reprocessBefore → processed > 7 days ago → refresh suggestion
+      //
+      // NOTE: Condition "processed but got no suggestion → retry immediately" is intentionally
+      // removed. Failed transactions are now stamped with opheliaProcessedAt so they don't
+      // retry until the 7-day reprocess window. This prevents infinite retry loops.
       const transactions = await prisma.transaction.findMany({
         where: {
           isInitialBalance: false,
           OR: [
-            { opheliaProcessedAt: null },                                       // 1. never processed
-            { opheliaProcessedAt: { not: null }, opheliaCategoryId: null },     // 2. processed, no suggestion
-            { opheliaProcessedAt: { lt: reprocessBefore } },                   // 3. processed > 7 days ago
+            { opheliaProcessedAt: null },                    // 1. never processed
+            { opheliaProcessedAt: { lt: reprocessBefore } }, // 2. processed > 7 days ago
           ],
           account: {
             OR: [
@@ -214,17 +215,32 @@ export async function categorizeTransactionBatch(
       const now = new Date();
 
       if (!results) {
-        // AI call failed — leave opheliaProcessedAt unset so they'll be retried next run
-        console.error(`[Ophelia] enrichTransactions returned null for household ${hid}`);
-        errors++;
+        // AI call failed — stamp all transactions so they don't retry until the 7-day window.
+        // This is CRITICAL to prevent infinite retry loops.
+        console.error(`[Ophelia] enrichTransactions returned null for household ${hid} — stamping ${transactions.length} transactions as processed (failed)`);
+        const failedIds = transactions.map((tx) => tx.id);
+        await prisma.transaction.updateMany({
+          where: { id: { in: failedIds } },
+          data: {
+            opheliaProcessedAt: now,
+            opheliaCategoryId: null,
+            opheliaConfidence: null,
+            opheliaDisplayName: null,
+          },
+        });
+        errors += transactions.length;
         continue;
       }
 
       // Write back Ophelia suggestions for each transaction.
       // IMPORTANT: never touch categoryId — that's the user's domain.
+      // When enrichTransactions returns partial results (some batches failed), transactions
+      // without a matching result still get stamped so they don't loop endlessly.
+      const resultMap = new Map(results.map((r) => [r.index, r]));
+
       for (let i = 0; i < transactions.length; i++) {
         const tx = transactions[i];
-        const result = results.find((r) => r.index === i);
+        const result = resultMap.get(i);
 
         try {
           await prisma.transaction.update({
@@ -236,7 +252,12 @@ export async function categorizeTransactionBatch(
               opheliaProcessedAt: now,
             },
           });
-          processed++;
+          if (result) {
+            processed++;
+          } else {
+            // No result for this transaction (its batch failed) — stamped but counted as error
+            errors++;
+          }
         } catch (updateErr) {
           console.error(`[Ophelia] Failed to update transaction ${tx.id}:`, updateErr);
           errors++;

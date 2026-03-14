@@ -491,26 +491,48 @@ function TransactionsContent() {
   // ── Ophelia: silent auto-categorization on scroll ─────────────────
   // Runs silently in the background whenever loaded transactions contain
   // rows that have never been processed by Ophelia (opheliaProcessedAt === null).
-  // Chains automatically: after each 200-transaction batch completes the
-  // query is invalidated, transactions refresh, and the effect re-fires
-  // until no unprocessed rows remain.
+  // Chains automatically: after each successful batch the query is invalidated
+  // and the effect re-fires until no unprocessed rows remain.
+  //
+  // Safeguards:
+  //   - Max 2 consecutive failures before stopping (prevents infinite loops)
+  //   - 30s cooldown between calls (prevents hammering after query invalidations)
+  const autoRetryCount = useRef(0);
+  const lastAutoRunTime = useRef(0);
+  const MAX_AUTO_RETRIES = 2;
+  const AUTO_COOLDOWN_MS = 30_000;
+
   const autoCategorizeMutation = useMutation(
-    trpc.ophelia.runCategorization.mutationOptions({
-      onSuccess: (data) => {
-        if (data.opheliaEnabled && data.processed > 0) {
-          queryClient.invalidateQueries({ queryKey: infiniteQueryKey });
-        }
-      },
-    })
+    trpc.ophelia.runCategorization.mutationOptions()
   );
 
   useEffect(() => {
     if (autoCategorizeMutation.isPending) return;
+    if (autoRetryCount.current >= MAX_AUTO_RETRIES) return;
+    if (Date.now() - lastAutoRunTime.current < AUTO_COOLDOWN_MS) return;
+
     const hasUnprocessed = transactions.some(
       (t) => !t.isInitialBalance && t.opheliaProcessedAt === null
     );
-    if (!hasUnprocessed) return;
-    autoCategorizeMutation.mutate({ batchSize: 200 });
+    if (!hasUnprocessed) {
+      autoRetryCount.current = 0; // reset on clean state
+      return;
+    }
+
+    lastAutoRunTime.current = Date.now();
+    autoCategorizeMutation.mutate({ batchSize: 200 }, {
+      onSuccess: (data) => {
+        if (data.opheliaEnabled && data.processed > 0) {
+          autoRetryCount.current = 0;
+          queryClient.invalidateQueries({ queryKey: infiniteQueryKey });
+        } else if (data.errors > 0 && data.processed === 0) {
+          autoRetryCount.current++;
+        }
+      },
+      onError: () => {
+        autoRetryCount.current++;
+      },
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions, autoCategorizeMutation.isPending]);
 
