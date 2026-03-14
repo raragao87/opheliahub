@@ -1,16 +1,18 @@
 "use client";
 
 import { useTRPC } from "@/trpc/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCurrentYearMonth } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, RefreshCw } from "lucide-react";
 import { GettingStartedChecklist } from "@/components/shared/getting-started-checklist";
 import { NetWorthSparkline } from "@/components/charts/net-worth-trend";
+import { toast } from "sonner";
 
 export default function DashboardPage() {
   const trpc = useTRPC();
@@ -48,6 +50,18 @@ export default function DashboardPage() {
   const netWorthSummaryQuery = useQuery(
     trpc.netWorth.getSummary.queryOptions({
       visibility: visibilityParam,
+    })
+  );
+
+  const queryClient = useQueryClient();
+  const snapshotMutation = useMutation(
+    trpc.netWorth.captureSnapshot.mutationOptions({
+      onSuccess: () => {
+        toast.success("Snapshot saved");
+        queryClient.invalidateQueries({ queryKey: ["netWorth"] });
+        void trendQuery.refetch();
+      },
+      onError: (err) => toast.error(err.message),
     })
   );
 
@@ -141,13 +155,25 @@ export default function DashboardPage() {
           )}
         </CardHeader>
         <CardContent className="pb-3">
-          <MoneyDisplay amount={netWorthSummaryQuery.data?.netWorth ?? 0} className="text-2xl font-bold" />
+          <div className="flex items-end justify-between gap-4">
+            <MoneyDisplay amount={netWorthSummaryQuery.data?.netWorth ?? 0} className="text-2xl font-bold" />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              disabled={snapshotMutation.isPending}
+              onClick={() => snapshotMutation.mutate({ visibility: visibilityParam ?? "SHARED" })}
+            >
+              <RefreshCw className={`h-3 w-3 mr-1 ${snapshotMutation.isPending ? "animate-spin" : ""}`} />
+              {snapshotMutation.isPending ? "Saving…" : "Save snapshot"}
+            </Button>
+          </div>
           {(trend?.dataPoints.length ?? 0) > 1 && trend ? (
-            <div className="mt-3">
+            <div className="mt-2">
               <NetWorthSparkline dataPoints={trend.dataPoints} height={52} />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground mt-1">Go to Accounts to capture a snapshot and see the trend.</p>
+            <p className="text-xs text-muted-foreground mt-2">Click "Save snapshot" to start tracking the trend over time.</p>
           )}
         </CardContent>
       </Card>
