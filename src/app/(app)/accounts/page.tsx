@@ -3,20 +3,29 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOwnership } from "@/lib/ownership-context";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { VisibilityBadge } from "@/components/shared/visibility-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
+import { NetWorthTrendChart } from "@/components/charts/net-worth-trend";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { t } from "@/lib/translations";
+import { formatMoney } from "@/lib/money";
+import { toast } from "sonner";
 import {
   Plus,
   Wallet,
   ChevronRight,
   Layers,
   Building2,
+  RefreshCw,
+  History,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 
 type GroupBy = "type" | "institution";
@@ -32,8 +41,6 @@ interface AccountItem {
   isActive: boolean;
   owner: { id: string; name: string | null; image: string | null };
 }
-
-// ── Grouping logic ─────────────────────────────────────────────────
 
 function groupAccounts(accounts: AccountItem[], groupBy: GroupBy) {
   const groups = new Map<string, { label: string; accounts: AccountItem[]; order: number }>();
@@ -72,16 +79,52 @@ function groupAccounts(accounts: AccountItem[], groupBy: GroupBy) {
   });
 }
 
-// ── Component ──────────────────────────────────────────────────────
-
 export default function AccountsPage() {
   const router = useRouter();
   const trpc = useTRPC();
-  const { isVisible } = useOwnership();
+  const queryClient = useQueryClient();
+  const { isVisible, visibilityParam } = useOwnership();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
+  const locale = preferences.locale;
 
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
+  const trendQuery = useQuery(
+    trpc.netWorth.getTrend.queryOptions({
+      visibility: visibilityParam ?? "SHARED",
+      months: 12,
+    })
+  );
 
   const [groupBy, setGroupBy] = useState<GroupBy>("type");
+
+  const snapshotMutation = useMutation(
+    trpc.netWorth.captureSnapshot.mutationOptions({
+      onSuccess: () => {
+        toast.success(t(lang, "netWorth.snapshotSaved"));
+        queryClient.invalidateQueries(trpc.netWorth.getTrend.queryOptions({
+          visibility: visibilityParam ?? "SHARED",
+          months: 12,
+        }));
+      },
+      onError: (err) => toast.error(err.message),
+    })
+  );
+
+  const backfillMutation = useMutation(
+    trpc.netWorth.backfillSnapshots.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(`Created ${data.created} snapshots`);
+        queryClient.invalidateQueries(trpc.netWorth.getTrend.queryOptions({
+          visibility: visibilityParam ?? "SHARED",
+          months: 12,
+        }));
+      },
+      onError: (err) => toast.error(err.message),
+    })
+  );
+
+  const vis = visibilityParam ?? "SHARED";
 
   if (accountsQuery.isLoading) {
     return <div className="text-muted-foreground">Loading accounts...</div>;
@@ -91,7 +134,6 @@ export default function AccountsPage() {
   const accounts = allAccounts.filter((a) => a.isActive && isVisible(a.ownership as "SHARED" | "PERSONAL"));
   const inactiveAccounts = allAccounts.filter((a) => !a.isActive && isVisible(a.ownership as "SHARED" | "PERSONAL"));
 
-  // Compute totals from all accounts
   const assetAccounts = accounts.filter((a) => !ACCOUNT_TYPE_META[a.type]?.isLiability);
   const liabilityAccounts = accounts.filter((a) => ACCOUNT_TYPE_META[a.type]?.isLiability);
   const totalAssets = assetAccounts.reduce((sum, a) => sum + a.balance, 0);
@@ -99,8 +141,18 @@ export default function AccountsPage() {
   const netWorth = totalAssets - totalLiabilities;
 
   const grouped = groupAccounts(accounts, groupBy);
-
   const hasAnyContent = accounts.length > 0 || inactiveAccounts.length > 0;
+
+  const trend = trendQuery.data;
+  const hasTrend = (trend?.dataPoints.length ?? 0) > 0;
+
+  // Determine the primary currency from accounts (most common)
+  const currencyCount = new Map<string, number>();
+  for (const a of accounts) {
+    currencyCount.set(a.currency, (currencyCount.get(a.currency) ?? 0) + 1);
+  }
+  const primaryCurrency =
+    [...currencyCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "EUR";
 
   return (
     <div className="space-y-6">
@@ -127,7 +179,7 @@ export default function AccountsPage() {
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Assets</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">{t(lang, "netWorth.assets")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <MoneyDisplay
@@ -143,7 +195,7 @@ export default function AccountsPage() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Liabilities</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">{t(lang, "netWorth.liabilities")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <MoneyDisplay
@@ -159,7 +211,7 @@ export default function AccountsPage() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Net Worth</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">{t(lang, "netWorth.title")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <MoneyDisplay
@@ -174,6 +226,61 @@ export default function AccountsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Net Worth Trend Chart */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle>{t(lang, "netWorth.trend")}</CardTitle>
+                  {hasTrend && trend && (
+                    <CardDescription className="mt-1">
+                      <span className={trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                        {trend.changeAmount >= 0 ? "+" : ""}
+                        {formatMoney(trend.changeAmount, primaryCurrency, locale)}
+                        {" "}({trend.changePercent >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}%)
+                      </span>
+                      {" "}{t(lang, "netWorth.change")} {trend.dataPoints.length} {t(lang, "netWorth.months")}
+                    </CardDescription>
+                  )}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  {!hasTrend && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={backfillMutation.isPending}
+                      onClick={() => backfillMutation.mutate({ visibility: vis, monthsBack: 12 })}
+                    >
+                      <History className="h-3.5 w-3.5 mr-1" />
+                      {backfillMutation.isPending ? t(lang, "netWorth.backfilling") : t(lang, "netWorth.backfill")}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={snapshotMutation.isPending}
+                    onClick={() => snapshotMutation.mutate({ visibility: vis })}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${snapshotMutation.isPending ? "animate-spin" : ""}`} />
+                    {hasTrend ? t(lang, "netWorth.refreshSnapshot") : t(lang, "netWorth.takeSnapshot")}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {hasTrend && trend ? (
+                <NetWorthTrendChart dataPoints={trend.dataPoints} currency={primaryCurrency} />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                    <TrendingUp className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">{t(lang, "netWorth.noData")}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Grouping selector */}
           {accounts.length > 0 && (
@@ -230,12 +337,9 @@ export default function AccountsPage() {
                           className="flex items-center gap-3 py-3 cursor-pointer hover:bg-muted/50 -mx-6 px-6 transition-colors"
                           onClick={() => router.push(`/accounts/${account.id}`)}
                         >
-                          {/* Icon */}
                           <div className="flex items-center justify-center h-9 w-9 rounded-full bg-muted shrink-0">
                             <Icon className="h-4 w-4 text-muted-foreground" />
                           </div>
-
-                          {/* Name + meta */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium truncate">{account.name}</span>
@@ -249,14 +353,11 @@ export default function AccountsPage() {
                               <span>{meta?.label ?? account.type}</span>
                             </div>
                           </div>
-
-                          {/* Balance */}
                           <MoneyDisplay
                             amount={account.balance}
                             currency={account.currency}
                             className="text-sm font-semibold shrink-0"
                           />
-
                           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                         </div>
                       );
@@ -267,7 +368,7 @@ export default function AccountsPage() {
             );
           })}
 
-          {/* Inactive / archived accounts */}
+          {/* Inactive accounts */}
           {inactiveAccounts.length > 0 && (
             <details className="group">
               <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground list-none flex items-center gap-1">
@@ -280,7 +381,6 @@ export default function AccountsPage() {
                     {inactiveAccounts.map((account) => {
                       const meta = ACCOUNT_TYPE_META[account.type];
                       const Icon = meta?.icon ?? Wallet;
-
                       return (
                         <div
                           key={account.id}

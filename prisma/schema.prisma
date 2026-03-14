@@ -87,6 +87,7 @@ model User {
   recurringRules        RecurringRule[]
   dismissedPatterns     DismissedRecurringPattern[]
   feedback              Feedback[]
+  netWorthSnapshots     NetWorthSnapshot[]
 
   @@map("users")
 }
@@ -106,6 +107,7 @@ model Household {
   recurringRules        RecurringRule[]
   dismissedPatterns     DismissedRecurringPattern[]
   opheliaFeedback       OpheliaFeedback[]
+  netWorthSnapshots     NetWorthSnapshot[]
 
   @@map("households")
 }
@@ -636,4 +638,34 @@ model Feedback {
   @@index([status])
   @@index([createdAt])
   @@map("feedback")
+}
+
+// ─── NET WORTH SNAPSHOTS ─────────────────────────────────────────
+
+model NetWorthSnapshot {
+  id               String     @id @default(cuid())
+  householdId      String
+  userId           String
+  month            Int        // 1-12
+  year             Int        // e.g. 2026
+  visibility       Visibility // SHARED or PERSONAL
+
+  // All values in cents
+  totalAssets      Int
+  totalLiabilities Int
+  netWorth         Int
+
+  // Array of { accountId, name, type, balance, currency }
+  accountBreakdown Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId, year, month, visibility])
+  @@index([householdId, userId])
+  @@index([year, month])
+  @@map("net_worth_snapshots")
 }

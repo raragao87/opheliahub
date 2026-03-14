@@ -117,6 +117,20 @@ const translations = {
     "danger.cancel": "Cancel",
     "danger.deleting": "Deleting...",
     "danger.confirmDelete": "Delete my account",
+
+    // Net Worth
+    "netWorth.title": "Net Worth",
+    "netWorth.trend": "Net Worth Over Time",
+    "netWorth.assets": "Assets",
+    "netWorth.liabilities": "Liabilities",
+    "netWorth.change": "change over",
+    "netWorth.months": "months",
+    "netWorth.noData": "No historical data yet. Snapshots are taken monthly.",
+    "netWorth.takeSnapshot": "Take first snapshot",
+    "netWorth.refreshSnapshot": "Refresh snapshot",
+    "netWorth.backfill": "Build history (12 months)",
+    "netWorth.backfilling": "Building history...",
+    "netWorth.snapshotSaved": "Snapshot saved",
   },
 
   pt: {
@@ -235,6 +249,20 @@ const translations = {
     "danger.cancel": "Cancelar",
     "danger.deleting": "Excluindo...",
     "danger.confirmDelete": "Excluir minha conta",
+
+    // Net Worth
+    "netWorth.title": "Patrimônio Líquido",
+    "netWorth.trend": "Evolução do Patrimônio",
+    "netWorth.assets": "Ativos",
+    "netWorth.liabilities": "Passivos",
+    "netWorth.change": "variação nos últimos",
+    "netWorth.months": "meses",
+    "netWorth.noData": "Sem histórico ainda. Capturas são feitas mensalmente.",
+    "netWorth.takeSnapshot": "Fazer primeira captura",
+    "netWorth.refreshSnapshot": "Atualizar captura",
+    "netWorth.backfill": "Construir histórico (12 meses)",
+    "netWorth.backfilling": "Construindo histórico...",
+    "netWorth.snapshotSaved": "Captura salva",
   },
 
   ro: {
@@ -353,6 +381,20 @@ const translations = {
     "danger.cancel": "Anulează",
     "danger.deleting": "Se șterge...",
     "danger.confirmDelete": "Șterge contul meu",
+
+    // Net Worth
+    "netWorth.title": "Valoare Netă",
+    "netWorth.trend": "Evoluția Valorii Nete",
+    "netWorth.assets": "Active",
+    "netWorth.liabilities": "Pasive",
+    "netWorth.change": "variație în ultimele",
+    "netWorth.months": "luni",
+    "netWorth.noData": "Fără date istorice. Capturile se fac lunar.",
+    "netWorth.takeSnapshot": "Prima captură",
+    "netWorth.refreshSnapshot": "Actualizează captura",
+    "netWorth.backfill": "Construiește istoricul (12 luni)",
+    "netWorth.backfilling": "Se construiește istoricul...",
+    "netWorth.snapshotSaved": "Captură salvată",
   },
 
   nl: {
@@ -471,6 +513,20 @@ const translations = {
     "danger.cancel": "Annuleren",
     "danger.deleting": "Verwijderen...",
     "danger.confirmDelete": "Mijn account verwijderen",
+
+    // Net Worth
+    "netWorth.title": "Nettovermogen",
+    "netWorth.trend": "Nettovermogen Over Tijd",
+    "netWorth.assets": "Activa",
+    "netWorth.liabilities": "Passiva",
+    "netWorth.change": "verandering over",
+    "netWorth.months": "maanden",
+    "netWorth.noData": "Nog geen historische data. Opnames worden maandelijks gemaakt.",
+    "netWorth.takeSnapshot": "Eerste opname maken",
+    "netWorth.refreshSnapshot": "Opname vernieuwen",
+    "netWorth.backfill": "Geschiedenis opbouwen (12 maanden)",
+    "netWorth.backfilling": "Geschiedenis opbouwen...",
+    "netWorth.snapshotSaved": "Opname opgeslagen",
   },
 } as const;
 

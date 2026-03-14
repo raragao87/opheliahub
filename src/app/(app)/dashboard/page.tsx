@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
 import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight } from "lucide-react";
 import { GettingStartedChecklist } from "@/components/shared/getting-started-checklist";
+import { NetWorthSparkline } from "@/components/charts/net-worth-trend";
 
 export default function DashboardPage() {
   const trpc = useTRPC();
@@ -37,6 +38,13 @@ export default function DashboardPage() {
     })
   );
 
+  const trendQuery = useQuery(
+    trpc.netWorth.getTrend.queryOptions({
+      visibility: visibilityParam ?? "SHARED",
+      months: 6,
+    })
+  );
+
   const monthName = new Date(year, month - 1).toLocaleString("default", { month: "long" });
 
   if (summaryQuery.isLoading || accountsQuery.isLoading) {
@@ -57,6 +65,7 @@ export default function DashboardPage() {
   const summary = summaryQuery.data!;
   const accounts = accountsQuery.data ?? [];
   const recentTxns = recentTxnsQuery.data ?? [];
+  const trend = trendQuery.data;
 
   return (
     <div className="space-y-6">
@@ -110,6 +119,25 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{accounts.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-full md:col-span-2 lg:col-span-4">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+            <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
+            {trend && trend.dataPoints.length > 0 && (
+              <span className={`text-xs font-medium ${trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                {trend.changeAmount >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}% (6 mo)
+              </span>
+            )}
+          </CardHeader>
+          <CardContent className="pb-2">
+            <MoneyDisplay amount={trend?.currentNetWorth ?? 0} className="text-2xl font-bold" />
+            {trend && trend.dataPoints.length > 1 ? (
+              <div className="mt-2">
+                <NetWorthSparkline dataPoints={trend.dataPoints} height={44} />
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>
