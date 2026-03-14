@@ -45,6 +45,12 @@ export default function DashboardPage() {
     })
   );
 
+  const netWorthSummaryQuery = useQuery(
+    trpc.netWorth.getSummary.queryOptions({
+      visibility: visibilityParam,
+    })
+  );
+
   const monthName = new Date(year, month - 1).toLocaleString("default", { month: "long" });
 
   if (summaryQuery.isLoading || accountsQuery.isLoading) {
@@ -122,25 +128,29 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-full md:col-span-2 lg:col-span-4">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-            <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-            {trend && trend.dataPoints.length > 0 && (
-              <span className={`text-xs font-medium ${trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                {trend.changeAmount >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}% (6 mo)
-              </span>
-            )}
-          </CardHeader>
-          <CardContent className="pb-2">
-            <MoneyDisplay amount={trend?.currentNetWorth ?? 0} className="text-2xl font-bold" />
-            {trend && trend.dataPoints.length > 1 ? (
-              <div className="mt-2">
-                <NetWorthSparkline dataPoints={trend.dataPoints} height={44} />
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
       </div>
+
+      {/* Net Worth Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
+          {trend && trend.dataPoints.length > 0 && (
+            <span className={`text-xs font-medium ${trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+              {trend.changeAmount >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}% (6 mo)
+            </span>
+          )}
+        </CardHeader>
+        <CardContent className="pb-3">
+          <MoneyDisplay amount={netWorthSummaryQuery.data?.netWorth ?? 0} className="text-2xl font-bold" />
+          {(trend?.dataPoints.length ?? 0) > 1 && trend ? (
+            <div className="mt-3">
+              <NetWorthSparkline dataPoints={trend.dataPoints} height={52} />
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">Go to Accounts to capture a snapshot and see the trend.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Two-column layout: Category Breakdown + Accounts */}
       <div className="grid gap-6 lg:grid-cols-2">
