@@ -168,12 +168,20 @@ export default function DashboardPage() {
               {snapshotMutation.isPending ? "Saving…" : "Save snapshot"}
             </Button>
           </div>
-          {(trend?.dataPoints.length ?? 0) > 1 && trend ? (
+          {trendQuery.isLoading ? (
+            <div className="mt-2 h-[52px] bg-muted animate-pulse rounded" />
+          ) : trendQuery.isError ? (
+            <p className="text-xs text-destructive mt-2">Could not load trend ({trendQuery.error?.message})</p>
+          ) : (trend?.dataPoints.length ?? 0) > 1 && trend ? (
             <div className="mt-2">
               <NetWorthSparkline dataPoints={trend.dataPoints} height={52} />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground mt-2">Click "Save snapshot" to start tracking the trend over time.</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              {(trend?.dataPoints.length ?? 0) === 1
+                ? "One snapshot saved — save another next month to see the trend."
+                : "Click \"Save snapshot\" to start tracking the trend over time."}
+            </p>
           )}
         </CardContent>
       </Card>

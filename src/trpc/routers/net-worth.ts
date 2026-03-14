@@ -84,15 +84,17 @@ export const netWorthRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      // Fetch most recent N months (desc), then re-sort ascending for display
       const snapshots = await ctx.prisma.netWorthSnapshot.findMany({
         where: {
           householdId: ctx.householdId,
           userId: ctx.userId,
           visibility: input.visibility,
         },
-        orderBy: [{ year: "asc" }, { month: "asc" }],
+        orderBy: [{ year: "desc" }, { month: "desc" }],
         take: input.months,
       });
+      snapshots.reverse();
 
       const dataPoints = snapshots.map((s) => ({
         year: s.year,
