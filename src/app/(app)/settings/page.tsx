@@ -96,7 +96,7 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-lg mx-auto flex items-center justify-center py-16">
+      <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -105,189 +105,192 @@ export default function SettingsPage() {
   const selectedLocale = preferences.locale;
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">{t(language, "settings.title")}</h1>
 
-      {/* Profile Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t(language, "settings.profile")}</CardTitle>
-          <CardDescription>{t(language, "settings.profileDesc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Avatar */}
-          <div className="flex items-center gap-4">
-            {data?.image ? (
-              <img
-                src={data.image}
-                alt={data.name ?? ""}
-                className="h-16 w-16 rounded-full object-cover"
-              />
-            ) : (
-              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center text-xl font-semibold text-muted-foreground">
-                {data?.name?.charAt(0)?.toUpperCase() ?? "?"}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">{t(language, "settings.avatarNote")}</p>
-          </div>
-
-          {/* Display Name */}
-          <div className="space-y-2">
-            <Label htmlFor="displayName">{t(language, "settings.editName")}</Label>
-            <div className="flex gap-2">
-              <Input
-                id="displayName"
-                value={nameValue}
-                onChange={(e) => setNameValue(e.target.value)}
-                placeholder="Your name"
-                className="flex-1"
-              />
-              {nameValue !== (data?.name ?? "") && (
-                <Button
-                  onClick={handleSaveName}
-                  disabled={nameSaving}
-                  size="sm"
-                >
-                  {nameSaving ? (
-                    <>
-                      <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                      {t(language, "common.saving")}
-                    </>
-                  ) : (
-                    t(language, "common.save")
-                  )}
-                </Button>
+      {/* Two-column layout on md+ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        {/* Profile Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t(language, "settings.profile")}</CardTitle>
+            <CardDescription>{t(language, "settings.profileDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Avatar */}
+            <div className="flex items-center gap-4">
+              {data?.image ? (
+                <img
+                  src={data.image}
+                  alt={data.name ?? ""}
+                  className="h-16 w-16 rounded-full object-cover"
+                />
+              ) : (
+                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center text-xl font-semibold text-muted-foreground">
+                  {data?.name?.charAt(0)?.toUpperCase() ?? "?"}
+                </div>
               )}
+              <p className="text-xs text-muted-foreground">{t(language, "settings.avatarNote")}</p>
             </div>
-          </div>
 
-          {/* Email (read-only) */}
-          <div className="space-y-2">
-            <Label htmlFor="email">{t(language, "settings.emailReadOnly")}</Label>
-            <Input
-              id="email"
-              value={data?.email ?? ""}
-              readOnly
-              disabled
-              className="bg-muted text-muted-foreground"
-            />
-          </div>
-
-          {/* Sign Out */}
-          <Button
-            variant="outline"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-          >
-            {t(language, "nav.signOut")}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Preferences Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t(language, "settings.preferences")}</CardTitle>
-          <CardDescription>{t(language, "settings.preferencesDesc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Region & Format */}
-          <div className="space-y-2">
-            <Label htmlFor="locale">{t(language, "settings.locale")}</Label>
-            <p className="text-xs text-muted-foreground">{t(language, "settings.localeDesc")}</p>
-            <Select
-              id="locale"
-              value={selectedLocale}
-              onChange={(e) => handleLocaleChange(e.target.value)}
-            >
-              {LOCALE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {t(language, "settings.localePreview")}:{" "}
-              <span className="font-mono font-medium">
-                {formatMoney(123456, "EUR", selectedLocale)}
-              </span>
-            </p>
-          </div>
-
-          {/* Language */}
-          <div className="space-y-2">
-            <Label htmlFor="language">{t(language, "settings.language")}</Label>
-            <p className="text-xs text-muted-foreground">{t(language, "settings.languageDesc")}</p>
-            <Select
-              id="language"
-              value={preferences.language}
-              onChange={(e) => handleLanguageChange(e.target.value as Language)}
-            >
-              {LANGUAGE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-            <p className="text-xs text-muted-foreground italic">
-              {t(language, "settings.languageNote")}
-            </p>
-          </div>
-
-          {/* Default Visibility */}
-          <div className="space-y-2">
-            <Label>{t(language, "settings.defaultVisibility")}</Label>
-            <p className="text-xs text-muted-foreground">{t(language, "settings.defaultVisibilityDesc")}</p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  preferences.defaultVisibility === "SHARED" &&
-                    "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+            {/* Display Name */}
+            <div className="space-y-2">
+              <Label htmlFor="displayName">{t(language, "settings.editName")}</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="displayName"
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  placeholder="Your name"
+                  className="flex-1"
+                />
+                {nameValue !== (data?.name ?? "") && (
+                  <Button
+                    onClick={handleSaveName}
+                    disabled={nameSaving}
+                    size="sm"
+                  >
+                    {nameSaving ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                        {t(language, "common.saving")}
+                      </>
+                    ) : (
+                      t(language, "common.save")
+                    )}
+                  </Button>
                 )}
-                onClick={() => handleVisibilityChange("SHARED")}
-              >
-                {t(language, "common.shared")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  preferences.defaultVisibility === "PERSONAL" &&
-                    "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
-                )}
-                onClick={() => handleVisibilityChange("PERSONAL")}
-              >
-                {t(language, "common.personal")}
-              </Button>
+              </div>
             </div>
-          </div>
 
-          {/* Theme */}
-          <div className="space-y-2">
-            <Label>{t(language, "settings.theme")}</Label>
-            <p className="text-xs text-muted-foreground">{t(language, "settings.themeDesc")}</p>
-            <div className="flex gap-2">
-              {(["light", "dark", "system"] as const).map((themeOption) => (
+            {/* Email (read-only) */}
+            <div className="space-y-2">
+              <Label htmlFor="email">{t(language, "settings.emailReadOnly")}</Label>
+              <Input
+                id="email"
+                value={data?.email ?? ""}
+                readOnly
+                disabled
+                className="bg-muted text-muted-foreground"
+              />
+            </div>
+
+            {/* Sign Out */}
+            <Button
+              variant="outline"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+            >
+              {t(language, "nav.signOut")}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Preferences Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t(language, "settings.preferences")}</CardTitle>
+            <CardDescription>{t(language, "settings.preferencesDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Region & Format */}
+            <div className="space-y-2">
+              <Label htmlFor="locale">{t(language, "settings.locale")}</Label>
+              <p className="text-xs text-muted-foreground">{t(language, "settings.localeDesc")}</p>
+              <Select
+                id="locale"
+                value={selectedLocale}
+                onChange={(e) => handleLocaleChange(e.target.value)}
+              >
+                {LOCALE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t(language, "settings.localePreview")}:{" "}
+                <span className="font-mono font-medium">
+                  {formatMoney(123456, "EUR", selectedLocale)}
+                </span>
+              </p>
+            </div>
+
+            {/* Language */}
+            <div className="space-y-2">
+              <Label htmlFor="language">{t(language, "settings.language")}</Label>
+              <p className="text-xs text-muted-foreground">{t(language, "settings.languageDesc")}</p>
+              <Select
+                id="language"
+                value={preferences.language}
+                onChange={(e) => handleLanguageChange(e.target.value as Language)}
+              >
+                {LANGUAGE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground italic">
+                {t(language, "settings.languageNote")}
+              </p>
+            </div>
+
+            {/* Default Visibility */}
+            <div className="space-y-2">
+              <Label>{t(language, "settings.defaultVisibility")}</Label>
+              <p className="text-xs text-muted-foreground">{t(language, "settings.defaultVisibilityDesc")}</p>
+              <div className="flex gap-2">
                 <Button
-                  key={themeOption}
                   variant="outline"
                   size="sm"
                   className={cn(
-                    preferences.theme === themeOption &&
+                    preferences.defaultVisibility === "SHARED" &&
                       "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
                   )}
-                  onClick={() => handleThemeChange(themeOption)}
+                  onClick={() => handleVisibilityChange("SHARED")}
                 >
-                  {t(language, `theme.${themeOption}` as "theme.light" | "theme.dark" | "theme.system")}
+                  {t(language, "common.shared")}
                 </Button>
-              ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    preferences.defaultVisibility === "PERSONAL" &&
+                      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                  )}
+                  onClick={() => handleVisibilityChange("PERSONAL")}
+                >
+                  {t(language, "common.personal")}
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Danger Zone */}
+            {/* Theme */}
+            <div className="space-y-2">
+              <Label>{t(language, "settings.theme")}</Label>
+              <p className="text-xs text-muted-foreground">{t(language, "settings.themeDesc")}</p>
+              <div className="flex gap-2">
+                {(["light", "dark", "system"] as const).map((themeOption) => (
+                  <Button
+                    key={themeOption}
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      preferences.theme === themeOption &&
+                        "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                    )}
+                    onClick={() => handleThemeChange(themeOption)}
+                  >
+                    {t(language, `theme.${themeOption}` as "theme.light" | "theme.dark" | "theme.system")}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Danger Zone — full width */}
       <DangerZone userEmail={data?.email ?? ""} />
     </div>
   );
