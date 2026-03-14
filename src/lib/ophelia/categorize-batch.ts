@@ -236,18 +236,32 @@ export async function categorizeTransactionBatch(
       // IMPORTANT: never touch categoryId — that's the user's domain.
       // When enrichTransactions returns partial results (some batches failed), transactions
       // without a matching result still get stamped so they don't loop endlessly.
+      const validCategoryIds = new Set(categories.map((c) => c.id));
       const resultMap = new Map(results.map((r) => [r.index, r]));
 
       for (let i = 0; i < transactions.length; i++) {
         const tx = transactions[i];
         const result = resultMap.get(i);
 
+        // Validate the suggested category ID — AI sometimes returns hallucinated IDs.
+        // If the ID isn't in our fetched list, null it out to avoid FK constraint failures.
+        const safeCategoryId =
+          result?.suggestedCategoryId && validCategoryIds.has(result.suggestedCategoryId)
+            ? result.suggestedCategoryId
+            : null;
+
+        if (result?.suggestedCategoryId && !safeCategoryId) {
+          console.warn(
+            `[Ophelia] Discarding invalid suggestedCategoryId "${result.suggestedCategoryId}" for tx ${tx.id} — not in household category list`
+          );
+        }
+
         try {
           await prisma.transaction.update({
             where: { id: tx.id },
             data: {
-              opheliaCategoryId: result?.suggestedCategoryId ?? null,
-              opheliaConfidence: result?.categoryConfidence ?? null,
+              opheliaCategoryId: safeCategoryId,
+              opheliaConfidence: safeCategoryId ? (result?.categoryConfidence ?? null) : null,
               opheliaDisplayName: result?.suggestedDisplayName ?? null,
               opheliaProcessedAt: now,
             },
