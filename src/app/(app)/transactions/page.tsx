@@ -674,11 +674,26 @@ function TransactionsContent() {
 
   const clearAllFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
 
+  // ── Header visibility (for sticky bar) ────────────────────────────
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerVisible, setHeaderVisible] = useState(true);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeaderVisible(entry.isIntersecting),
+      { threshold: 0, rootMargin: "-64px 0px 0px 0px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div ref={headerRef} className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl font-bold">
@@ -755,8 +770,8 @@ function TransactionsContent() {
         )}
       </div>
 
-      {/* ── Sticky account info bar ────────────────────────────────── */}
-      {mounted && selectedAccount && (
+      {/* ── Sticky account info bar — only when header is scrolled away */}
+      {mounted && selectedAccount && !headerVisible && (
         <div className="sticky top-16 z-20 bg-card border-b border-border px-4 py-2 -mx-4 md:-mx-6 lg:-mx-8 md:px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm font-medium truncate">{selectedAccount.name}</span>
@@ -777,45 +792,42 @@ function TransactionsContent() {
       {mounted && selectedAccount && (
         <div className="space-y-1.5 pb-2">
           {/* Description */}
-          <div className="flex items-start gap-2">
-            {!descEditing ? (
+          {!descEditing ? (
+            <div className="flex items-start gap-1.5">
               <div
-                className="flex-1 flex items-start gap-1.5 cursor-pointer group min-w-0"
+                className="flex-1 min-w-0 cursor-pointer"
                 onClick={() => { setDescDraft(selectedAccount.notes ?? ""); setDescEditing(true); }}
               >
                 {selectedAccount.notes ? (
-                  <p className="text-sm text-muted-foreground flex-1 whitespace-pre-wrap">{selectedAccount.notes}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedAccount.notes}</p>
                 ) : (
                   <p className="text-sm text-muted-foreground/40 italic">Add a description...</p>
                 )}
               </div>
-            ) : (
-              <div className="flex-1 space-y-1.5">
-                <textarea
-                  ref={descRef}
-                  value={descDraft}
-                  onChange={(e) => setDescDraft(e.target.value)}
-                  onBlur={() => {
-                    accountUpdateMutation.mutate({ id: selectedAccount.id, notes: descDraft || null });
-                    setDescEditing(false);
-                  }}
-                  rows={2}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring resize-none"
-                  placeholder="Write a short description..."
-                  autoFocus
-                />
-              </div>
-            )}
-            {/* Generate description */}
-            <Button
-              variant="ghost" size="sm" className="h-6 px-2 text-xs shrink-0"
-              disabled={generateDescMutation.isPending}
-              onClick={() => generateDescMutation.mutate({ id: selectedAccount.id })}
-              title="Generate description with Ophelia"
-            >
-              {generateDescMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            </Button>
-          </div>
+              <Button
+                variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0"
+                disabled={generateDescMutation.isPending}
+                onClick={() => generateDescMutation.mutate({ id: selectedAccount.id })}
+                title="Generate description with Ophelia"
+              >
+                {generateDescMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              </Button>
+            </div>
+          ) : (
+            <textarea
+              ref={descRef}
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              onBlur={() => {
+                accountUpdateMutation.mutate({ id: selectedAccount.id, notes: descDraft || null });
+                setDescEditing(false);
+              }}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring resize-none"
+              placeholder="Write a short description..."
+              autoFocus
+            />
+          )}
 
           {/* Links */}
           <div className="flex flex-wrap gap-1.5 items-center">
@@ -932,7 +944,7 @@ function TransactionsContent() {
             accountFilterGroups={accountFilterGroups}
             categoryFilterGroups={categoryFilterGroups}
             tagFilterGroups={tagFilterGroups}
-            stickyOffset={selectedAccount ? 104 : 64}
+            stickyOffset={selectedAccount && !headerVisible ? 104 : 64}
           />
 
           {/* Infinite scroll sentinel + spinner */}
