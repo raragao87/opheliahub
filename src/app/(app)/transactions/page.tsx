@@ -21,6 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MoneyDisplay } from "@/components/shared/money-display";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -694,6 +695,24 @@ function TransactionsContent() {
         )}
       </div>
 
+      {/* ── Sticky account info bar ────────────────────────────────── */}
+      {mounted && selectedAccount && (
+        <div className="sticky top-16 z-20 bg-card border-b border-border px-4 py-2 -mx-4 md:-mx-6 lg:-mx-8 md:px-6 lg:px-8 flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-medium truncate">{selectedAccount.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {ACCOUNT_TYPE_META[selectedAccount.type]?.label ?? selectedAccount.type}
+              {selectedAccount.institution && ` · ${selectedAccount.institution}`}
+            </span>
+          </div>
+          <MoneyDisplay
+            amount={selectedAccount.balance}
+            currency={selectedAccount.currency}
+            className="text-sm font-semibold shrink-0"
+          />
+        </div>
+      )}
+
       {/* ── Transaction table ──────────────────────────────────────── */}
       {transactionsQuery.isLoading && transactions.length === 0 ? (
         <div className="space-y-2">
@@ -751,6 +770,7 @@ function TransactionsContent() {
             accountFilterGroups={accountFilterGroups}
             categoryFilterGroups={categoryFilterGroups}
             tagFilterGroups={tagFilterGroups}
+            stickyOffset={selectedAccount ? 104 : 64}
           />
 
           {/* Infinite scroll sentinel + spinner */}

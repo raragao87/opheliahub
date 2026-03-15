@@ -108,6 +108,8 @@ interface TransactionTableProps {
   accountFilterGroups?: FilterOptionGroup[];
   categoryFilterGroups?: FilterOptionGroup[];
   tagFilterGroups?: FilterOptionGroup[];
+  /** Pixels from top for the sticky thead (default 64 = app header height) */
+  stickyOffset?: number;
 }
 
 // ── Column Header Filter ─────────────────────────────────────────────
@@ -215,8 +217,16 @@ function ColumnHeaderFilter({ label, active, children, iconOnly }: ColumnHeaderF
 function ColumnSearchInput({
   search, onChange, close,
 }: { search: string; onChange: (s: string) => void; close: () => void }) {
+  const [draft, setDraft] = useState(search);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Sync from parent only when the input is NOT focused (e.g. external "Clear all")
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) {
+      setDraft(search);
+    }
+  }, [search]);
 
   return (
     <div className="p-2 space-y-1.5">
@@ -226,15 +236,21 @@ function ColumnSearchInput({
           ref={inputRef}
           type="text"
           placeholder="Search by name…"
-          value={search}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Escape" || e.key === "Enter") close(); }}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            onChange(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") close();
+            if (e.key === "Escape") close();
+          }}
           className="w-full h-8 rounded-md border border-input bg-background pl-7 pr-2 text-sm outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
-      {search && (
+      {draft && (
         <button
-          onClick={() => { onChange(""); close(); }}
+          onClick={() => { setDraft(""); onChange(""); close(); }}
           className="w-full text-xs text-center py-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         >
           Clear
@@ -570,6 +586,7 @@ export function TransactionTable({
   accountFilterGroups = [],
   categoryFilterGroups = [],
   tagFilterGroups = [],
+  stickyOffset = 64,
 }: TransactionTableProps) {
   const cf  = columnFilters;
   const setCf = onColumnFilterChange;
@@ -612,7 +629,7 @@ export function TransactionTable({
     // which allows the sticky thead to work correctly.
     <div className="overflow-x-clip">
       <table className="w-full text-sm min-w-[760px]">
-        <thead className="sticky top-16 z-10">
+        <thead className="sticky z-10" style={{ top: stickyOffset }}>
           <tr className="border-y border-border bg-card">
             {selectable && (
               <th className="py-2 px-2 w-[40px]">
