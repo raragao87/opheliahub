@@ -25,6 +25,8 @@ import {
 import { cn } from "@/lib/utils";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { AccountEditDialog } from "@/components/accounts/account-edit-dialog";
+import { MarkTransferDialog, UnmarkTransferDialog } from "@/components/transactions/mark-transfer-dialog";
+import type { TransactionItem } from "@/components/transactions/transaction-table";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -602,6 +604,8 @@ function TransactionsContent() {
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [suggestedLinks, setSuggestedLinks] = useState<Array<{ label: string; url: string }>>([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [markTransferTxn, setMarkTransferTxn] = useState<TransactionItem | null>(null);
+  const [unmarkTransferTxn, setUnmarkTransferTxn] = useState<TransactionItem | null>(null);
 
   // Init links from account data
   useEffect(() => {
@@ -626,6 +630,7 @@ function TransactionsContent() {
   const accountUpdateMutation = useMutation(
     trpc.account.update.mutationOptions({
       onSuccess: () => queryClient.invalidateQueries(),
+      onError: (err) => toast.error(`Failed to update account: ${err.message}`),
     })
   );
 
@@ -636,6 +641,7 @@ function TransactionsContent() {
         setDescEditing(true);
         setSuggestedLinks(data.suggestedLinks);
       },
+      onError: (err) => toast.error(`Failed to generate description: ${err.message}`),
     })
   );
 
@@ -887,6 +893,20 @@ function TransactionsContent() {
         />
       )}
 
+      {/* ── Mark/unmark transfer dialogs ───────────────────────────── */}
+      <MarkTransferDialog
+        transaction={markTransferTxn}
+        open={!!markTransferTxn}
+        onClose={() => setMarkTransferTxn(null)}
+        onSuccess={() => setMarkTransferTxn(null)}
+      />
+      <UnmarkTransferDialog
+        transaction={unmarkTransferTxn}
+        open={!!unmarkTransferTxn}
+        onClose={() => setUnmarkTransferTxn(null)}
+        onSuccess={() => setUnmarkTransferTxn(null)}
+      />
+
       {/* ── Transaction table ──────────────────────────────────────── */}
       {transactionsQuery.isLoading && transactions.length === 0 ? (
         <div className="space-y-2">
@@ -944,6 +964,8 @@ function TransactionsContent() {
             accountFilterGroups={accountFilterGroups}
             categoryFilterGroups={categoryFilterGroups}
             tagFilterGroups={tagFilterGroups}
+            onMarkAsTransfer={setMarkTransferTxn}
+            onUnmarkTransfer={setUnmarkTransferTxn}
             stickyOffset={selectedAccount && !headerVisible ? 104 : 64}
           />
 

@@ -105,6 +105,8 @@ interface TransactionTableProps {
   onColumnFilterChange?: (key: keyof ColumnFilters, value: ColumnFilters[keyof ColumnFilters]) => void;
   onTypeChange?: (type: string, transferType: string) => void;
   onDelete?: (id: string) => void;
+  onMarkAsTransfer?: (txn: TransactionItem) => void;
+  onUnmarkTransfer?: (txn: TransactionItem) => void;
   accountFilterGroups?: FilterOptionGroup[];
   categoryFilterGroups?: FilterOptionGroup[];
   tagFilterGroups?: FilterOptionGroup[];
@@ -583,6 +585,8 @@ export function TransactionTable({
   onColumnFilterChange,
   onTypeChange,
   onDelete,
+  onMarkAsTransfer,
+  onUnmarkTransfer,
   accountFilterGroups = [],
   categoryFilterGroups = [],
   tagFilterGroups = [],
@@ -836,6 +840,8 @@ export function TransactionTable({
               allTags={allTags}
               onUpdate={onUpdate}
               onDelete={onDelete}
+              onMarkAsTransfer={onMarkAsTransfer}
+              onUnmarkTransfer={onUnmarkTransfer}
               isUpdating={updatingId === txn.id}
               selectable={selectable}
               isSelected={selectedIds?.has(txn.id) ?? false}
@@ -857,6 +863,8 @@ function TransactionRow({
   allTags,
   onUpdate,
   onDelete,
+  onMarkAsTransfer,
+  onUnmarkTransfer,
   isUpdating,
   selectable,
   isSelected,
@@ -868,6 +876,8 @@ function TransactionRow({
   allTags: TagOption[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   onDelete?: (id: string) => void;
+  onMarkAsTransfer?: (txn: TransactionItem) => void;
+  onUnmarkTransfer?: (txn: TransactionItem) => void;
   isUpdating: boolean;
   selectable: boolean;
   isSelected: boolean;
@@ -1044,6 +1054,28 @@ function TransactionRow({
       {/* Notes */}
       <td className="py-1.5 px-2">
         <NoteCell txnId={txn.id} notes={txn.notes} onUpdate={onUpdate} />
+      </td>
+
+      {/* Mark/unmark transfer */}
+      <td className="py-1.5 px-1">
+        {!txn.isInitialBalance && txn.type !== "TRANSFER" && onMarkAsTransfer && (
+          <button
+            onClick={() => onMarkAsTransfer(txn)}
+            title="Mark as transfer"
+            className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-blue-500 transition-opacity"
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {!txn.isInitialBalance && txn.type === "TRANSFER" && onUnmarkTransfer && (
+          <button
+            onClick={() => onUnmarkTransfer(txn)}
+            title="Unmark transfer"
+            className="shrink-0 opacity-0 group-hover:opacity-100 text-blue-400 hover:text-amber-500 transition-opacity"
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" />
+          </button>
+        )}
       </td>
 
       {/* Delete */}

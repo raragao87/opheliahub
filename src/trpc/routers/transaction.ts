@@ -985,4 +985,169 @@ export const transactionRouter = router({
 
       return { deleted: input.ids.length };
     }),
+
+  /** Find potential transfer matches for a given transaction */
+  findTransferMatches: householdProcedure
+    .input(z.object({ transactionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const source = await ctx.prisma.transaction.findFirst({
+        where: { id: input.transactionId, ...visibleTransactionsWhere(ctx.userId, ctx.householdId) },
+        include: { account: { select: { id: true, name: true } } },
+      });
+      if (!source) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
+      }
+
+      const targetAmount = -source.amount;
+      const sourceDate = new Date(source.date);
+      const dateFrom = new Date(sourceDate);
+      dateFrom.setDate(dateFrom.getDate() - 3);
+      const dateTo = new Date(sourceDate);
+      dateTo.setDate(dateTo.getDate() + 3);
+
+      const candidates = await ctx.prisma.transaction.findMany({
+        where: {
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          amount: targetAmount,
+          accountId: { not: source.accountId },
+          date: { gte: dateFrom, lte: dateTo },
+          linkedTransactionId: null,
+          linkedBy: { is: null },
+          isInitialBalance: false,
+        },
+        include: { account: { select: { id: true, name: true } } },
+        orderBy: { date: "asc" },
+        take: 10,
+      });
+
+      // Sort by date proximity to source
+      return candidates
+        .map((c) => ({
+          id: c.id,
+          description: c.description,
+          displayName: c.displayName,
+          amount: c.amount,
+          date: c.date,
+          type: c.type,
+          account: c.account,
+        }))
+        .sort((a, b) =>
+          Math.abs(new Date(a.date).getTime() - sourceDate.getTime()) -
+          Math.abs(new Date(b.date).getTime() - sourceDate.getTime())
+        );
+    }),
+
+  /** Mark a transaction as a transfer and optionally link to a matching transaction */
+  markAsTransfer: householdProcedure
+    .input(z.object({
+      transactionId: z.string(),
+      linkedTransactionId: z.string().nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const txn = await ctx.prisma.transaction.findFirst({
+        where: { id: input.transactionId, ...visibleTransactionsWhere(ctx.userId, ctx.householdId) },
+      });
+      if (!txn) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
+      }
+      if (txn.type === "TRANSFER") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Transaction is already a transfer." });
+      }
+
+      if (input.linkedTransactionId) {
+        const partner = await ctx.prisma.transaction.findFirst({
+          where: { id: input.linkedTransactionId, ...visibleTransactionsWhere(ctx.userId, ctx.householdId) },
+        });
+        if (!partner) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Linked transaction not found." });
+        }
+        if (partner.accountId === txn.accountId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Linked transaction must be in a different account." });
+        }
+        if (partner.linkedTransactionId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Linked transaction is already linked to another transaction." });
+        }
+        // Check partner isn't linked BY another transaction
+        const linkedBy = await ctx.prisma.transaction.findFirst({
+          where: { linkedTransactionId: partner.id },
+        });
+        if (linkedBy) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Linked transaction is already linked to another transaction." });
+        }
+        if (Math.abs(txn.amount) !== Math.abs(partner.amount)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Amounts do not match." });
+        }
+
+        // Determine outflow (negative) and inflow (positive) for linking direction
+        const outflow = txn.amount < 0 ? txn : partner;
+        const inflow = txn.amount < 0 ? partner : txn;
+
+        await ctx.prisma.$transaction([
+          ctx.prisma.transaction.update({
+            where: { id: outflow.id },
+            data: { type: "TRANSFER", categoryId: null, linkedTransactionId: inflow.id },
+          }),
+          ctx.prisma.transaction.update({
+            where: { id: inflow.id },
+            data: { type: "TRANSFER", categoryId: null },
+          }),
+        ]);
+      } else {
+        // Unlinked transfer (e.g. cash withdrawal)
+        await ctx.prisma.transaction.update({
+          where: { id: input.transactionId },
+          data: { type: "TRANSFER", categoryId: null },
+        });
+      }
+
+      return { success: true };
+    }),
+
+  /** Unmark a transfer back to INCOME or EXPENSE */
+  unmarkTransfer: householdProcedure
+    .input(z.object({
+      transactionId: z.string(),
+      newType: z.enum(["INCOME", "EXPENSE"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const txn = await ctx.prisma.transaction.findFirst({
+        where: { id: input.transactionId, ...visibleTransactionsWhere(ctx.userId, ctx.householdId) },
+      });
+      if (!txn) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
+      }
+      if (txn.type !== "TRANSFER") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Transaction is not a transfer." });
+      }
+
+      // Find the linked partner (either direction)
+      const partnerId = txn.linkedTransactionId;
+      const linkedByTxn = partnerId
+        ? null
+        : await ctx.prisma.transaction.findFirst({ where: { linkedTransactionId: txn.id } });
+      const actualPartnerId = partnerId ?? linkedByTxn?.id;
+
+      if (actualPartnerId) {
+        const partnerType = input.newType === "INCOME" ? "EXPENSE" : "INCOME";
+        await ctx.prisma.$transaction([
+          // Unlink: clear the FK on whichever side holds it
+          ctx.prisma.transaction.update({
+            where: { id: partnerId ? txn.id : actualPartnerId },
+            data: { linkedTransactionId: null, type: partnerId ? input.newType : partnerType },
+          }),
+          ctx.prisma.transaction.update({
+            where: { id: partnerId ? actualPartnerId : txn.id },
+            data: { type: partnerId ? partnerType : input.newType },
+          }),
+        ]);
+      } else {
+        // Unlinked transfer — just change the type
+        await ctx.prisma.transaction.update({
+          where: { id: input.transactionId },
+          data: { type: input.newType },
+        });
+      }
+
+      return { success: true };
+    }),
 });
