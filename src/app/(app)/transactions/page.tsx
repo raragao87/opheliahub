@@ -318,8 +318,12 @@ function TransactionsContent() {
                         category: (() => {
                           if (!variables.categoryId) return null;
                           const cat = flatCategories.find((c) => c.id === variables.categoryId);
-                          if (!cat) return txn.category;
-                          return { id: cat.id, name: cat.name, icon: cat.icon ?? null, color: null };
+                          if (cat) return { id: cat.id, name: cat.name, icon: cat.icon ?? null, color: null };
+                          // Fallback: use opheliaCategory if this was an Ophelia accept
+                          if (txn.opheliaCategory?.id === variables.categoryId) {
+                            return { id: txn.opheliaCategory.id, name: txn.opheliaCategory.name, icon: null, color: null };
+                          }
+                          return txn.category;
                         })(),
                       }),
                       ...(variables.tagIds !== undefined && {

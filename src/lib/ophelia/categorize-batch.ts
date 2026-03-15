@@ -97,6 +97,7 @@ export async function categorizeTransactionBatch(
           description: true,
           amount: true,
           date: true,
+          visibility: true,
         },
         take: batchSize,
         orderBy: { opheliaProcessedAt: "asc" }, // null comes first
@@ -109,15 +110,19 @@ export async function categorizeTransactionBatch(
         continue;
       }
 
-      // Fetch all leaf categories for this household (both SHARED and PERSONAL)
+      // Fetch all leaf categories for this household, with visibility
       const categories = await prisma.category.findMany({
         where: {
           householdId: hid,
           parentId: { not: null },
         },
-        select: { id: true, name: true, parent: { select: { name: true } } },
+        select: { id: true, name: true, visibility: true, parent: { select: { name: true } } },
         orderBy: [{ parent: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       });
+
+      // Split categories by visibility so transactions only see matching categories
+      const sharedCategories = categories.filter((c) => c.visibility === "SHARED");
+      const personalCategories = categories.filter((c) => c.visibility === "PERSONAL");
 
       // Fetch all non-archived tags visible to household members
       const tags = await prisma.tag.findMany({
@@ -181,36 +186,79 @@ export async function categorizeTransactionBatch(
             : undefined,
         }));
 
-      // Call the Ophelia AI — only descriptions go to the AI
-      const results = await enrichTransactions({
-        transactions: transactions.map((tx) => ({
-          date: tx.date.toISOString().slice(0, 10),
-          description: tx.description,
-          amount: tx.amount,
-        })),
-        categories: categories.map((c) => ({
-          id: c.id,
-          name: c.name,
-          parentName: c.parent?.name ?? undefined,
-        })),
-        tags: tags.map((t) => ({
-          id: t.id,
-          name: t.name,
-          groupName: t.group?.name ?? undefined,
-        })),
-        // Corrections first (highest priority), then general examples
-        recentExamples: [
-          ...correctionExamples,
-          ...recentExamples
-            .filter((t) => t.category !== null)
-            .map((t) => ({
-              description: t.description,
-              categoryName: t.category!.name,
-              displayName: t.displayName ?? t.description,
-              tags: t.tags.map((tt) => tt.tag.name),
-            })),
-        ].slice(0, 20),
-      });
+      // Split transactions by visibility and call Ophelia with matching categories
+      const sharedTxns = transactions.filter((t) => t.visibility === "SHARED");
+      const personalTxns = transactions.filter((t) => t.visibility === "PERSONAL");
+
+      const examples = [
+        ...correctionExamples,
+        ...recentExamples
+          .filter((t) => t.category !== null)
+          .map((t) => ({
+            description: t.description,
+            categoryName: t.category!.name,
+            displayName: t.displayName ?? t.description,
+            tags: t.tags.map((tt) => tt.tag.name),
+          })),
+      ].slice(0, 20);
+
+      const tagList = tags.map((t) => ({
+        id: t.id,
+        name: t.name,
+        groupName: t.group?.name ?? undefined,
+      }));
+
+      const callEnrich = async (
+        txns: typeof transactions,
+        cats: typeof categories,
+      ) => {
+        if (txns.length === 0) return null;
+        return enrichTransactions({
+          transactions: txns.map((tx) => ({
+            date: tx.date.toISOString().slice(0, 10),
+            description: tx.description,
+            amount: tx.amount,
+          })),
+          categories: cats.map((c) => ({
+            id: c.id,
+            name: c.name,
+            parentName: c.parent?.name ?? undefined,
+          })),
+          tags: tagList,
+          recentExamples: examples,
+        });
+      };
+
+      // Run both visibility batches (in parallel if both exist)
+      const [sharedResults, personalResults] = await Promise.all([
+        callEnrich(sharedTxns, sharedCategories),
+        callEnrich(personalTxns, personalCategories),
+      ]);
+
+      // Merge results back into a single map keyed by transaction index in the original array
+      type EnrichResult = NonNullable<Awaited<ReturnType<typeof enrichTransactions>>>[number];
+      const resultMap = new Map<number, EnrichResult>();
+      let anyFailed = false;
+
+      if (sharedTxns.length > 0) {
+        if (sharedResults) {
+          for (const r of sharedResults) {
+            const origIdx = transactions.indexOf(sharedTxns[r.index]);
+            if (origIdx >= 0) resultMap.set(origIdx, { ...r, index: origIdx });
+          }
+        } else { anyFailed = true; }
+      }
+      if (personalTxns.length > 0) {
+        if (personalResults) {
+          for (const r of personalResults) {
+            const origIdx = transactions.indexOf(personalTxns[r.index]);
+            if (origIdx >= 0) resultMap.set(origIdx, { ...r, index: origIdx });
+          }
+        } else { anyFailed = true; }
+      }
+
+      // Treat as full failure only if both batches failed
+      const results = resultMap.size > 0 ? Array.from(resultMap.values()) : (anyFailed ? null : []);
 
       const now = new Date();
 
@@ -237,7 +285,6 @@ export async function categorizeTransactionBatch(
       // When enrichTransactions returns partial results (some batches failed), transactions
       // without a matching result still get stamped so they don't loop endlessly.
       const validCategoryIds = new Set(categories.map((c) => c.id));
-      const resultMap = new Map(results.map((r) => [r.index, r]));
 
       // Track transactions where AI returned an invalid category ID — these get a retry pass.
       const retryNeeded: Array<{ tx: (typeof transactions)[number]; localIndex: number }> = [];
@@ -286,38 +333,52 @@ export async function categorizeTransactionBatch(
       // just the opheliaCategoryId field if the retry returns a valid ID.
       if (retryNeeded.length > 0) {
         console.log(`[Ophelia] Retrying categorization for ${retryNeeded.length} transaction(s) with invalid category suggestions`);
-        const retryResults = await enrichTransactions({
-          transactions: retryNeeded.map(({ tx }) => ({
-            date: tx.date.toISOString().slice(0, 10),
-            description: tx.description,
-            amount: tx.amount,
-          })),
-          categories: categories.map((c) => ({
-            id: c.id,
-            name: c.name,
-            parentName: c.parent?.name ?? undefined,
-          })),
-          tags: tags.map((t) => ({
-            id: t.id,
-            name: t.name,
-            groupName: t.group?.name ?? undefined,
-          })),
-          recentExamples: [
-            ...correctionExamples,
-            ...recentExamples
-              .filter((t) => t.category !== null)
-              .map((t) => ({
-                description: t.description,
-                categoryName: t.category!.name,
-                displayName: t.displayName ?? t.description,
-                tags: t.tags.map((tt) => tt.tag.name),
-              })),
-          ].slice(0, 20),
-        });
+        // Split retries by visibility too
+        const retryShared = retryNeeded.filter(({ tx }) => tx.visibility === "SHARED");
+        const retryPersonal = retryNeeded.filter(({ tx }) => tx.visibility === "PERSONAL");
+
+        const [retrySharedResults, retryPersonalResults] = await Promise.all([
+          retryShared.length > 0 ? enrichTransactions({
+            transactions: retryShared.map(({ tx }) => ({
+              date: tx.date.toISOString().slice(0, 10),
+              description: tx.description,
+              amount: tx.amount,
+            })),
+            categories: sharedCategories.map((c) => ({ id: c.id, name: c.name, parentName: c.parent?.name ?? undefined })),
+            tags: tagList,
+            recentExamples: examples,
+          }) : Promise.resolve(null),
+          retryPersonal.length > 0 ? enrichTransactions({
+            transactions: retryPersonal.map(({ tx }) => ({
+              date: tx.date.toISOString().slice(0, 10),
+              description: tx.description,
+              amount: tx.amount,
+            })),
+            categories: personalCategories.map((c) => ({ id: c.id, name: c.name, parentName: c.parent?.name ?? undefined })),
+            tags: tagList,
+            recentExamples: examples,
+          }) : Promise.resolve(null),
+        ]);
+
+        // Merge retry results
+        const retryResultMap = new Map<number, { suggestedCategoryId?: string | null; categoryConfidence?: number | null }>();
+        if (retrySharedResults) {
+          for (const r of retrySharedResults) {
+            const entry = retryShared[r.index];
+            if (entry) retryResultMap.set(entry.localIndex, r);
+          }
+        }
+        if (retryPersonalResults) {
+          for (const r of retryPersonalResults) {
+            const entry = retryPersonal[r.index];
+            if (entry) retryResultMap.set(entry.localIndex, r);
+          }
+        }
+        const retryResults = retryResultMap.size > 0 ? retryResultMap : null;
 
         if (retryResults) {
           for (const { tx, localIndex } of retryNeeded) {
-            const retryResult = retryResults.find((r) => r.index === localIndex);
+            const retryResult = retryResults.get(localIndex);
             const retryId = retryResult?.suggestedCategoryId;
             if (retryId && validCategoryIds.has(retryId)) {
               try {
