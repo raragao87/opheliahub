@@ -309,12 +309,15 @@ interface ColumnMultiSelectProps {
   toggleLabel?: string;
   toggleActive?: boolean;
   onToggle?: () => void;
+  /** Extra toggles rendered before groups (e.g. "Transfer") */
+  extraToggles?: Array<{ label: string; active: boolean; onToggle: () => void; icon?: React.ReactNode }>;
   close: () => void;
 }
 
 function ColumnMultiSelect({
   groups, selected, onChange,
   toggleLabel, toggleActive, onToggle,
+  extraToggles,
   close,
 }: ColumnMultiSelectProps) {
   const [search, setSearch] = useState("");
@@ -335,6 +338,18 @@ function ColumnMultiSelect({
 
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((v) => v !== id) : [...selected, id]);
+
+  const toggleGroup = (group: FilterOptionGroup) => {
+    const groupIds = group.options.map((o) => o.value);
+    const allSelected = groupIds.every((id) => selected.includes(id));
+    if (allSelected) {
+      onChange(selected.filter((id) => !groupIds.includes(id)));
+    } else {
+      onChange([...new Set([...selected, ...groupIds])]);
+    }
+  };
+
+  const hasAnyActive = selected.length > 0 || toggleActive || extraToggles?.some((t) => t.active);
 
   return (
     <>
@@ -360,12 +375,37 @@ function ColumnMultiSelect({
             <input type="checkbox" checked={toggleActive ?? false} onChange={onToggle} className="ml-auto rounded border-border" />
           </label>
         )}
+        {extraToggles?.map((et, i) => (
+          <label key={i} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm">
+            {et.icon ?? <ArrowLeftRight className={cn("h-3.5 w-3.5 shrink-0", et.active ? "text-primary" : "text-muted-foreground")} />}
+            <span className={et.active ? "text-foreground font-medium" : "text-muted-foreground"}>
+              {et.label}
+            </span>
+            <input type="checkbox" checked={et.active} onChange={et.onToggle} className="ml-auto rounded border-border" />
+          </label>
+        ))}
         {filtered.map((group, gi) => (
           <div key={gi}>
             {groups.length > 1 && (
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 mt-1 first:mt-0">
+              <button
+                type="button"
+                onClick={() => toggleGroup(group)}
+                className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 mt-1 first:mt-0 hover:text-foreground transition-colors cursor-pointer w-full text-left flex items-center gap-1"
+              >
+                <input
+                  type="checkbox"
+                  checked={group.options.length > 0 && group.options.every((o) => selected.includes(o.value))}
+                  ref={(el) => {
+                    if (el) {
+                      const count = group.options.filter((o) => selected.includes(o.value)).length;
+                      el.indeterminate = count > 0 && count < group.options.length;
+                    }
+                  }}
+                  onChange={() => toggleGroup(group)}
+                  className="rounded border-border shrink-0"
+                />
                 {group.label}
-              </p>
+              </button>
             )}
             {group.options.map((opt) => (
               <label key={opt.value} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm">
@@ -385,10 +425,15 @@ function ColumnMultiSelect({
           <p className="text-xs text-muted-foreground/50 text-center py-3">No matches</p>
         )}
       </div>
-      {(selected.length > 0 || toggleActive) && (
+      {hasAnyActive && (
         <div className="border-t border-border p-1.5 shrink-0">
           <button
-            onClick={() => { onChange([]); if (toggleActive && onToggle) onToggle(); close(); }}
+            onClick={() => {
+              onChange([]);
+              if (toggleActive && onToggle) onToggle();
+              extraToggles?.forEach((et) => { if (et.active) et.onToggle(); });
+              close();
+            }}
             className="w-full text-xs text-center py-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             Clear
@@ -750,10 +795,10 @@ export function TransactionTable({
 
             {/* Category */}
             <th className="py-2 px-2 w-[140px]">
-              {cf && setCf ? (
+              {cf && setCf && onTypeChange ? (
                 <ColumnHeaderFilter
                   label="Category"
-                  active={cf.categoryIds.length > 0 || cf.uncategorized}
+                  active={cf.categoryIds.length > 0 || cf.uncategorized || cf.type === "TRANSFER"}
                 >
                   {(close) => (
                     <ColumnMultiSelect
@@ -763,6 +808,12 @@ export function TransactionTable({
                       toggleLabel="No category"
                       toggleActive={cf.uncategorized}
                       onToggle={() => { setCf("uncategorized", !cf.uncategorized); setCf("categoryIds", []); }}
+                      extraToggles={[{
+                        label: "Transfer",
+                        active: cf.type === "TRANSFER",
+                        onToggle: () => onTypeChange(cf.type === "TRANSFER" ? "" : "TRANSFER", cf.type === "TRANSFER" ? "" : cf.transferType),
+                        icon: <ArrowLeftRight className={cn("h-3.5 w-3.5 shrink-0", cf.type === "TRANSFER" ? "text-primary" : "text-muted-foreground")} />,
+                      }]}
                       close={close}
                     />
                   )}
@@ -1079,27 +1130,6 @@ function TransactionRow({
         <NoteCell txnId={txn.id} notes={txn.notes} onUpdate={onUpdate} />
       </td>
 
-      {/* Mark/unmark transfer */}
-      <td className="py-1.5 px-1">
-        {!txn.isInitialBalance && txn.type !== "TRANSFER" && onMarkAsTransfer && (
-          <button
-            onClick={() => onMarkAsTransfer(txn)}
-            title="Mark as transfer"
-            className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground/30 hover:text-blue-500 transition-opacity"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-          </button>
-        )}
-        {!txn.isInitialBalance && txn.type === "TRANSFER" && onUnmarkTransfer && (
-          <button
-            onClick={() => onUnmarkTransfer(txn)}
-            title="Unmark transfer"
-            className="shrink-0 opacity-0 group-hover:opacity-100 text-blue-400 hover:text-amber-500 transition-opacity"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </td>
 
       {/* Delete */}
       <td className="py-1.5 px-1">
