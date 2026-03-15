@@ -145,9 +145,9 @@ export const accountRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ownership, ...data } = input;
 
-      // Verify ownership
+      // Verify visibility (owner OR household member for shared accounts)
       const account = await ctx.prisma.financialAccount.findFirst({
-        where: { id, ownerId: ctx.userId },
+        where: { id, ...visibleAccountsWhere(ctx.userId, ctx.householdId) },
       });
 
       if (!account) {
@@ -373,7 +373,7 @@ export const accountRouter = router({
       ].join("\n");
 
       const raw = await chatCompletion({
-        systemPrompt: `You are a personal finance assistant. Given an account's details and recent transactions, write a short description (1-2 sentences) of what this account is used for. Also suggest up to 3 useful external links (e.g. the bank's login page, mobile app, or customer service). Return JSON only: { "description": "...", "suggestedLinks": [{ "label": "...", "url": "..." }] }`,
+        systemPrompt: `You are a personal finance assistant. Given an account's details and recent transactions, write a very brief description (1 short sentence, maximum 120 characters) of what this account is used for. Be concise. Also suggest up to 3 useful external links (e.g. the bank's login page, mobile app, or customer service). Return JSON only: { "description": "...", "suggestedLinks": [{ "label": "...", "url": "..." }] }`,
         userMessage,
         maxTokens: 512,
       });
@@ -388,7 +388,7 @@ export const accountRouter = router({
       }
 
       return {
-        description: parsed.description,
+        description: parsed.description.slice(0, 120),
         suggestedLinks: Array.isArray(parsed.suggestedLinks) ? parsed.suggestedLinks.slice(0, 3) : [],
       };
     }),

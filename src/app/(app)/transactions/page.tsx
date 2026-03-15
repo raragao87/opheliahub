@@ -553,16 +553,18 @@ function TransactionsContent() {
 
   // ── Derived data for filters ───────────────────────────────────────
 
-  // Account filter groups (Liquid / Illiquid)
+  // Account filter groups (Liquid / Illiquid) — filtered by current visibility
   const accountFilterGroups: FilterOptionGroup[] = useMemo(() => {
-    const accounts = accountsQuery.data ?? [];
+    const accounts = (accountsQuery.data ?? []).filter(
+      (a) => a.ownership === visibilityParam
+    );
     return SIDEBAR_GROUPS.map((sg) => ({
       label: sg.label,
       options: accounts
         .filter((a) => ACCOUNT_TYPE_META[a.type]?.sidebarGroup === sg.key)
         .map((a) => ({ value: a.id, label: a.name })),
     })).filter((g) => g.options.length > 0);
-  }, [accountsQuery.data]);
+  }, [accountsQuery.data, visibilityParam]);
 
   // Category filter groups (by parent group)
   const categoryFilterGroups: FilterOptionGroup[] = useMemo(() => {
@@ -703,33 +705,110 @@ function TransactionsContent() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div ref={headerRef} className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">
-              {mounted && selectedAccount ? selectedAccount.name : "Transactions"}
-            </h1>
-            {mounted && selectedAccount && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {ACCOUNT_TYPE_META[selectedAccount.type]?.label ?? selectedAccount.type}
-                {selectedAccount.institution && ` · ${selectedAccount.institution}`}
-              </p>
-            )}
-          </div>
-          {selectedAccount && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => updateFilter("accountIds", [])}
-              className="text-muted-foreground"
-            >
-              <X className="h-3.5 w-3.5 mr-1" />
-              Clear
-            </Button>
+      <div ref={headerRef} className="flex items-start justify-between gap-4">
+        <div className="shrink-0">
+          <h1 className="text-2xl font-bold">
+            {mounted && selectedAccount ? selectedAccount.name : "Transactions"}
+          </h1>
+          {mounted && selectedAccount && (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {ACCOUNT_TYPE_META[selectedAccount.type]?.label ?? selectedAccount.type}
+              {selectedAccount.institution && ` · ${selectedAccount.institution}`}
+            </p>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Description + links inline in header */}
+        {mounted && selectedAccount && (
+          <div className="flex-1 min-w-0 pt-1 space-y-1">
+            {/* Description */}
+            {!descEditing ? (
+              <div className="flex items-start gap-1.5">
+                <div
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={() => { setDescDraft(selectedAccount.notes ?? ""); setDescEditing(true); }}
+                >
+                  {selectedAccount.notes ? (
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-2">{selectedAccount.notes}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/40 italic">Add a description...</p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0"
+                  disabled={generateDescMutation.isPending}
+                  onClick={() => generateDescMutation.mutate({ id: selectedAccount.id })}
+                  title="Generate description with Ophelia"
+                >
+                  {generateDescMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                </Button>
+              </div>
+            ) : (
+              <textarea
+                ref={descRef}
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)}
+                onBlur={() => {
+                  accountUpdateMutation.mutate({ id: selectedAccount.id, notes: descDraft || null });
+                  setDescEditing(false);
+                }}
+                rows={2}
+                maxLength={120}
+                className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring resize-none"
+                placeholder="Write a short description (max 120 chars)..."
+                autoFocus
+              />
+            )}
+
+            {/* Links */}
+            <div className="flex flex-wrap gap-1 items-center">
+              {accountLinks.map((link, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0 text-[11px]">
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="hover:underline max-w-[140px] truncate text-muted-foreground hover:text-foreground">{link.label}</a>
+                  <button onClick={() => { const updated = accountLinks.filter((_, i) => i !== idx); setAccountLinks(updated); accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated }); }} className="text-muted-foreground/40 hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
+                </span>
+              ))}
+              {accountLinks.length < 6 && !addingLink && (
+                <button onClick={() => setAddingLink(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border/60 px-2 py-0 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                  + Add link
+                </button>
+              )}
+              {addingLink && (
+                <div className="flex gap-1 items-center">
+                  <input placeholder="Label" value={newLinkLabel} onChange={(e) => setNewLinkLabel(e.target.value)} className="h-5 text-[11px] w-24 rounded border border-input bg-background px-1.5" />
+                  <input placeholder="https://..." value={newLinkUrl} onChange={(e) => setNewLinkUrl(e.target.value)} className="h-5 text-[11px] w-40 rounded border border-input bg-background px-1.5"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newLinkLabel && newLinkUrl) {
+                        const updated = [...accountLinks, { label: newLinkLabel.trim(), url: newLinkUrl.trim() }];
+                        setAccountLinks(updated);
+                        accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated });
+                        setNewLinkLabel(""); setNewLinkUrl(""); setAddingLink(false);
+                      }
+                      if (e.key === "Escape") setAddingLink(false);
+                    }}
+                  />
+                  <button onClick={() => setAddingLink(false)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {suggestedLinks.map((sl, idx) => (
+                <button key={idx} onClick={() => {
+                  if (accountLinks.length >= 6) return;
+                  const updated = [...accountLinks, sl];
+                  setAccountLinks(updated);
+                  accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated });
+                  setSuggestedLinks((prev) => prev.filter((l) => l.url !== sl.url));
+                }}
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0 text-[11px] text-primary/70 hover:text-primary transition-colors">
+                  {sl.label} +
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 shrink-0">
           {selectedAccount && (
             <Button variant="ghost" size="sm" onClick={() => setEditDialogOpen(true)} title="Account settings">
               <Settings className="h-4 w-4" />
@@ -798,95 +877,7 @@ function TransactionsContent() {
         </div>
       )}
 
-      {/* ── Description + links — single-account mode ──────────────── */}
-      {mounted && selectedAccount && (
-        <div className="space-y-1.5 pb-2">
-          {/* Description */}
-          {!descEditing ? (
-            <div className="flex items-start gap-1.5">
-              <div
-                className="flex-1 min-w-0 cursor-pointer"
-                onClick={() => { setDescDraft(selectedAccount.notes ?? ""); setDescEditing(true); }}
-              >
-                {selectedAccount.notes ? (
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedAccount.notes}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground/40 italic">Add a description...</p>
-                )}
-              </div>
-              <Button
-                variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0"
-                disabled={generateDescMutation.isPending}
-                onClick={() => generateDescMutation.mutate({ id: selectedAccount.id })}
-                title="Generate description with Ophelia"
-              >
-                {generateDescMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-              </Button>
-            </div>
-          ) : (
-            <textarea
-              ref={descRef}
-              value={descDraft}
-              onChange={(e) => setDescDraft(e.target.value)}
-              onBlur={() => {
-                accountUpdateMutation.mutate({ id: selectedAccount.id, notes: descDraft || null });
-                setDescEditing(false);
-              }}
-              rows={2}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring resize-none"
-              placeholder="Write a short description..."
-              autoFocus
-            />
-          )}
 
-          {/* Links */}
-          <div className="flex flex-wrap gap-1.5 items-center">
-            {accountLinks.map((link, idx) => (
-              <span key={idx} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs">
-                <a href={link.url} target="_blank" rel="noopener noreferrer" className="hover:underline max-w-[160px] truncate text-muted-foreground hover:text-foreground">{link.label}</a>
-                <button onClick={() => { const updated = accountLinks.filter((_, i) => i !== idx); setAccountLinks(updated); accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated }); }} className="text-muted-foreground/40 hover:text-destructive ml-0.5"><X className="h-2.5 w-2.5" /></button>
-              </span>
-            ))}
-            {accountLinks.length < 6 && !addingLink && (
-              <button onClick={() => setAddingLink(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                + Add link
-              </button>
-            )}
-            {addingLink && (
-              <div className="flex gap-1.5 items-center">
-                <input placeholder="Label" value={newLinkLabel} onChange={(e) => setNewLinkLabel(e.target.value)} className="h-6 text-xs w-28 rounded border border-input bg-background px-2" />
-                <input placeholder="https://..." value={newLinkUrl} onChange={(e) => setNewLinkUrl(e.target.value)} className="h-6 text-xs w-48 rounded border border-input bg-background px-2"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && newLinkLabel && newLinkUrl) {
-                      const updated = [...accountLinks, { label: newLinkLabel.trim(), url: newLinkUrl.trim() }];
-                      setAccountLinks(updated);
-                      accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated });
-                      setNewLinkLabel(""); setNewLinkUrl(""); setAddingLink(false);
-                    }
-                    if (e.key === "Escape") setAddingLink(false);
-                  }}
-                />
-                <button onClick={() => setAddingLink(false)} className="text-xs text-muted-foreground hover:text-foreground">
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-            {/* Ophelia suggested links */}
-            {suggestedLinks.map((sl, idx) => (
-              <button key={idx} onClick={() => {
-                if (accountLinks.length >= 6) return;
-                const updated = [...accountLinks, sl];
-                setAccountLinks(updated);
-                accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated });
-                setSuggestedLinks((prev) => prev.filter((l) => l.url !== sl.url));
-              }}
-                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs text-primary/70 hover:text-primary transition-colors">
-                {sl.label} +
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Account edit dialog ─────────────────────────────────────── */}
       {selectedAccount && (

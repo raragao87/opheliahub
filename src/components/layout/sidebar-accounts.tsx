@@ -11,7 +11,7 @@ import { MoneyDisplay } from "@/components/shared/money-display";
 import { groupAccountsForSidebar, ACCOUNT_TYPE_META } from "@/lib/account-types";
 import type { SidebarGroupKey } from "@/lib/account-types";
 import { fromCents, parseToCents } from "@/lib/money";
-import { ChevronDown, ChevronRight, Pencil, Plus, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Upload } from "lucide-react";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
 
@@ -283,31 +283,13 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                       href={item.href}
                       onClick={onNavigate}
                       className={cn(
-                        "group/account flex items-center justify-between rounded-md px-3 py-1.5 text-sm transition-colors ml-2",
+                        "group/account flex items-center justify-between rounded-md px-3 py-1.5 text-sm transition-colors ml-5",
                         isActive
                           ? "bg-primary text-primary-foreground"
                           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                       )}
                     >
                       <span className="min-w-0 flex-1 flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            router.push(`/accounts/${item.id}?edit`);
-                            onNavigate?.();
-                          }}
-                          className={cn(
-                            "opacity-0 group-hover/account:opacity-100 transition-opacity shrink-0",
-                            isActive
-                              ? "text-primary-foreground/70 hover:text-primary-foreground"
-                              : "text-muted-foreground/50 hover:text-muted-foreground"
-                          )}
-                          title="Edit account"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
                         <span className="truncate text-xs">{item.name}</span>
                         {(pendingByAccount[item.id] ?? 0) > 0 && (
                           <span className={cn(

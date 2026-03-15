@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   ArrowLeftRight, Trash2, X,
   ChevronDown, ChevronLeft, ChevronRight,
-  CircleSlash, ArrowUp, ArrowDown, ArrowUpDown, Search, MessageSquare, Sparkles,
+  CircleSlash, Search, MessageSquare, Sparkles,
 } from "lucide-react";
 import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
 import { InlineTextEdit } from "@/components/shared/inline-text-edit";
@@ -74,6 +74,7 @@ interface TagOption {
   id: string;
   name: string;
   color?: string | null;
+  group?: { id: string; name: string } | null;
 }
 
 export interface ColumnFilters {
@@ -135,12 +136,20 @@ function ColumnHeaderFilter({ label, active, children, iconOnly }: ColumnHeaderF
   const toggle = () => {
     if (!open && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      const dropW = 260;
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - dropW - 8));
-      setPos({ top: rect.bottom + 4, left });
+      setPos({ top: rect.bottom + 4, left: rect.left });
     }
     setOpen((v) => !v);
   };
+
+  // Reposition if dropdown overflows viewport
+  useEffect(() => {
+    if (!open || !dropdownRef.current) return;
+    const el = dropdownRef.current;
+    const rect = el.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 8) {
+      setPos((p) => ({ ...p, left: Math.max(8, window.innerWidth - rect.width - 8) }));
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -205,7 +214,7 @@ function ColumnHeaderFilter({ label, active, children, iconOnly }: ColumnHeaderF
         <div
           ref={dropdownRef}
           style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="rounded-lg border bg-popover shadow-lg w-[260px] max-h-[320px] flex flex-col"
+          className="rounded-lg border bg-popover shadow-lg min-w-[260px] max-h-[400px] flex flex-col"
         >
           {children(close)}
         </div>
@@ -258,44 +267,6 @@ function ColumnSearchInput({
           Clear
         </button>
       )}
-    </div>
-  );
-}
-
-// ── Column Type Filter ────────────────────────────────────────────────
-
-const TYPE_OPTIONS = [
-  { type: "", tt: "", label: "All types" },
-  { type: "INCOME",   tt: "", label: "Income" },
-  { type: "EXPENSE",  tt: "", label: "Expense" },
-  { type: "TRANSFER", tt: "", label: "Transfer" },
-  { type: "TRANSFER", tt: "INTERNAL", label: "Transfer · Internal" },
-  { type: "TRANSFER", tt: "EXTERNAL", label: "Transfer · External" },
-] as const;
-
-function ColumnTypeFilter({
-  type, transferType, onChange, close,
-}: { type: string; transferType: string; onChange: (t: string, tt: string) => void; close: () => void }) {
-  return (
-    <div className="p-1.5 space-y-0.5">
-      {TYPE_OPTIONS.map((opt, i) => {
-        const active = type === opt.type && transferType === opt.tt;
-        return (
-          <button key={i}
-            onClick={() => { onChange(opt.type, opt.tt); close(); }}
-            className={cn(
-              "flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm transition-colors text-left",
-              active ? "bg-primary/10 text-foreground font-medium" : "hover:bg-muted text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {opt.type === "INCOME"   && <ArrowUp    className="h-3.5 w-3.5 text-green-500 shrink-0" />}
-            {opt.type === "EXPENSE"  && <ArrowDown   className="h-3.5 w-3.5 text-red-500 shrink-0" />}
-            {opt.type === "TRANSFER" && <ArrowLeftRight className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
-            {opt.type === ""         && <span className="h-3.5 w-3.5 shrink-0" />}
-            {opt.label}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -384,43 +355,49 @@ function ColumnMultiSelect({
             <input type="checkbox" checked={et.active} onChange={et.onToggle} className="ml-auto rounded border-border" />
           </label>
         ))}
-        {filtered.map((group, gi) => (
-          <div key={gi}>
-            {groups.length > 1 && (
-              <button
-                type="button"
-                onClick={() => toggleGroup(group)}
-                className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 mt-1 first:mt-0 hover:text-foreground transition-colors cursor-pointer w-full text-left flex items-center gap-1"
-              >
-                <input
-                  type="checkbox"
-                  checked={group.options.length > 0 && group.options.every((o) => selected.includes(o.value))}
-                  ref={(el) => {
-                    if (el) {
-                      const count = group.options.filter((o) => selected.includes(o.value)).length;
-                      el.indeterminate = count > 0 && count < group.options.length;
-                    }
-                  }}
-                  onChange={() => toggleGroup(group)}
-                  className="rounded border-border shrink-0"
-                />
-                {group.label}
-              </button>
-            )}
-            {group.options.map((opt) => (
-              <label key={opt.value} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt.value)}
-                  onChange={() => toggle(opt.value)}
-                  className="rounded border-border shrink-0"
-                />
-                {opt.icon && <span className="text-xs shrink-0">{opt.icon}</span>}
-                <span className="truncate">{opt.label}</span>
-              </label>
-            ))}
-          </div>
-        ))}
+        {filtered.map((group, gi) => {
+          const showHeaders = groups.length > 1;
+          return (
+            <div key={gi} className={gi > 0 && showHeaders ? "mt-1 pt-1 border-t border-border/40" : ""}>
+              {showHeaders && (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group)}
+                  className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 py-1 hover:text-foreground transition-colors cursor-pointer w-full text-left flex items-center gap-1.5"
+                >
+                  <input
+                    type="checkbox"
+                    checked={group.options.length > 0 && group.options.every((o) => selected.includes(o.value))}
+                    ref={(el) => {
+                      if (el) {
+                        const count = group.options.filter((o) => selected.includes(o.value)).length;
+                        el.indeterminate = count > 0 && count < group.options.length;
+                      }
+                    }}
+                    onChange={() => toggleGroup(group)}
+                    className="rounded border-border shrink-0 h-3 w-3"
+                  />
+                  {group.label}
+                </button>
+              )}
+              {group.options.map((opt) => (
+                <label key={opt.value} className={cn(
+                  "flex items-center gap-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm",
+                  showHeaders ? "pl-5 pr-2" : "px-2"
+                )}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt.value)}
+                    onChange={() => toggle(opt.value)}
+                    className="rounded border-border shrink-0"
+                  />
+                  {opt.icon && <span className="text-xs shrink-0">{opt.icon}</span>}
+                  <span className="truncate">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          );
+        })}
         {filtered.length === 0 && (
           <p className="text-xs text-muted-foreground/50 text-center py-3">No matches</p>
         )}
@@ -471,8 +448,9 @@ function ymToDateTo(ym: YM) {
 }
 
 const MONTH_PRESETS = [
+  { label: "All",        get: () => null },
   { label: "This month", get: () => { const n = nowYM(); return [n, n] as [YM, YM]; } },
-  { label: "Last month",  get: () => { const m = addMonths(nowYM(), -1); return [m, m] as [YM, YM]; } },
+  { label: "Last month", get: () => { const m = addMonths(nowYM(), -1); return [m, m] as [YM, YM]; } },
   { label: "Last 3 mo",  get: () => [addMonths(nowYM(), -2), nowYM()] as [YM, YM] },
   { label: "Last 6 mo",  get: () => [addMonths(nowYM(), -5), nowYM()] as [YM, YM] },
   { label: "This year",  get: () => [{ year: nowYM().year, month: 1 }, nowYM()] as [YM, YM] },
@@ -487,6 +465,8 @@ function ColumnMonthPicker({
   close: () => void;
 }) {
   const [year, setYear] = useState(() => parseDateToYM(dateFrom)?.year ?? nowYM().year);
+  const [editingYear, setEditingYear] = useState(false);
+  const [yearDraft, setYearDraft] = useState("");
   const [picking, setPicking] = useState<"start" | "end">("start");
   const [tempStart, setTempStart] = useState<YM | null>(null);
   const [hover, setHover] = useState<YM | null>(null);
@@ -513,30 +493,58 @@ function ColumnMonthPicker({
   const hint = picking === "start" ? "Select start" : "Select end";
 
   return (
-    <div className="w-[300px]">
-      <div className="p-2 border-b border-border flex flex-wrap gap-1">
+    <div className="w-[280px]">
+      {/* Presets — 3×2 grid */}
+      <div className="p-2 border-b border-border grid grid-cols-3 gap-1">
         {MONTH_PRESETS.map((p) => (
-          <button key={p.label} onClick={() => { const [s, e] = p.get(); apply(s, e); close(); }}
-            className="text-xs px-2 py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+          <button key={p.label} onClick={() => { const r = p.get(); if (r) { apply(r[0], r[1]); } else { onChange("", ""); } close(); }}
+            className="text-xs px-1 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors font-medium text-center whitespace-nowrap">
             {p.label}
           </button>
         ))}
       </div>
-      <div className="flex items-center justify-between px-3 py-2">
-        <span className="text-xs text-muted-foreground">{hint}</span>
-        <div className="flex items-center gap-1">
+      {/* Year nav + hint */}
+      <div className="flex items-center justify-between px-2 py-1.5">
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{hint}</span>
+        <div className="flex items-center gap-0.5">
           <button onClick={() => setYear((y) => y - 1)}
-            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+            className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span className="text-xs font-semibold w-10 text-center">{year}</span>
+          {editingYear ? (
+            <input
+              type="number"
+              value={yearDraft}
+              onChange={(e) => setYearDraft(e.target.value)}
+              onBlur={() => {
+                const parsed = parseInt(yearDraft, 10);
+                if (!isNaN(parsed) && parsed >= 1900 && parsed <= 2100) setYear(parsed);
+                setEditingYear(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") setEditingYear(false);
+              }}
+              className="w-12 text-xs font-semibold text-center bg-transparent border-b border-primary/50 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              autoFocus
+            />
+          ) : (
+            <button
+              onClick={() => { setYearDraft(String(year)); setEditingYear(true); }}
+              className="text-xs font-semibold w-9 text-center hover:text-primary transition-colors cursor-pointer"
+              title="Click to edit year"
+            >
+              {year}
+            </button>
+          )}
           <button onClick={() => setYear((y) => y + 1)}
-            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+            className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-1 px-3 pb-2">
+      {/* Month grid */}
+      <div className="grid grid-cols-4 gap-1 px-2 pb-2">
         {Array.from({ length: 12 }, (_, i) => {
           const ym: YM = { year, month: i + 1 };
           const label = new Date(year, i).toLocaleString("default", { month: "short" });
@@ -576,42 +584,98 @@ function ColumnMonthPicker({
 
 function ColumnAmountRange({
   amountMin, amountMax,
+  dataMin, dataMax,
   onChange, close,
 }: {
   amountMin: string; amountMax: string;
+  /** Absolute bounds from actual transaction data (display values, not cents) */
+  dataMin: number; dataMax: number;
   onChange: (min: string, max: string) => void;
   close: () => void;
 }) {
   const [min, setMin] = useState(amountMin);
   const [max, setMax] = useState(amountMax);
 
+  const sliderMin = dataMin;
+  const sliderMax = dataMax;
+  const range = sliderMax - sliderMin;
+  const step = range <= 100 ? 1 : range <= 1000 ? 5 : range <= 10000 ? 50 : 100;
+
+  const curMin = min ? parseFloat(min) : sliderMin;
+  const curMax = max ? parseFloat(max) : sliderMax;
+
   const apply = () => { onChange(min, max); close(); };
-  const clear  = () => { onChange("", ""); close(); };
+  const clear = () => { onChange("", ""); close(); };
 
   return (
-    <div className="p-3 space-y-3">
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground font-medium">Min (€)</label>
-        <input type="number" value={min} onChange={(e) => setMin(e.target.value)} placeholder="0"
-          className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring" />
+    <div className="p-3 space-y-3 w-[280px]">
+      {/* Dual range slider */}
+      <div className="relative h-6 flex items-center">
+        {/* Track background */}
+        <div className="absolute inset-x-0 h-1 rounded-full bg-muted" />
+        {/* Active range */}
+        <div
+          className="absolute h-1 rounded-full bg-primary"
+          style={{
+            left: `${((curMin - sliderMin) / (sliderMax - sliderMin)) * 100}%`,
+            right: `${100 - ((curMax - sliderMin) / (sliderMax - sliderMin)) * 100}%`,
+          }}
+        />
+        {/* Min thumb */}
+        <input
+          type="range"
+          min={sliderMin} max={sliderMax} step={step}
+          value={curMin}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            if (v <= curMax) setMin(v <= sliderMin ? "" : v.toString());
+          }}
+          className="absolute inset-x-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-background [&::-moz-range-thumb]:cursor-pointer"
+        />
+        {/* Max thumb */}
+        <input
+          type="range"
+          min={sliderMin} max={sliderMax} step={step}
+          value={curMax}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            if (v >= curMin) setMax(v >= sliderMax ? "" : v.toString());
+          }}
+          className="absolute inset-x-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-background [&::-moz-range-thumb]:cursor-pointer"
+        />
       </div>
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground font-medium">Max (€)</label>
-        <input type="number" value={max} onChange={(e) => setMax(e.target.value)} placeholder="∞"
-          className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring" />
+
+      {/* Inline editable min/max inputs */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 space-y-0.5">
+          <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Min</label>
+          <input
+            type="number" step="0.01" value={min} placeholder={sliderMin.toFixed(0)}
+            onChange={(e) => setMin(e.target.value)}
+            onBlur={apply}
+            onKeyDown={(e) => { if (e.key === "Enter") apply(); }}
+            className="w-full h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        </div>
+        <span className="text-muted-foreground/40 pt-3">—</span>
+        <div className="flex-1 space-y-0.5">
+          <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Max</label>
+          <input
+            type="number" step="0.01" value={max} placeholder={sliderMax.toFixed(0)}
+            onChange={(e) => setMax(e.target.value)}
+            onBlur={apply}
+            onKeyDown={(e) => { if (e.key === "Enter") apply(); }}
+            className="w-full h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        </div>
       </div>
-      <div className="flex gap-2">
-        <button onClick={apply}
-          className="flex-1 h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
-          Apply
+
+      {(amountMin || amountMax) && (
+        <button onClick={clear}
+          className="w-full text-xs text-center py-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+          Clear
         </button>
-        {(amountMin || amountMax) && (
-          <button onClick={clear}
-            className="h-7 px-3 rounded-md border border-input text-xs text-muted-foreground hover:bg-muted transition-colors">
-            Clear
-          </button>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -683,6 +747,13 @@ export function TransactionTable({
     return Array.from(groupMap.entries()).map(([label, options]) => ({ label, options }));
   }, [flatCategories]);
 
+  // Compute amount bounds from loaded transactions (display values, not cents)
+  const amountBounds = useMemo(() => {
+    if (transactions.length === 0) return { min: -1000, max: 1000 };
+    const amounts = transactions.map((t) => t.amount / 100);
+    return { min: Math.floor(Math.min(...amounts)), max: Math.ceil(Math.max(...amounts)) };
+  }, [transactions]);
+
   return (
     // overflow-y-auto + max-h makes this a self-contained scroll area,
     // which allows the sticky thead to work correctly.
@@ -691,7 +762,7 @@ export function TransactionTable({
         <thead className="sticky z-10" style={{ top: stickyOffset }}>
           <tr className="border-y border-border bg-card">
             {selectable && (
-              <th className="py-2 px-2 w-[40px]">
+              <th className="py-2 px-2 w-[40px] text-left">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -703,33 +774,6 @@ export function TransactionTable({
                 />
               </th>
             )}
-
-            {/* Type – icon-only column with filter */}
-            <th className="py-2 px-2 w-[36px]">
-              {cf && setCf && onTypeChange ? (
-                <ColumnHeaderFilter
-                  label="Type"
-                  active={!!(cf.type || cf.transferType)}
-                  iconOnly={
-                    cf.type === "INCOME"   ? <ArrowUp       className="h-3.5 w-3.5 text-green-500" /> :
-                    cf.type === "EXPENSE"  ? <ArrowDown      className="h-3.5 w-3.5 text-red-500" /> :
-                    cf.type === "TRANSFER" ? <ArrowLeftRight  className="h-3.5 w-3.5 text-blue-500" /> :
-                                            <ArrowUpDown     className="h-3.5 w-3.5" />
-                  }
-                >
-                  {(close) => (
-                    <ColumnTypeFilter
-                      type={cf.type}
-                      transferType={cf.transferType}
-                      onChange={onTypeChange}
-                      close={close}
-                    />
-                  )}
-                </ColumnHeaderFilter>
-              ) : (
-                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto" />
-              )}
-            </th>
 
             {/* Date */}
             <th className="py-2 px-2 w-[110px]">
@@ -859,6 +903,8 @@ export function TransactionTable({
                       <ColumnAmountRange
                         amountMin={cf.amountMin}
                         amountMax={cf.amountMax}
+                        dataMin={amountBounds.min}
+                        dataMax={amountBounds.max}
                         onChange={(min, max) => { setCf("amountMin", min); setCf("amountMax", max); }}
                         close={close}
                       />
@@ -991,19 +1037,6 @@ function TransactionRow({
         </td>
       )}
 
-      {/* Type icon */}
-      <td className="py-1.5 px-2">
-        {txn.type === "INCOME" && (
-          <ArrowUp className="h-3.5 w-3.5 text-green-500 mx-auto" />
-        )}
-        {txn.type === "EXPENSE" && (
-          <ArrowDown className="h-3.5 w-3.5 text-red-500 mx-auto" />
-        )}
-        {txn.type === "TRANSFER" && (
-          <ArrowLeftRight className={cn("h-3.5 w-3.5 mx-auto", partnerAccount ? "text-blue-400" : "text-amber-400")} />
-        )}
-      </td>
-
       {/* Date */}
       <td className="py-1.5 px-2">
         {txn.isInitialBalance ? (
@@ -1114,7 +1147,7 @@ function TransactionRow({
       </td>
 
       {/* Amount */}
-      <td className="py-1.5 px-2 text-right">
+      <td className="py-1.5 px-2 text-right whitespace-nowrap">
         <InlineMoneyEdit
           value={txn.amount}
           onSave={(cents) => onUpdate(txn.id, { amount: cents })}
