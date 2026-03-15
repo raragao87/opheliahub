@@ -11,7 +11,8 @@ export default auth((req) => {
     pathname === "/login" ||
     pathname === "/" ||
     pathname.startsWith("/api/auth") ||
-    pathname === "/api/ophelia/categorize"; // cron endpoint — protected by its own Bearer token
+    pathname === "/api/ophelia/categorize" || // cron — protected by Bearer token
+    pathname.startsWith("/api/cron"); // cron endpoints — protected by Bearer token
 
   if (!isLoggedIn && !isPublicRoute) {
     return Response.redirect(new URL("/login", req.nextUrl));
