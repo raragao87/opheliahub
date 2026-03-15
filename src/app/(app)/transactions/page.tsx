@@ -165,6 +165,9 @@ function TransactionsContent() {
   }, [searchParams]);
 
   // Sync filter state → URL params (debounced)
+  // Uses history.replaceState instead of router.replace to avoid triggering
+  // a Next.js navigation that would re-suspend the component tree and
+  // unmount open dropdowns (e.g. the search filter).
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     clearTimeout(syncTimeoutRef.current);
@@ -173,11 +176,11 @@ function TransactionsContent() {
       if (!filtersEqual(filters, currentParams)) {
         const newParams = filtersToParams(filters);
         const qs = newParams.toString();
-        router.replace(qs ? `?${qs}` : "?", { scroll: false });
+        window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
       }
     }, 300);
     return () => clearTimeout(syncTimeoutRef.current);
-  }, [filters, router, searchParams]);
+  }, [filters, searchParams]);
 
   // ── Convenience updaters ───────────────────────────────────────────
   const updateFilter = useCallback(<K extends keyof Filters>(key: K, value: Filters[K]) => {
