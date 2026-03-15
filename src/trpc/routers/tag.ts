@@ -109,7 +109,7 @@ export const tagRouter = router({
     .mutation(async ({ ctx, input }) => {
       const ids = input.items.map((i) => i.id);
       const count = await ctx.prisma.tag.count({
-        where: { id: { in: ids }, userId: ctx.userId },
+        where: { id: { in: ids }, ...visibleTagsWhere(ctx.userId, ctx.householdId) },
       });
       if (count !== ids.length) {
         throw new TRPCError({

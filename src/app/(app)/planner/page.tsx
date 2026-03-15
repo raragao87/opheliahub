@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { Suspense, useState, useRef, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { UpcomingTab } from "@/components/planner/upcoming-tab";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +13,7 @@ import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
 import { getCurrentYearMonth, getPreviousMonth, getNextMonth } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCenter,
@@ -63,12 +66,43 @@ function getRowBorder(remaining: number, allocated: number, spent: number): stri
   return "border-l-2 border-l-red-500";
 }
 
+// ── Tab types ────────────────────────────────────────────────────
+const TABS = ["upcoming", "tags", "cost-analysis", "reports"] as const;
+type Tab = (typeof TABS)[number];
+const TAB_LABELS: Record<Tab, string> = {
+  upcoming: "Upcoming",
+  tags: "Tags",
+  "cost-analysis": "Cost Analysis",
+  reports: "Reports",
+};
+
 // ── Main Component ────────────────────────────────────────────────
 
 export default function PlannerPage() {
+  return (
+    <Suspense fallback={<div className="text-muted-foreground p-8">Loading...</div>}>
+      <PlannerContent />
+    </Suspense>
+  );
+}
+
+function PlannerContent() {
+  const searchParams = useSearchParams();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { visibilityParam } = useOwnership();
+
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const param = searchParams.get("tab");
+    return TABS.includes(param as Tab) ? (param as Tab) : "upcoming";
+  });
+
+  // Sync tab to URL
+  useEffect(() => {
+    const qs = new URLSearchParams(window.location.search);
+    qs.set("tab", activeTab);
+    window.history.replaceState(null, "", `?${qs.toString()}`);
+  }, [activeTab]);
 
   const [period, setPeriod] = useState(getCurrentYearMonth());
   const [collapsedTagGroups, setCollapsedTagGroups] = useState<Set<string>>(new Set());
@@ -188,12 +222,14 @@ export default function PlannerPage() {
 
   const reorderTagsMutation = useMutation(
     trpc.tag.reorderTags.mutationOptions({
+      onError: (err) => toast.error(`Failed to reorder: ${err.message}`),
       onSettled: () => queryClient.invalidateQueries(),
     })
   );
 
   const reorderTagGroupsMutation = useMutation(
     trpc.tag.reorderGroups.mutationOptions({
+      onError: (err) => toast.error(`Failed to reorder: ${err.message}`),
       onSettled: () => queryClient.invalidateQueries(),
     })
   );
@@ -520,8 +556,41 @@ export default function PlannerPage() {
         </div>
       </div>
 
+      {/* ── Tab Bar ───────────────────────────────────────────────── */}
+      <div className="flex gap-1 border-b border-border">
+        {TABS.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+              activeTab === tab
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            )}
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Upcoming Tab ───────────────────────────────────────────── */}
+      {activeTab === "upcoming" && (
+        <UpcomingTab month={period.month} year={period.year} visibility={visibility} />
+      )}
+
+      {/* ── Cost Analysis Tab ──────────────────────────────────────── */}
+      {activeTab === "cost-analysis" && (
+        <div className="text-center py-12 text-sm text-muted-foreground">Coming soon</div>
+      )}
+
+      {/* ── Reports Tab ────────────────────────────────────────────── */}
+      {activeTab === "reports" && (
+        <div className="text-center py-12 text-sm text-muted-foreground">Coming soon</div>
+      )}
+
       {/* ── Tag Planner Table ─────────────────────────────────────── */}
-      <DndContext
+      {activeTab === "tags" && <DndContext
         sensors={isTagEditing ? [] : sensors}
         collisionDetection={closestCenter}
         onDragStart={handleTagDragStart}
@@ -938,7 +1007,7 @@ export default function PlannerPage() {
             </table>
           )}
         </DragOverlay>
-      </DndContext>
+      </DndContext>}
     </div>
   );
 }

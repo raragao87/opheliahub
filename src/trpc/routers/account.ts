@@ -373,17 +373,25 @@ export const accountRouter = router({
       ].join("\n");
 
       const raw = await chatCompletion({
-        systemPrompt: `You are a personal finance assistant. Given an account's details and recent transactions, write a very brief description (1 short sentence, maximum 120 characters) of what this account is used for. Be concise. Also suggest up to 3 useful external links (e.g. the bank's login page, mobile app, or customer service). Return JSON only: { "description": "...", "suggestedLinks": [{ "label": "...", "url": "..." }] }`,
+        systemPrompt: `You are a personal finance assistant. Do NOT think or reason — respond with JSON only, no explanation. Given an account's details and recent transactions, write a very brief description (1 short sentence, maximum 120 characters) of what this account is used for. Also suggest up to 3 useful external links (e.g. the bank's login page, mobile app, or customer service). Respond with ONLY this JSON: { "description": "...", "suggestedLinks": [{ "label": "...", "url": "..." }] }`,
         userMessage,
-        maxTokens: 512,
+        maxTokens: 2048,
       });
 
       if (!raw) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI did not return a response." });
       }
 
-      const parsed = extractJSON<{ description: string; suggestedLinks: Array<{ label: string; url: string }> }>(raw);
+      // Strip <think>...</think> reasoning blocks before parsing (greedy to handle unclosed tags)
+      const cleaned = raw.replace(/<think>[\s\S]*<\/think>/gi, "").trim();
+      type DescResult = { description: string; suggestedLinks: Array<{ label: string; url: string }> };
+      let parsed = extractJSON<DescResult>(cleaned || raw);
+      // Fallback: try extracting from original if cleaned version failed
+      if (!parsed?.description && cleaned !== raw) {
+        parsed = extractJSON<DescResult>(raw);
+      }
       if (!parsed || !parsed.description) {
+        console.error("[Ophelia] generateDescription — failed to parse response:", raw.slice(0, 500));
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not parse AI response." });
       }
 
