@@ -3,7 +3,7 @@
 import { Suspense, useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TransactionTable } from "@/components/transactions/transaction-table";
@@ -19,9 +19,12 @@ import {
   X,
   Receipt,
   Loader2,
+  Sparkles,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MoneyDisplay } from "@/components/shared/money-display";
+import { AccountEditDialog } from "@/components/accounts/account-edit-dialog";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -223,11 +226,12 @@ function TransactionsContent() {
     };
   }, [filters, visibilityParam]);
 
-  const transactionsQuery = useInfiniteQuery(
-    trpc.transaction.list.infiniteQueryOptions(queryInput, {
+  const transactionsQuery = useInfiniteQuery({
+    ...trpc.transaction.list.infiniteQueryOptions(queryInput, {
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    })
-  );
+    }),
+    placeholderData: keepPreviousData,
+  });
 
   const transactions = useMemo(() => {
     const all = transactionsQuery.data?.pages.flatMap((p) => p.transactions) ?? [];
@@ -587,6 +591,54 @@ function TransactionsContent() {
     return (accountsQuery.data ?? []).find((a) => a.id === filters.accountIds[0]) ?? null;
   }, [filters.accountIds, accountsQuery.data]);
 
+  // ── Account description, links, and edit dialog state ─────────────
+  const [descEditing, setDescEditing] = useState(false);
+  const [descDraft, setDescDraft] = useState("");
+  const descRef = useRef<HTMLTextAreaElement>(null);
+  const [accountLinks, setAccountLinks] = useState<Array<{ label: string; url: string }>>([]);
+  const [linksInit, setLinksInit] = useState(false);
+  const [addingLink, setAddingLink] = useState(false);
+  const [newLinkLabel, setNewLinkLabel] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [suggestedLinks, setSuggestedLinks] = useState<Array<{ label: string; url: string }>>([]);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // Init links from account data
+  useEffect(() => {
+    if (selectedAccount && !linksInit) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = (selectedAccount as any).links;
+      if (Array.isArray(raw)) setAccountLinks(raw);
+      setLinksInit(true);
+    }
+  }, [selectedAccount, linksInit]);
+
+  // Reset when account changes
+  useEffect(() => {
+    setLinksInit(false);
+    setAccountLinks([]);
+    setDescEditing(false);
+    setDescDraft("");
+    setSuggestedLinks([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAccount?.id]);
+
+  const accountUpdateMutation = useMutation(
+    trpc.account.update.mutationOptions({
+      onSuccess: () => queryClient.invalidateQueries(),
+    })
+  );
+
+  const generateDescMutation = useMutation(
+    trpc.account.generateDescription.mutationOptions({
+      onSuccess: (data) => {
+        setDescDraft(data.description);
+        setDescEditing(true);
+        setSuggestedLinks(data.suggestedLinks);
+      },
+    })
+  );
+
   // ── Active filters check ───────────────────────────────────────────
   const hasActiveFilters =
     filters.search !== "" ||
@@ -653,6 +705,11 @@ function TransactionsContent() {
         </div>
 
         <div className="flex items-center gap-2">
+          {selectedAccount && (
+            <Button variant="ghost" size="sm" onClick={() => setEditDialogOpen(true)} title="Account settings">
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => router.push("/transactions/import")}>
             <Upload className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Import</span>
@@ -714,6 +771,108 @@ function TransactionsContent() {
             className="text-sm font-semibold shrink-0"
           />
         </div>
+      )}
+
+      {/* ── Description + links — single-account mode ──────────────── */}
+      {mounted && selectedAccount && (
+        <div className="space-y-1.5 pb-2">
+          {/* Description */}
+          <div className="flex items-start gap-2">
+            {!descEditing ? (
+              <div
+                className="flex-1 flex items-start gap-1.5 cursor-pointer group min-w-0"
+                onClick={() => { setDescDraft(selectedAccount.notes ?? ""); setDescEditing(true); }}
+              >
+                {selectedAccount.notes ? (
+                  <p className="text-sm text-muted-foreground flex-1 whitespace-pre-wrap">{selectedAccount.notes}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground/40 italic">Add a description...</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 space-y-1.5">
+                <textarea
+                  ref={descRef}
+                  value={descDraft}
+                  onChange={(e) => setDescDraft(e.target.value)}
+                  onBlur={() => {
+                    accountUpdateMutation.mutate({ id: selectedAccount.id, notes: descDraft || null });
+                    setDescEditing(false);
+                  }}
+                  rows={2}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring resize-none"
+                  placeholder="Write a short description..."
+                  autoFocus
+                />
+              </div>
+            )}
+            {/* Generate description */}
+            <Button
+              variant="ghost" size="sm" className="h-6 px-2 text-xs shrink-0"
+              disabled={generateDescMutation.isPending}
+              onClick={() => generateDescMutation.mutate({ id: selectedAccount.id })}
+              title="Generate description with Ophelia"
+            >
+              {generateDescMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            </Button>
+          </div>
+
+          {/* Links */}
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {accountLinks.map((link, idx) => (
+              <span key={idx} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs">
+                <a href={link.url} target="_blank" rel="noopener noreferrer" className="hover:underline max-w-[160px] truncate text-muted-foreground hover:text-foreground">{link.label}</a>
+                <button onClick={() => { const updated = accountLinks.filter((_, i) => i !== idx); setAccountLinks(updated); accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated }); }} className="text-muted-foreground/40 hover:text-destructive ml-0.5"><X className="h-2.5 w-2.5" /></button>
+              </span>
+            ))}
+            {accountLinks.length < 6 && !addingLink && (
+              <button onClick={() => setAddingLink(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                + Add link
+              </button>
+            )}
+            {addingLink && (
+              <div className="flex gap-1.5 items-center">
+                <input placeholder="Label" value={newLinkLabel} onChange={(e) => setNewLinkLabel(e.target.value)} className="h-6 text-xs w-28 rounded border border-input bg-background px-2" />
+                <input placeholder="https://..." value={newLinkUrl} onChange={(e) => setNewLinkUrl(e.target.value)} className="h-6 text-xs w-48 rounded border border-input bg-background px-2"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newLinkLabel && newLinkUrl) {
+                      const updated = [...accountLinks, { label: newLinkLabel.trim(), url: newLinkUrl.trim() }];
+                      setAccountLinks(updated);
+                      accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated });
+                      setNewLinkLabel(""); setNewLinkUrl(""); setAddingLink(false);
+                    }
+                    if (e.key === "Escape") setAddingLink(false);
+                  }}
+                />
+                <button onClick={() => setAddingLink(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {/* Ophelia suggested links */}
+            {suggestedLinks.map((sl, idx) => (
+              <button key={idx} onClick={() => {
+                if (accountLinks.length >= 6) return;
+                const updated = [...accountLinks, sl];
+                setAccountLinks(updated);
+                accountUpdateMutation.mutate({ id: selectedAccount.id, links: updated });
+                setSuggestedLinks((prev) => prev.filter((l) => l.url !== sl.url));
+              }}
+                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs text-primary/70 hover:text-primary transition-colors">
+                {sl.label} +
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Account edit dialog ─────────────────────────────────────── */}
+      {selectedAccount && (
+        <AccountEditDialog
+          accountId={selectedAccount.id}
+          open={editDialogOpen}
+          onClose={() => setEditDialogOpen(false)}
+        />
       )}
 
       {/* ── Transaction table ──────────────────────────────────────── */}

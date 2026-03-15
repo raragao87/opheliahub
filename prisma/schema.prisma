@@ -189,6 +189,7 @@ model FinancialAccount {
   color       String?
   metadata    Json?
   notes       String?          @db.Text
+  links       Json?            // Array of { label: string, url: string }
   ownerId     String
   householdId String?
   createdAt   DateTime         @default(now())

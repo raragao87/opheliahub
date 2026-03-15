@@ -136,6 +136,10 @@ export const accountRouter = router({
         color: z.string().optional(),
         isActive: z.boolean().optional(),
         notes: z.string().optional().nullable(),
+        links: z.array(z.object({
+          label: z.string().min(1).max(100),
+          url: z.string().url().max(500),
+        })).max(6).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -318,5 +322,74 @@ export const accountRouter = router({
       });
 
       return updated;
+    }),
+
+  /** Generate an AI description and suggested links for an account */
+  generateDescription: householdProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { isOpheliaEnabled, chatCompletion, extractJSON } = await import("@/lib/ophelia");
+
+      if (!isOpheliaEnabled()) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Ophelia is not enabled." });
+      }
+
+      const account = await ctx.prisma.financialAccount.findFirst({
+        where: { id: input.id, ...visibleAccountsWhere(ctx.userId, ctx.householdId) },
+      });
+      if (!account) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Account not found." });
+      }
+
+      const recentTxns = await ctx.prisma.transaction.findMany({
+        where: { accountId: input.id },
+        orderBy: { date: "desc" },
+        take: 20,
+        select: { description: true, displayName: true, amount: true, type: true, date: true },
+      });
+
+      const recurringRules = await ctx.prisma.recurringRule.findMany({
+        where: { accountId: input.id },
+        take: 10,
+        select: { description: true, amount: true, frequency: true },
+      });
+
+      const txnSummary = recentTxns.map((t) =>
+        `${t.displayName || t.description} | ${t.amount / 100} ${account.currency} | ${t.type}`
+      ).join("\n");
+
+      const ruleSummary = recurringRules.map((r) =>
+        `${r.description} | ${r.amount / 100} ${account.currency} | ${r.frequency}`
+      ).join("\n");
+
+      const userMessage = [
+        `Account: ${account.name}`,
+        `Type: ${account.type}`,
+        `Institution: ${account.institution ?? "unknown"}`,
+        `Currency: ${account.currency}`,
+        `Balance: ${account.balance / 100}`,
+        `\nRecent transactions:\n${txnSummary || "(none)"}`,
+        recurringRules.length > 0 ? `\nRecurring rules:\n${ruleSummary}` : "",
+      ].join("\n");
+
+      const raw = await chatCompletion({
+        systemPrompt: `You are a personal finance assistant. Given an account's details and recent transactions, write a short description (1-2 sentences) of what this account is used for. Also suggest up to 3 useful external links (e.g. the bank's login page, mobile app, or customer service). Return JSON only: { "description": "...", "suggestedLinks": [{ "label": "...", "url": "..." }] }`,
+        userMessage,
+        maxTokens: 512,
+      });
+
+      if (!raw) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI did not return a response." });
+      }
+
+      const parsed = extractJSON<{ description: string; suggestedLinks: Array<{ label: string; url: string }> }>(raw);
+      if (!parsed || !parsed.description) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not parse AI response." });
+      }
+
+      return {
+        description: parsed.description,
+        suggestedLinks: Array.isArray(parsed.suggestedLinks) ? parsed.suggestedLinks.slice(0, 3) : [],
+      };
     }),
 });

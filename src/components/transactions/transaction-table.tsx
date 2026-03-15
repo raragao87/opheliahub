@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   ArrowLeftRight, Trash2, X,
   ChevronDown, ChevronLeft, ChevronRight,
@@ -624,6 +624,16 @@ export function TransactionTable({
     label: `${c.icon ?? ""} ${c.name}`.trim(),
   }));
 
+  const categoryOptionGroups = useMemo(() => {
+    const groupMap = new Map<string, { value: string; label: string }[]>();
+    for (const c of flatCategories) {
+      const group = c.groupName;
+      if (!groupMap.has(group)) groupMap.set(group, []);
+      groupMap.get(group)!.push({ value: c.id, label: `${c.icon ?? ""} ${c.name}`.trim() });
+    }
+    return Array.from(groupMap.entries()).map(([label, options]) => ({ label, options }));
+  }, [flatCategories]);
+
   return (
     // overflow-y-auto + max-h makes this a self-contained scroll area,
     // which allows the sticky thead to work correctly.
@@ -822,6 +832,7 @@ export function TransactionTable({
               key={txn.id}
               txn={txn}
               categoryOptions={categoryOptions}
+              categoryOptionGroups={categoryOptionGroups}
               allTags={allTags}
               onUpdate={onUpdate}
               onDelete={onDelete}
@@ -842,6 +853,7 @@ export function TransactionTable({
 function TransactionRow({
   txn,
   categoryOptions,
+  categoryOptionGroups,
   allTags,
   onUpdate,
   onDelete,
@@ -852,6 +864,7 @@ function TransactionRow({
 }: {
   txn: TransactionItem;
   categoryOptions: { value: string; label: string }[];
+  categoryOptionGroups: { label: string; options: { value: string; label: string }[] }[];
   allTags: TagOption[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   onDelete?: (id: string) => void;
@@ -977,6 +990,7 @@ function TransactionRow({
                 value=""
                 displayValue={opheliaCatLabel}
                 options={categoryOptions}
+                optionGroups={categoryOptionGroups}
                 onSave={(value) => onUpdate(txn.id, { categoryId: value || null })}
                 emptyLabel="Uncategorized"
                 placeholder="—"
@@ -995,6 +1009,7 @@ function TransactionRow({
               value={txn.category?.id ?? ""}
               displayValue={categoryDisplay}
               options={categoryOptions}
+              optionGroups={categoryOptionGroups}
               onSave={(value) => onUpdate(txn.id, { categoryId: value || null })}
               emptyLabel="Uncategorized"
               placeholder="—"

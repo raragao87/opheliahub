@@ -8,10 +8,17 @@ interface InlineSelectOption {
   label: string;
 }
 
+interface InlineSelectOptionGroup {
+  label: string;
+  options: InlineSelectOption[];
+}
+
 interface InlineSelectEditProps {
   value: string;
   displayValue: string;
   options: InlineSelectOption[];
+  /** When provided, options are rendered inside <optgroup> elements */
+  optionGroups?: InlineSelectOptionGroup[];
   onSave: (value: string) => void;
   placeholder?: string;
   className?: string;
@@ -23,6 +30,7 @@ export function InlineSelectEdit({
   value,
   displayValue,
   options,
+  optionGroups,
   onSave,
   placeholder = "—",
   className,
@@ -72,11 +80,21 @@ export function InlineSelectEdit({
         )}
       >
         {allowEmpty && <option value="">{emptyLabel}</option>}
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
+        {optionGroups
+          ? optionGroups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))
+          : options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
       </select>
     );
   }
