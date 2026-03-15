@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOwnership } from "@/lib/ownership-context";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { VisibilityBadge } from "@/components/shared/visibility-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
-import { NetWorthTrendChart } from "@/components/charts/net-worth-trend";
+import { NetWorthTrendChart, PeriodSelector, PERIOD_OPTIONS, type PeriodKey } from "@/components/charts/net-worth-trend";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
 import { formatMoney } from "@/lib/money";
@@ -23,9 +23,7 @@ import {
   Layers,
   Building2,
   RefreshCw,
-  History,
   TrendingUp,
-  TrendingDown,
 } from "lucide-react";
 
 type GroupBy = "type" | "institution";
@@ -89,14 +87,16 @@ export default function AccountsPage() {
   const locale = preferences.locale;
 
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
+
+  const [groupBy, setGroupBy] = useState<GroupBy>("type");
+  const [period, setPeriod] = useState<PeriodKey>("1Y");
+
   const trendQuery = useQuery(
     trpc.netWorth.getTrend.queryOptions({
       visibility: visibilityParam ?? "SHARED",
-      months: 12,
+      months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 12,
     })
   );
-
-  const [groupBy, setGroupBy] = useState<GroupBy>("type");
 
   const snapshotMutation = useMutation(
     trpc.netWorth.captureSnapshot.mutationOptions({
@@ -104,7 +104,7 @@ export default function AccountsPage() {
         toast.success(t(lang, "netWorth.snapshotSaved"));
         queryClient.invalidateQueries(trpc.netWorth.getTrend.queryOptions({
           visibility: visibilityParam ?? "SHARED",
-          months: 12,
+          months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 12,
         }));
       },
       onError: (err) => toast.error(err.message),
@@ -117,7 +117,7 @@ export default function AccountsPage() {
         toast.success(`Created ${data.created} snapshots`);
         queryClient.invalidateQueries(trpc.netWorth.getTrend.queryOptions({
           visibility: visibilityParam ?? "SHARED",
-          months: 12,
+          months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 12,
         }));
       },
       onError: (err) => toast.error(err.message),
@@ -234,28 +234,16 @@ export default function AccountsPage() {
                 <div>
                   <CardTitle>{t(lang, "netWorth.trend")}</CardTitle>
                   {hasTrend && trend && (
-                    <CardDescription className="mt-1">
-                      <span className={trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                        {trend.changeAmount >= 0 ? "+" : ""}
-                        {formatMoney(trend.changeAmount, primaryCurrency, locale)}
-                        {" "}({trend.changePercent >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}%)
-                      </span>
-                      {" "}{t(lang, "netWorth.change")} {trend.dataPoints.length} {t(lang, "netWorth.months")}
-                    </CardDescription>
+                    <p className={`text-xs mt-0.5 ${trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                      {trend.changeAmount >= 0 ? "+" : ""}
+                      {formatMoney(trend.changeAmount, primaryCurrency, locale)}
+                      {" "}({trend.changePercent >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}%)
+                      {" "}{t(lang, "netWorth.change")} {PERIOD_OPTIONS.find((o) => o.key === period)?.label}
+                    </p>
                   )}
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  {!hasTrend && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={backfillMutation.isPending}
-                      onClick={() => backfillMutation.mutate({ visibility: vis, monthsBack: 12 })}
-                    >
-                      <History className="h-3.5 w-3.5 mr-1" />
-                      {backfillMutation.isPending ? t(lang, "netWorth.backfilling") : t(lang, "netWorth.backfill")}
-                    </Button>
-                  )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <PeriodSelector value={period} onChange={setPeriod} />
                   <Button
                     size="sm"
                     variant="outline"
@@ -263,7 +251,7 @@ export default function AccountsPage() {
                     onClick={() => snapshotMutation.mutate({ visibility: vis })}
                   >
                     <RefreshCw className={`h-3.5 w-3.5 mr-1 ${snapshotMutation.isPending ? "animate-spin" : ""}`} />
-                    {hasTrend ? t(lang, "netWorth.refreshSnapshot") : t(lang, "netWorth.takeSnapshot")}
+                    {t(lang, "netWorth.refreshSnapshot")}
                   </Button>
                 </div>
               </div>

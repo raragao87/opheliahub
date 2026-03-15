@@ -80,7 +80,7 @@ export const netWorthRouter = router({
     .input(
       z.object({
         visibility: z.enum(["SHARED", "PERSONAL"]),
-        months: z.number().int().min(3).max(36).default(12),
+        months: z.number().int().min(1).max(120).default(12),
       })
     )
     .query(async ({ ctx, input }) => {

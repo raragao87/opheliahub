@@ -8,11 +8,12 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Line,
   LineChart,
+  Line,
 } from "recharts";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { formatMoney, fromCents } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 interface DataPoint {
   year: number;
@@ -23,22 +24,52 @@ interface DataPoint {
   netWorth: number;
 }
 
-interface NetWorthTrendChartProps {
-  dataPoints: DataPoint[];
-  currency?: string;
+export const PERIOD_OPTIONS = [
+  { key: "6M", label: "6M", months: 6 },
+  { key: "1Y", label: "1Y", months: 12 },
+  { key: "2Y", label: "2Y", months: 24 },
+  { key: "5Y", label: "5Y", months: 60 },
+  { key: "ALL", label: "All", months: 120 },
+] as const;
+
+export type PeriodKey = (typeof PERIOD_OPTIONS)[number]["key"];
+
+export function PeriodSelector({
+  value,
+  onChange,
+}: {
+  value: PeriodKey;
+  onChange: (k: PeriodKey) => void;
+}) {
+  return (
+    <div className="flex gap-0.5 p-0.5 bg-muted rounded-lg">
+      {PERIOD_OPTIONS.map((opt) => (
+        <button
+          key={opt.key}
+          type="button"
+          onClick={() => onChange(opt.key)}
+          className={cn(
+            "px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+            value === opt.key
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function abbreviateAmount(cents: number, locale: string, currency: string): string {
   const val = fromCents(Math.abs(cents));
+  const sign = cents < 0 ? "-" : "";
   if (val >= 1_000_000) {
-    return formatMoney(Math.round(cents / 10_000) * 10_000, currency, locale).replace(/[\d,.]+/, (n) =>
-      (parseFloat(n.replace(/[^0-9.]/g, "")) / 100).toFixed(0) + "M"
-    );
+    return `${sign}${(val / 1_000_000).toFixed(1)}M`;
   }
   if (val >= 1_000) {
-    const k = Math.round(val / 1000);
-    return (cents < 0 ? "-" : "") + formatMoney(k * 100_000, currency, locale)
-      .replace(/[\d,.]+/, k + "K");
+    return `${sign}${Math.round(val / 1_000)}K`;
   }
   return formatMoney(cents, currency, locale);
 }
@@ -57,7 +88,6 @@ function CustomTooltip({
   currency: string;
 }) {
   if (!active || !payload?.length) return null;
-
   const data = payload[0]?.payload;
   if (!data) return null;
 
@@ -86,7 +116,17 @@ function CustomTooltip({
   );
 }
 
-export function NetWorthTrendChart({ dataPoints, currency = "EUR" }: NetWorthTrendChartProps) {
+interface NetWorthTrendChartProps {
+  dataPoints: DataPoint[];
+  currency?: string;
+  compact?: boolean;
+}
+
+export function NetWorthTrendChart({
+  dataPoints,
+  currency = "EUR",
+  compact = false,
+}: NetWorthTrendChartProps) {
   const { preferences } = useUserPreferences();
   const locale = preferences.locale;
 
@@ -94,12 +134,16 @@ export function NetWorthTrendChart({ dataPoints, currency = "EUR" }: NetWorthTre
   const fillColor = isPositive ? "#16a34a" : "#dc2626";
   const strokeColor = isPositive ? "#15803d" : "#b91c1c";
 
+  const height = compact ? 180 : 300;
+  const yAxisWidth = compact ? 52 : 64;
+  const tickCount = compact ? 3 : 5;
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <AreaChart data={dataPoints} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={height}>
+      <AreaChart data={dataPoints} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={fillColor} stopOpacity={0.25} />
+            <stop offset="5%" stopColor={fillColor} stopOpacity={0.2} />
             <stop offset="95%" stopColor={fillColor} stopOpacity={0.02} />
           </linearGradient>
         </defs>
@@ -118,7 +162,8 @@ export function NetWorthTrendChart({ dataPoints, currency = "EUR" }: NetWorthTre
           tickLine={false}
           axisLine={false}
           className="fill-muted-foreground"
-          width={56}
+          width={yAxisWidth}
+          tickCount={tickCount}
         />
         <Tooltip
           content={<CustomTooltip locale={locale} currency={currency} />}
@@ -131,7 +176,7 @@ export function NetWorthTrendChart({ dataPoints, currency = "EUR" }: NetWorthTre
           stroke="#16a34a"
           strokeWidth={1}
           strokeDasharray="4 3"
-          strokeOpacity={0.4}
+          strokeOpacity={0.35}
           fill="none"
         />
         {/* Faint liability line */}
@@ -141,7 +186,7 @@ export function NetWorthTrendChart({ dataPoints, currency = "EUR" }: NetWorthTre
           stroke="#dc2626"
           strokeWidth={1}
           strokeDasharray="4 3"
-          strokeOpacity={0.4}
+          strokeOpacity={0.35}
           fill="none"
         />
         {/* Main net worth area */}
@@ -151,7 +196,7 @@ export function NetWorthTrendChart({ dataPoints, currency = "EUR" }: NetWorthTre
           stroke={strokeColor}
           strokeWidth={2}
           fill="url(#netWorthGradient)"
-          dot={dataPoints.length <= 6 ? { r: 3, fill: strokeColor } : false}
+          dot={dataPoints.length <= 8 ? { r: 3, fill: strokeColor } : false}
           activeDot={{ r: 4, fill: strokeColor }}
           isAnimationActive
         />
@@ -160,7 +205,7 @@ export function NetWorthTrendChart({ dataPoints, currency = "EUR" }: NetWorthTre
   );
 }
 
-// ── Sparkline — minimal, no axes, for dashboard ──────────────────
+// Sparkline — minimal, no axes, for dashboard
 
 interface SparklineProps {
   dataPoints: DataPoint[];

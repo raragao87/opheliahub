@@ -1,23 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import { useTRPC } from "@/trpc/client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getCurrentYearMonth } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, RefreshCw } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight } from "lucide-react";
 import { GettingStartedChecklist } from "@/components/shared/getting-started-checklist";
-import { NetWorthSparkline } from "@/components/charts/net-worth-trend";
-import { toast } from "sonner";
+import { NetWorthTrendChart, PeriodSelector, PERIOD_OPTIONS, type PeriodKey } from "@/components/charts/net-worth-trend";
 
 export default function DashboardPage() {
   const trpc = useTRPC();
   const { visibilityParam } = useOwnership();
   const { year, month } = getCurrentYearMonth();
+
+  const [period, setPeriod] = useState<PeriodKey>("6M");
 
   const summaryQuery = useQuery(
     trpc.dashboard.monthlySummary.queryOptions({
@@ -43,25 +44,13 @@ export default function DashboardPage() {
   const trendQuery = useQuery(
     trpc.netWorth.getTrend.queryOptions({
       visibility: visibilityParam ?? "SHARED",
-      months: 6,
+      months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 6,
     })
   );
 
   const netWorthSummaryQuery = useQuery(
     trpc.netWorth.getSummary.queryOptions({
       visibility: visibilityParam,
-    })
-  );
-
-  const queryClient = useQueryClient();
-  const snapshotMutation = useMutation(
-    trpc.netWorth.captureSnapshot.mutationOptions({
-      onSuccess: () => {
-        toast.success("Snapshot saved");
-        queryClient.invalidateQueries({ queryKey: ["netWorth"] });
-        void trendQuery.refetch();
-      },
-      onError: (err) => toast.error(err.message),
     })
   );
 
@@ -146,41 +135,43 @@ export default function DashboardPage() {
 
       {/* Net Worth Card */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-          {trend && trend.dataPoints.length > 0 && (
-            <span className={`text-xs font-medium ${trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-              {trend.changeAmount >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}% (6 mo)
-            </span>
-          )}
-        </CardHeader>
-        <CardContent className="pb-3">
-          <div className="flex items-end justify-between gap-4">
-            <MoneyDisplay amount={netWorthSummaryQuery.data?.netWorth ?? 0} className="text-2xl font-bold" />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-xs text-muted-foreground"
-              disabled={snapshotMutation.isPending}
-              onClick={() => snapshotMutation.mutate({ visibility: visibilityParam ?? "SHARED" })}
-            >
-              <RefreshCw className={`h-3 w-3 mr-1 ${snapshotMutation.isPending ? "animate-spin" : ""}`} />
-              {snapshotMutation.isPending ? "Saving…" : "Save snapshot"}
-            </Button>
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
+              {trend && trend.dataPoints.length > 0 && (
+                <p className={`text-xs font-medium mt-0.5 ${trend.changeAmount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                  {trend.changeAmount >= 0 ? "+" : ""}{trend.changePercent.toFixed(1)}%
+                  {" "}({PERIOD_OPTIONS.find((o) => o.key === period)?.label})
+                </p>
+              )}
+            </div>
+            <PeriodSelector value={period} onChange={setPeriod} />
           </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <MoneyDisplay amount={netWorthSummaryQuery.data?.netWorth ?? 0} className="text-2xl font-bold mb-1" />
           {trendQuery.isLoading ? (
-            <div className="mt-2 h-[52px] bg-muted animate-pulse rounded" />
+            <div className="mt-2 h-[180px] bg-muted animate-pulse rounded" />
           ) : trendQuery.isError ? (
             <p className="text-xs text-destructive mt-2">Could not load trend ({trendQuery.error?.message})</p>
           ) : (trend?.dataPoints.length ?? 0) > 1 && trend ? (
-            <div className="mt-2">
-              <NetWorthSparkline dataPoints={trend.dataPoints} height={52} />
-            </div>
+            <NetWorthTrendChart
+              dataPoints={trend.dataPoints}
+              currency={(() => {
+                const currencyCount = new Map<string, number>();
+                for (const a of accounts) {
+                  currencyCount.set(a.currency, (currencyCount.get(a.currency) ?? 0) + 1);
+                }
+                return [...currencyCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "EUR";
+              })()}
+              compact
+            />
           ) : (
             <p className="text-xs text-muted-foreground mt-2">
               {(trend?.dataPoints.length ?? 0) === 1
-                ? "One snapshot saved — save another next month to see the trend."
-                : "Click \"Save snapshot\" to start tracking the trend over time."}
+                ? "One snapshot saved — more data will appear over time."
+                : "No snapshot data yet. Go to Accounts to build history."}
             </p>
           )}
         </CardContent>
