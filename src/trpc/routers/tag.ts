@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
-import { visibleTagsWhere } from "@/lib/privacy";
+import { visibleTagsWhere, visibleTransactionsWhere } from "@/lib/privacy";
 
 export const tagRouter = router({
   list: householdProcedure
@@ -234,5 +234,112 @@ export const tagRouter = router({
       );
 
       return { success: true };
+    }),
+
+  /** Aggregated analysis for one or more tags */
+  tagAnalysis: householdProcedure
+    .input(z.object({
+      tagIds: z.array(z.string()).min(1).max(5),
+      dateFrom: z.coerce.date().optional(),
+      dateTo: z.coerce.date().optional(),
+      visibility: z.enum(["SHARED", "PERSONAL"]),
+    }))
+    .query(async ({ ctx, input }) => {
+      const tags = await ctx.prisma.tag.findMany({
+        where: { id: { in: input.tagIds }, ...visibleTagsWhere(ctx.userId, ctx.householdId) },
+        select: { id: true, name: true, group: { select: { name: true } } },
+      });
+
+      const results = await Promise.all(tags.map(async (tag) => {
+        const dateFilter = {
+          ...(input.dateFrom && { gte: input.dateFrom }),
+          ...(input.dateTo && { lte: input.dateTo }),
+        };
+
+        const txns = await ctx.prisma.transaction.findMany({
+          where: {
+            ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+            visibility: input.visibility,
+            tags: { some: { tagId: tag.id } },
+            isInitialBalance: false,
+            ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
+          },
+          select: {
+            id: true,
+            amount: true,
+            date: true,
+            description: true,
+            displayName: true,
+            account: { select: { id: true, name: true } },
+            category: { select: { id: true, name: true, icon: true } },
+          },
+          orderBy: { date: "desc" },
+        });
+
+        const totalAmount = txns.reduce((s, t) => s + t.amount, 0);
+        const dates = txns.map((t) => new Date(t.date));
+        const dateRange = dates.length > 0
+          ? { first: new Date(Math.min(...dates.map((d) => d.getTime()))), last: new Date(Math.max(...dates.map((d) => d.getTime()))) }
+          : null;
+
+        // Category breakdown
+        const catMap = new Map<string, { categoryId: string | null; categoryName: string | null; categoryIcon: string | null; amount: number; count: number }>();
+        for (const t of txns) {
+          const key = t.category?.id ?? "__none__";
+          const entry = catMap.get(key) ?? { categoryId: t.category?.id ?? null, categoryName: t.category?.name ?? null, categoryIcon: t.category?.icon ?? null, amount: 0, count: 0 };
+          entry.amount += t.amount;
+          entry.count++;
+          catMap.set(key, entry);
+        }
+
+        // Account breakdown
+        const accMap = new Map<string, { accountId: string; accountName: string; amount: number; count: number }>();
+        for (const t of txns) {
+          const entry = accMap.get(t.account.id) ?? { accountId: t.account.id, accountName: t.account.name, amount: 0, count: 0 };
+          entry.amount += t.amount;
+          entry.count++;
+          accMap.set(t.account.id, entry);
+        }
+
+        // Monthly trend
+        const monthMap = new Map<string, { year: number; month: number; label: string; amount: number; count: number }>();
+        for (const t of txns) {
+          const d = new Date(t.date);
+          const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+          const entry = monthMap.get(key) ?? {
+            year: d.getFullYear(), month: d.getMonth() + 1,
+            label: d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+            amount: 0, count: 0,
+          };
+          entry.amount += t.amount;
+          entry.count++;
+          monthMap.set(key, entry);
+        }
+        const byMonth = Array.from(monthMap.values()).sort((a, b) => a.year - b.year || a.month - b.month);
+
+        return {
+          tagId: tag.id,
+          tagName: tag.name,
+          tagGroupName: tag.group?.name ?? null,
+          totalAmount,
+          transactionCount: txns.length,
+          dateRange,
+          byCategory: Array.from(catMap.values()).sort((a, b) => a.amount - b.amount),
+          byAccount: Array.from(accMap.values()).sort((a, b) => a.amount - b.amount),
+          byMonth,
+          recentTransactions: txns.slice(0, 10).map((t) => ({
+            id: t.id,
+            date: t.date,
+            description: t.description,
+            displayName: t.displayName,
+            amount: t.amount,
+            accountName: t.account.name,
+            categoryName: t.category?.name ?? null,
+            categoryIcon: t.category?.icon ?? null,
+          })),
+        };
+      }));
+
+      return { tags: results };
     }),
 });

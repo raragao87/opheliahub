@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { UpcomingTab } from "@/components/planner/upcoming-tab";
+import { TagsTab } from "@/components/planner/tags-tab";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -589,8 +590,13 @@ function PlannerContent() {
         <div className="text-center py-12 text-sm text-muted-foreground">Coming soon</div>
       )}
 
-      {/* ── Tag Planner Table ─────────────────────────────────────── */}
-      {activeTab === "tags" && <DndContext
+      {/* ── Tags Explorer ─────────────────────────────────────────── */}
+      {activeTab === "tags" && (
+        <TagsTab month={period.month} year={period.year} visibility={visibility} />
+      )}
+
+      {/* ── Tag Budget Table (preserved but hidden — accessible via direct URL ?tab=tag-budget) */}
+      {(activeTab as string) === "__tag-budget__" && <DndContext
         sensors={isTagEditing ? [] : sensors}
         collisionDetection={closestCenter}
         onDragStart={handleTagDragStart}
