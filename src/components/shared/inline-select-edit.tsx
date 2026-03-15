@@ -19,6 +19,8 @@ interface InlineSelectEditProps {
   options: InlineSelectOption[];
   /** When provided, options are rendered inside <optgroup> elements */
   optionGroups?: InlineSelectOptionGroup[];
+  /** Options rendered before the empty/group options (e.g. special actions) */
+  topOptions?: InlineSelectOption[];
   onSave: (value: string) => void;
   placeholder?: string;
   className?: string;
@@ -31,6 +33,7 @@ export function InlineSelectEdit({
   displayValue,
   options,
   optionGroups,
+  topOptions,
   onSave,
   placeholder = "—",
   className,
@@ -79,6 +82,12 @@ export function InlineSelectEdit({
           className
         )}
       >
+        {topOptions?.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+        {topOptions && topOptions.length > 0 && <option disabled>──────────</option>}
         {allowEmpty && <option value="">{emptyLabel}</option>}
         {optionGroups
           ? optionGroups.map((group) => (

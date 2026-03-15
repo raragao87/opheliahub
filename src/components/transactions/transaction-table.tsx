@@ -989,7 +989,22 @@ function TransactionRow({
 
       {/* Category */}
       <td className="py-1.5 px-2">
-        {canEditCategory ? (
+        {isTransfer ? (
+          // Transfer indicator — clickable to unmark
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 text-xs px-1 py-0.5 rounded cursor-pointer transition-colors hover:bg-muted/50",
+              partnerAccount ? "text-blue-500" : "text-amber-500"
+            )}
+            onClick={() => onUnmarkTransfer?.(txn)}
+            title="Click to undo transfer"
+          >
+            <ArrowLeftRight className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              Transfer{partnerAccount ? ` → ${partnerAccount.name}` : ""}
+            </span>
+          </span>
+        ) : canEditCategory ? (
           opheliaCatLabel && !txn.category ? (
             // Ophelia suggestion: no user category set, AI has a candidate
             <div className="flex items-center gap-1 group/ophelia">
@@ -1001,7 +1016,11 @@ function TransactionRow({
                 displayValue={opheliaCatLabel}
                 options={categoryOptions}
                 optionGroups={categoryOptionGroups}
-                onSave={(value) => onUpdate(txn.id, { categoryId: value || null })}
+                topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
+                onSave={(value) => {
+                  if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
+                  onUpdate(txn.id, { categoryId: value || null });
+                }}
                 emptyLabel="Uncategorized"
                 placeholder="—"
               />
@@ -1020,7 +1039,11 @@ function TransactionRow({
               displayValue={categoryDisplay}
               options={categoryOptions}
               optionGroups={categoryOptionGroups}
-              onSave={(value) => onUpdate(txn.id, { categoryId: value || null })}
+              topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
+              onSave={(value) => {
+                if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
+                onUpdate(txn.id, { categoryId: value || null });
+              }}
               emptyLabel="Uncategorized"
               placeholder="—"
             />

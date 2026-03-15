@@ -131,6 +131,12 @@ const translations = {
     "netWorth.backfill": "Build history (12 months)",
     "netWorth.backfilling": "Building history...",
     "netWorth.snapshotSaved": "Snapshot saved",
+
+    // Transfers
+    "transfer.markAsTransfer": "Mark as transfer",
+    "transfer.transfer": "Transfer",
+    "transfer.noMatch": "No match — unlinked transfer",
+    "transfer.noMatchesFound": "No matching transactions found",
   },
 
   pt: {
@@ -263,6 +269,12 @@ const translations = {
     "netWorth.backfill": "Construir histórico (12 meses)",
     "netWorth.backfilling": "Construindo histórico...",
     "netWorth.snapshotSaved": "Captura salva",
+
+    // Transfers
+    "transfer.markAsTransfer": "Marcar como transferência",
+    "transfer.transfer": "Transferência",
+    "transfer.noMatch": "Sem correspondência — transferência sem vínculo",
+    "transfer.noMatchesFound": "Nenhuma transação correspondente encontrada",
   },
 
   ro: {
@@ -395,6 +407,12 @@ const translations = {
     "netWorth.backfill": "Construiește istoricul (12 luni)",
     "netWorth.backfilling": "Se construiește istoricul...",
     "netWorth.snapshotSaved": "Captură salvată",
+
+    // Transfers
+    "transfer.markAsTransfer": "Marchează ca transfer",
+    "transfer.transfer": "Transfer",
+    "transfer.noMatch": "Fără potrivire — transfer nelegat",
+    "transfer.noMatchesFound": "Nu s-au găsit tranzacții potrivite",
   },
 
   nl: {
@@ -527,6 +545,12 @@ const translations = {
     "netWorth.backfill": "Geschiedenis opbouwen (12 maanden)",
     "netWorth.backfilling": "Geschiedenis opbouwen...",
     "netWorth.snapshotSaved": "Opname opgeslagen",
+
+    // Transfers
+    "transfer.markAsTransfer": "Markeren als overboeking",
+    "transfer.transfer": "Overboeking",
+    "transfer.noMatch": "Geen match — losse overboeking",
+    "transfer.noMatchesFound": "Geen overeenkomende transacties gevonden",
   },
 } as const;
 
