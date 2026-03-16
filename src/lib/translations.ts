@@ -158,6 +158,14 @@ const translations = {
     "planner.noUpcoming": "No upcoming payments this month",
     "planner.noOverdue": "No overdue payments",
     "planner.addRule": "Add recurring rule",
+    "planner.tags.analyze": "Analyze",
+    "planner.tags.byTag": "By tag",
+    "planner.tags.byCategory": "By category",
+    "planner.tags.byMonth": "Monthly trend",
+    "planner.tags.byAccount": "By account",
+    "planner.tags.recentTransactions": "Recent transactions",
+    "planner.tags.viewAll": "View all",
+    "planner.tags.noData": "No transactions found for this selection.",
   },
 
   pt: {
@@ -317,6 +325,14 @@ const translations = {
     "planner.noUpcoming": "Sem pagamentos próximos este mês",
     "planner.noOverdue": "Sem pagamentos atrasados",
     "planner.addRule": "Adicionar regra recorrente",
+    "planner.tags.analyze": "Analisar",
+    "planner.tags.byTag": "Por etiqueta",
+    "planner.tags.byCategory": "Por categoria",
+    "planner.tags.byMonth": "Tendência mensal",
+    "planner.tags.byAccount": "Por conta",
+    "planner.tags.recentTransactions": "Transações recentes",
+    "planner.tags.viewAll": "Ver tudo",
+    "planner.tags.noData": "Nenhuma transação encontrada.",
   },
 
   ro: {
@@ -476,6 +492,14 @@ const translations = {
     "planner.noUpcoming": "Fără plăți viitoare luna aceasta",
     "planner.noOverdue": "Fără plăți restante",
     "planner.addRule": "Adaugă regulă recurentă",
+    "planner.tags.analyze": "Analizează",
+    "planner.tags.byTag": "Per etichetă",
+    "planner.tags.byCategory": "Per categorie",
+    "planner.tags.byMonth": "Tendință lunară",
+    "planner.tags.byAccount": "Per cont",
+    "planner.tags.recentTransactions": "Tranzacții recente",
+    "planner.tags.viewAll": "Vezi toate",
+    "planner.tags.noData": "Nu s-au găsit tranzacții.",
   },
 
   nl: {
@@ -635,6 +659,14 @@ const translations = {
     "planner.noUpcoming": "Geen aankomende betalingen deze maand",
     "planner.noOverdue": "Geen achterstallige betalingen",
     "planner.addRule": "Terugkerende regel toevoegen",
+    "planner.tags.analyze": "Analyseren",
+    "planner.tags.byTag": "Per tag",
+    "planner.tags.byCategory": "Per categorie",
+    "planner.tags.byMonth": "Maandelijkse trend",
+    "planner.tags.byAccount": "Per rekening",
+    "planner.tags.recentTransactions": "Recente transacties",
+    "planner.tags.viewAll": "Alles bekijken",
+    "planner.tags.noData": "Geen transacties gevonden.",
   },
 } as const;
 

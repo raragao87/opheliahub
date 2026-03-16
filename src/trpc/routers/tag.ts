@@ -236,6 +236,139 @@ export const tagRouter = router({
       return { success: true };
     }),
 
+  /** Analysis for a tag group (all tags combined with per-tag breakdown) */
+  getGroupAnalysis: householdProcedure
+    .input(z.object({
+      tagGroupId: z.string(),
+      visibility: z.enum(["SHARED", "PERSONAL"]),
+      dateFrom: z.coerce.date().optional(),
+      dateTo: z.coerce.date().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const group = await ctx.prisma.tagGroup.findFirst({
+        where: { id: input.tagGroupId },
+        select: { id: true, name: true, icon: true },
+      });
+      if (!group) throw new TRPCError({ code: "NOT_FOUND", message: "Tag group not found." });
+
+      const tags = await ctx.prisma.tag.findMany({
+        where: { groupId: input.tagGroupId, ...visibleTagsWhere(ctx.userId, ctx.householdId) },
+        select: { id: true, name: true, color: true },
+      });
+      if (tags.length === 0) return { group, totalAmount: 0, transactionCount: 0, dateRange: null, byTag: [], byCategory: [], byMonth: [], byAccount: [], recentTransactions: [] };
+
+      const tagIds = tags.map((t) => t.id);
+      const dateFilter = {
+        ...(input.dateFrom && { gte: input.dateFrom }),
+        ...(input.dateTo && { lte: input.dateTo }),
+      };
+
+      // Fetch all transactions with any tag from this group (deduplicated)
+      const txns = await ctx.prisma.transaction.findMany({
+        where: {
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          visibility: input.visibility,
+          tags: { some: { tagId: { in: tagIds } } },
+          isInitialBalance: false,
+          ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
+        },
+        select: {
+          id: true, amount: true, date: true, description: true, displayName: true,
+          account: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true, icon: true } },
+          tags: { where: { tagId: { in: tagIds } }, select: { tagId: true } },
+        },
+        orderBy: { date: "desc" },
+      });
+
+      const totalAmount = txns.reduce((s, t) => s + t.amount, 0);
+      const dates = txns.map((t) => new Date(t.date).getTime());
+      const dateRange = dates.length > 0
+        ? { first: new Date(Math.min(...dates)), last: new Date(Math.max(...dates)) }
+        : null;
+
+      // Per-tag breakdown
+      const tagMap = new Map<string, { totalAmount: number; count: number }>();
+      for (const t of txns) {
+        for (const tt of t.tags) {
+          const entry = tagMap.get(tt.tagId) ?? { totalAmount: 0, count: 0 };
+          entry.totalAmount += t.amount;
+          entry.count++;
+          tagMap.set(tt.tagId, entry);
+        }
+      }
+      const byTag = tags.map((tag) => {
+        const data = tagMap.get(tag.id) ?? { totalAmount: 0, count: 0 };
+        return {
+          tagId: tag.id, tagName: tag.name, tagColor: tag.color,
+          totalAmount: data.totalAmount, count: data.count,
+          percentage: totalAmount !== 0 ? Math.abs(data.totalAmount / totalAmount) * 100 : 0,
+        };
+      }).filter((t) => t.count > 0).sort((a, b) => a.totalAmount - b.totalAmount);
+
+      // Category breakdown
+      const catMap = new Map<string, { categoryId: string | null; categoryName: string | null; categoryIcon: string | null; amount: number; count: number }>();
+      for (const t of txns) {
+        const key = t.category?.id ?? "__none__";
+        const entry = catMap.get(key) ?? { categoryId: t.category?.id ?? null, categoryName: t.category?.name ?? null, categoryIcon: t.category?.icon ?? null, amount: 0, count: 0 };
+        entry.amount += t.amount;
+        entry.count++;
+        catMap.set(key, entry);
+      }
+
+      // Monthly trend with per-tag amounts
+      const monthMap = new Map<string, { year: number; month: number; label: string; amount: number; count: number; tagAmounts: Map<string, number> }>();
+      for (const t of txns) {
+        const d = new Date(t.date);
+        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+        const entry = monthMap.get(key) ?? {
+          year: d.getFullYear(), month: d.getMonth() + 1,
+          label: d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+          amount: 0, count: 0, tagAmounts: new Map(),
+        };
+        entry.amount += t.amount;
+        entry.count++;
+        for (const tt of t.tags) {
+          entry.tagAmounts.set(tt.tagId, (entry.tagAmounts.get(tt.tagId) ?? 0) + t.amount);
+        }
+        monthMap.set(key, entry);
+      }
+      const byMonth = Array.from(monthMap.values())
+        .sort((a, b) => a.year - b.year || a.month - b.month)
+        .map((m) => ({
+          year: m.year, month: m.month, label: m.label, amount: m.amount, count: m.count,
+          byTag: tags.filter((t) => m.tagAmounts.has(t.id)).map((t) => ({
+            tagId: t.id, tagName: t.name, amount: m.tagAmounts.get(t.id) ?? 0,
+          })),
+        }));
+
+      // Account breakdown
+      const accMap = new Map<string, { accountId: string; accountName: string; amount: number; count: number }>();
+      for (const t of txns) {
+        const entry = accMap.get(t.account.id) ?? { accountId: t.account.id, accountName: t.account.name, amount: 0, count: 0 };
+        entry.amount += t.amount;
+        entry.count++;
+        accMap.set(t.account.id, entry);
+      }
+
+      return {
+        group,
+        totalAmount,
+        transactionCount: txns.length,
+        dateRange,
+        byTag,
+        byCategory: Array.from(catMap.values()).sort((a, b) => a.amount - b.amount),
+        byMonth,
+        byAccount: Array.from(accMap.values()).sort((a, b) => a.amount - b.amount),
+        recentTransactions: txns.slice(0, 15).map((t) => ({
+          id: t.id, date: t.date, description: t.description, displayName: t.displayName,
+          amount: t.amount, accountName: t.account.name,
+          categoryName: t.category?.name ?? null,
+          tagNames: t.tags.map((tt) => tags.find((tag) => tag.id === tt.tagId)?.name ?? ""),
+        })),
+      };
+    }),
+
   /** Aggregated analysis for one or more tags */
   tagAnalysis: householdProcedure
     .input(z.object({
