@@ -174,6 +174,14 @@ const translations = {
     "planner.costAnalysis.byMonth": "Monthly trend",
     "planner.costAnalysis.noData": "No transactions found for the selected categories and period.",
     "planner.costAnalysis.selectToStart": "Select a category group to analyze.",
+    "planner.reports.income": "Income",
+    "planner.reports.expenses": "Expenses",
+    "planner.reports.netSavings": "Net savings",
+    "planner.reports.savingsRate": "Savings rate",
+    "planner.reports.trend": "Income vs. expenses",
+    "planner.reports.categoryComparison": "By category",
+    "planner.reports.topMerchants": "Top expenses",
+    "planner.reports.noData": "No transactions found for this month.",
   },
 
   pt: {
@@ -349,6 +357,14 @@ const translations = {
     "planner.costAnalysis.byMonth": "Tendência mensal",
     "planner.costAnalysis.noData": "Nenhuma transação encontrada.",
     "planner.costAnalysis.selectToStart": "Selecione um grupo de categorias para analisar.",
+    "planner.reports.income": "Receita",
+    "planner.reports.expenses": "Despesas",
+    "planner.reports.netSavings": "Poupança líquida",
+    "planner.reports.savingsRate": "Taxa de poupança",
+    "planner.reports.trend": "Receita vs. despesas",
+    "planner.reports.categoryComparison": "Por categoria",
+    "planner.reports.topMerchants": "Maiores despesas",
+    "planner.reports.noData": "Nenhuma transação encontrada para este mês.",
   },
 
   ro: {
@@ -524,6 +540,14 @@ const translations = {
     "planner.costAnalysis.byMonth": "Tendință lunară",
     "planner.costAnalysis.noData": "Nu s-au găsit tranzacții.",
     "planner.costAnalysis.selectToStart": "Selectați un grup de categorii pentru analiză.",
+    "planner.reports.income": "Venituri",
+    "planner.reports.expenses": "Cheltuieli",
+    "planner.reports.netSavings": "Economii nete",
+    "planner.reports.savingsRate": "Rata de economisire",
+    "planner.reports.trend": "Venituri vs. cheltuieli",
+    "planner.reports.categoryComparison": "Per categorie",
+    "planner.reports.topMerchants": "Cele mai mari cheltuieli",
+    "planner.reports.noData": "Nu s-au găsit tranzacții pentru această lună.",
   },
 
   nl: {
@@ -699,6 +723,14 @@ const translations = {
     "planner.costAnalysis.byMonth": "Maandelijkse trend",
     "planner.costAnalysis.noData": "Geen transacties gevonden.",
     "planner.costAnalysis.selectToStart": "Selecteer een categoriegroep om te analyseren.",
+    "planner.reports.income": "Inkomen",
+    "planner.reports.expenses": "Uitgaven",
+    "planner.reports.netSavings": "Netto besparing",
+    "planner.reports.savingsRate": "Spaarquote",
+    "planner.reports.trend": "Inkomen vs. uitgaven",
+    "planner.reports.categoryComparison": "Per categorie",
+    "planner.reports.topMerchants": "Grootste uitgaven",
+    "planner.reports.noData": "Geen transacties gevonden voor deze maand.",
   },
 } as const;
 
