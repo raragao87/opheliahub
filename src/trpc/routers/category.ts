@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { chatCompletion, extractJSON, isOpheliaEnabled } from "@/lib/ophelia";
+import { visibleTransactionsWhere } from "@/lib/privacy";
 
 export const categoryRouter = router({
   /** Flat list of leaf categories (for dropdowns — grouped by parent) */
@@ -259,5 +260,116 @@ export const categoryRouter = router({
       );
 
       return { success: true };
+    }),
+
+  /** Cost analysis for selected categories */
+  costAnalysis: householdProcedure
+    .input(z.object({
+      categoryIds: z.array(z.string()).min(1).max(20),
+      dateFrom: z.coerce.date().optional(),
+      dateTo: z.coerce.date().optional(),
+      visibility: z.enum(["SHARED", "PERSONAL"]),
+    }))
+    .query(async ({ ctx, input }) => {
+      const dateFilter = {
+        ...(input.dateFrom && { gte: input.dateFrom }),
+        ...(input.dateTo && { lte: input.dateTo }),
+      };
+
+      const txns = await ctx.prisma.transaction.findMany({
+        where: {
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          visibility: input.visibility,
+          categoryId: { in: input.categoryIds },
+          isInitialBalance: false,
+          type: { not: "TRANSFER" },
+          ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
+        },
+        select: {
+          id: true, amount: true, date: true, type: true,
+          description: true, displayName: true,
+          account: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true, icon: true, parent: { select: { name: true } } } },
+        },
+        orderBy: { date: "desc" },
+      });
+
+      const totalExpenses = txns.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+      const totalIncome = txns.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      const netCost = totalExpenses + totalIncome;
+
+      // Calculate months spanned for monthly average
+      const dates = txns.map((t) => new Date(t.date));
+      let monthsSpanned = 1;
+      if (dates.length > 1) {
+        const min = Math.min(...dates.map((d) => d.getTime()));
+        const max = Math.max(...dates.map((d) => d.getTime()));
+        monthsSpanned = Math.max(1, Math.round((max - min) / (30.44 * 24 * 60 * 60 * 1000)));
+      }
+
+      // Category breakdown
+      const catMap = new Map<string, { categoryId: string; categoryName: string; categoryIcon: string | null; parentName: string | null; totalAmount: number; count: number }>();
+      for (const t of txns) {
+        const key = t.category?.id ?? "__none__";
+        const entry = catMap.get(key) ?? {
+          categoryId: t.category?.id ?? "", categoryName: t.category?.name ?? "Uncategorized",
+          categoryIcon: t.category?.icon ?? null, parentName: t.category?.parent?.name ?? null,
+          totalAmount: 0, count: 0,
+        };
+        entry.totalAmount += t.amount;
+        entry.count++;
+        catMap.set(key, entry);
+      }
+      const byCategory = Array.from(catMap.values())
+        .map((c) => ({ ...c, monthlyAverage: Math.round(c.totalAmount / monthsSpanned) }))
+        .sort((a, b) => a.totalAmount - b.totalAmount);
+
+      // Merchant breakdown (by displayName or description)
+      const merchantMap = new Map<string, { name: string; totalAmount: number; count: number; lastDate: Date }>();
+      for (const t of txns) {
+        const name = t.displayName || t.description;
+        const entry = merchantMap.get(name) ?? { name, totalAmount: 0, count: 0, lastDate: new Date(t.date) };
+        entry.totalAmount += t.amount;
+        entry.count++;
+        if (new Date(t.date) > entry.lastDate) entry.lastDate = new Date(t.date);
+        merchantMap.set(name, entry);
+      }
+      const byMerchant = Array.from(merchantMap.values())
+        .sort((a, b) => a.totalAmount - b.totalAmount)
+        .slice(0, 20);
+
+      // Monthly breakdown
+      const monthMap = new Map<string, { year: number; month: number; label: string; expenses: number; income: number; net: number }>();
+      for (const t of txns) {
+        const d = new Date(t.date);
+        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+        const entry = monthMap.get(key) ?? {
+          year: d.getFullYear(), month: d.getMonth() + 1,
+          label: d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+          expenses: 0, income: 0, net: 0,
+        };
+        if (t.amount < 0) entry.expenses += t.amount; else entry.income += t.amount;
+        entry.net += t.amount;
+        monthMap.set(key, entry);
+      }
+      const byMonth = Array.from(monthMap.values()).sort((a, b) => a.year - b.year || a.month - b.month);
+
+      // Account breakdown
+      const accMap = new Map<string, { accountId: string; accountName: string; totalAmount: number; count: number }>();
+      for (const t of txns) {
+        const entry = accMap.get(t.account.id) ?? { accountId: t.account.id, accountName: t.account.name, totalAmount: 0, count: 0 };
+        entry.totalAmount += t.amount;
+        entry.count++;
+        accMap.set(t.account.id, entry);
+      }
+
+      return {
+        totalExpenses, totalIncome, netCost,
+        transactionCount: txns.length,
+        monthlyAverage: Math.round(netCost / monthsSpanned),
+        monthsSpanned,
+        byCategory, byMerchant, byMonth,
+        byAccount: Array.from(accMap.values()).sort((a, b) => a.totalAmount - b.totalAmount),
+      };
     }),
 });

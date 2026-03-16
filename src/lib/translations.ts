@@ -166,6 +166,14 @@ const translations = {
     "planner.tags.recentTransactions": "Recent transactions",
     "planner.tags.viewAll": "View all",
     "planner.tags.noData": "No transactions found for this selection.",
+    "planner.costAnalysis.netCost": "Net cost",
+    "planner.costAnalysis.grossCost": "Gross cost",
+    "planner.costAnalysis.monthlyAverage": "Monthly average",
+    "planner.costAnalysis.byCategory": "By category",
+    "planner.costAnalysis.byMerchant": "By merchant",
+    "planner.costAnalysis.byMonth": "Monthly trend",
+    "planner.costAnalysis.noData": "No transactions found for the selected categories and period.",
+    "planner.costAnalysis.selectToStart": "Select a category group to analyze.",
   },
 
   pt: {
@@ -333,6 +341,14 @@ const translations = {
     "planner.tags.recentTransactions": "Transações recentes",
     "planner.tags.viewAll": "Ver tudo",
     "planner.tags.noData": "Nenhuma transação encontrada.",
+    "planner.costAnalysis.netCost": "Custo líquido",
+    "planner.costAnalysis.grossCost": "Custo bruto",
+    "planner.costAnalysis.monthlyAverage": "Média mensal",
+    "planner.costAnalysis.byCategory": "Por categoria",
+    "planner.costAnalysis.byMerchant": "Por comerciante",
+    "planner.costAnalysis.byMonth": "Tendência mensal",
+    "planner.costAnalysis.noData": "Nenhuma transação encontrada.",
+    "planner.costAnalysis.selectToStart": "Selecione um grupo de categorias para analisar.",
   },
 
   ro: {
@@ -500,6 +516,14 @@ const translations = {
     "planner.tags.recentTransactions": "Tranzacții recente",
     "planner.tags.viewAll": "Vezi toate",
     "planner.tags.noData": "Nu s-au găsit tranzacții.",
+    "planner.costAnalysis.netCost": "Cost net",
+    "planner.costAnalysis.grossCost": "Cost brut",
+    "planner.costAnalysis.monthlyAverage": "Medie lunară",
+    "planner.costAnalysis.byCategory": "Per categorie",
+    "planner.costAnalysis.byMerchant": "Per comerciant",
+    "planner.costAnalysis.byMonth": "Tendință lunară",
+    "planner.costAnalysis.noData": "Nu s-au găsit tranzacții.",
+    "planner.costAnalysis.selectToStart": "Selectați un grup de categorii pentru analiză.",
   },
 
   nl: {
@@ -667,6 +691,14 @@ const translations = {
     "planner.tags.recentTransactions": "Recente transacties",
     "planner.tags.viewAll": "Alles bekijken",
     "planner.tags.noData": "Geen transacties gevonden.",
+    "planner.costAnalysis.netCost": "Netto kosten",
+    "planner.costAnalysis.grossCost": "Bruto kosten",
+    "planner.costAnalysis.monthlyAverage": "Maandelijks gemiddelde",
+    "planner.costAnalysis.byCategory": "Per categorie",
+    "planner.costAnalysis.byMerchant": "Per leverancier",
+    "planner.costAnalysis.byMonth": "Maandelijkse trend",
+    "planner.costAnalysis.noData": "Geen transacties gevonden.",
+    "planner.costAnalysis.selectToStart": "Selecteer een categoriegroep om te analyseren.",
   },
 } as const;
 

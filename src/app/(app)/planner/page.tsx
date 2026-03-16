@@ -6,6 +6,7 @@ import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { UpcomingTab } from "@/components/planner/upcoming-tab";
 import { TagsTab } from "@/components/planner/tags-tab";
+import { CostAnalysisTab } from "@/components/planner/cost-analysis-tab";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -582,7 +583,7 @@ function PlannerContent() {
 
       {/* ── Cost Analysis Tab ──────────────────────────────────────── */}
       {activeTab === "cost-analysis" && (
-        <div className="text-center py-12 text-sm text-muted-foreground">Coming soon</div>
+        <CostAnalysisTab month={period.month} year={period.year} visibility={visibility} />
       )}
 
       {/* ── Reports Tab ────────────────────────────────────────────── */}
