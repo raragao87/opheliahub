@@ -9,12 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
-import { getCurrentYearMonth, getPreviousMonth, getNextMonth, formatShortDate } from "@/lib/date";
+import { getCurrentYearMonth, getPreviousMonth, getNextMonth } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { t } from "@/lib/translations";
+import { useUserPreferences } from "@/lib/user-preferences-context";
 import { EmojiPickerButton } from "@/components/ui/emoji-picker";
-import { extractDisplayName } from "@/lib/recurring";
+import { FundCard, type FundData } from "@/components/tracker/fund-card";
+import { FundEditDialog } from "@/components/tracker/fund-edit-dialog";
 import {
   DndContext,
   closestCenter,
@@ -43,14 +46,7 @@ import {
   Trash2,
   Check,
   X,
-  CalendarDays,
   GripVertical,
-  Repeat,
-  CircleCheck,
-  CircleDashed,
-  CircleAlert,
-  EyeOff,
-  RotateCcw,
   Sparkles,
 } from "lucide-react";
 
@@ -145,6 +141,8 @@ export default function TrackerPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { visibilityParam } = useOwnership();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   const [period, setPeriod] = useState(getCurrentYearMonth());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -199,6 +197,29 @@ export default function TrackerPage() {
   );
 
   const treeQuery = useQuery(trpc.category.tree.queryOptions({ visibility }));
+
+  // Funds query
+  const fundsQuery = useQuery(
+    trpc.fund.list.queryOptions({ visibility })
+  );
+
+  // Fund UI state
+  const [editingFundId, setEditingFundId] = useState<string | null>(null);
+  const [showFundDialog, setShowFundDialog] = useState(false);
+
+  // Fund mutations
+  const contributeAllMutation = useMutation(
+    trpc.fund.contributeAll.mutationOptions({
+      onSuccess: (data) => {
+        queryClient.invalidateQueries();
+        if (data.count > 0) {
+          toast.success(`Added contributions to ${data.count} funds`);
+        } else {
+          toast("All funds already have contributions this month");
+        }
+      },
+    })
+  );
 
   // Tracker mutations
   const setAllocationMutation = useMutation(
@@ -274,188 +295,6 @@ export default function TrackerPage() {
     suggestDebounceRef.current = setTimeout(() => {
       suggestIconMutation.mutate({ name: name.trim() });
     }, 600);
-  }
-
-  // Recurring queries & mutations
-  const recurringQuery = useQuery(
-    trpc.recurring.listForMonth.queryOptions({
-      month: period.month,
-      year: period.year,
-      visibility,
-    })
-  );
-
-  const accountsQuery = useQuery(trpc.account.list.queryOptions());
-
-  const detectQuery = useQuery(
-    trpc.recurring.detect.queryOptions({ visibility })
-  );
-
-  const createRecurringMutation = useMutation(
-    trpc.recurring.create.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
-        setAddingRecurring(false);
-        resetRecurringForm();
-      },
-    })
-  );
-
-  const updateRecurringMutation = useMutation(
-    trpc.recurring.update.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
-        setEditingRecurringId(null);
-        resetRecurringForm();
-      },
-    })
-  );
-
-  const deleteRecurringMutation = useMutation(
-    trpc.recurring.delete.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
-    })
-  );
-
-  const reapplyCategoryMutation = useMutation(
-    trpc.recurring.reapplyCategory.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
-    })
-  );
-
-  const dismissPatternMutation = useMutation(
-    trpc.recurring.dismiss.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
-    })
-  );
-
-  const undismissPatternMutation = useMutation(
-    trpc.recurring.undismiss.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
-    })
-  );
-
-  // Recurring section state
-  const [recurringSectionCollapsed, setRecurringSectionCollapsed] = useState(false);
-  const [addingRecurring, setAddingRecurring] = useState(false);
-  const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
-  const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
-  const [dismissedSubExpanded, setDismissedSubExpanded] = useState(false);
-  const [collapsedRecurringGroups, setCollapsedRecurringGroups] = useState<Set<string>>(new Set());
-  // Inactive sub-sections start collapsed — this tracks which are expanded
-  const [expandedInactiveGroups, setExpandedInactiveGroups] = useState<Set<string>>(new Set());
-
-  const toggleRecurringGroup = (groupId: string) => {
-    setCollapsedRecurringGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) next.delete(groupId);
-      else next.add(groupId);
-      return next;
-    });
-  };
-
-  const toggleInactiveGroup = (groupId: string) => {
-    setExpandedInactiveGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) next.delete(groupId);
-      else next.add(groupId);
-      return next;
-    });
-  };
-
-  // Compute new vs dismissed detected patterns (from server state)
-  const newPatterns = useMemo(() => {
-    if (!detectQuery.data) return [];
-    const dismissed = new Set(detectQuery.data.dismissedKeys);
-    return detectQuery.data.patterns.filter((p) => !dismissed.has(p.key));
-  }, [detectQuery.data]);
-
-  const dismissedPatterns = useMemo(() => {
-    if (!detectQuery.data) return [];
-    const dismissed = new Set(detectQuery.data.dismissedKeys);
-    return detectQuery.data.patterns.filter((p) => dismissed.has(p.key));
-  }, [detectQuery.data]);
-
-  // Group recurring rules by category
-  const recurringGroups = useMemo(() => {
-    if (!recurringQuery.data) return [];
-
-    const activeRules = recurringQuery.data.rules;
-    const inactiveRules = recurringQuery.data.inactiveRules ?? [];
-
-    type ActiveRule = (typeof activeRules)[number];
-    type InactiveRule = (typeof inactiveRules)[number];
-
-    const groupMap = new Map<
-      string,
-      {
-        categoryId: string | null;
-        categoryName: string;
-        categoryIcon: string | null;
-        activeRules: ActiveRule[];
-        inactiveRules: InactiveRule[];
-      }
-    >();
-
-    for (const rule of activeRules) {
-      const key = rule.categoryId ?? "__uncategorized__";
-      if (!groupMap.has(key)) {
-        groupMap.set(key, {
-          categoryId: rule.categoryId,
-          categoryName: rule.category?.name ?? "Other",
-          categoryIcon: rule.category?.icon ?? null,
-          activeRules: [],
-          inactiveRules: [],
-        });
-      }
-      groupMap.get(key)!.activeRules.push(rule);
-    }
-
-    for (const rule of inactiveRules) {
-      const key = rule.categoryId ?? "__uncategorized__";
-      if (!groupMap.has(key)) {
-        groupMap.set(key, {
-          categoryId: rule.categoryId,
-          categoryName: rule.category?.name ?? "Other",
-          categoryIcon: rule.category?.icon ?? null,
-          activeRules: [],
-          inactiveRules: [],
-        });
-      }
-      groupMap.get(key)!.inactiveRules.push(rule);
-    }
-
-    // Sort: groups with overdue/pending active rules first, uncategorized last
-    return [...groupMap.values()].sort((a, b) => {
-      if (a.categoryId === null && b.categoryId !== null) return 1;
-      if (b.categoryId === null && a.categoryId !== null) return -1;
-      return a.categoryName.localeCompare(b.categoryName);
-    });
-  }, [recurringQuery.data]);
-  const [recurringForm, setRecurringForm] = useState({
-    name: "",
-    description: "",
-    amount: "",
-    type: "EXPENSE" as "INCOME" | "EXPENSE",
-    frequency: "MONTHLY" as "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY",
-    startDate: new Date().toISOString().slice(0, 10),
-    totalInstallments: "",
-    categoryId: "",
-    accountId: "",
-  });
-
-  function resetRecurringForm() {
-    setRecurringForm({
-      name: "",
-      description: "",
-      amount: "",
-      type: "EXPENSE",
-      frequency: "MONTHLY",
-      startDate: new Date().toISOString().slice(0, 10),
-      totalInstallments: "",
-      categoryId: "",
-      accountId: "",
-    });
   }
 
   // ── DnD state & sensors ──
@@ -563,6 +402,20 @@ export default function TrackerPage() {
     return null;
   }, [activeDragId, groupsWithData]);
 
+
+  // Separate budgeted vs unbudgeted expense categories
+  const unbudgetedCategories = useMemo(() => {
+    const result: typeof groupsWithData[0]["children"] = [];
+    for (const group of groupsWithData) {
+      if (group.type !== "EXPENSE") continue;
+      for (const cat of group.children) {
+        if (cat.allocated === 0 && cat.spent > 0) {
+          result.push(cat);
+        }
+      }
+    }
+    return result;
+  }, [groupsWithData]);
 
   // Loading state
   if (trackerQuery.isLoading || !tracker) {
@@ -679,20 +532,46 @@ export default function TrackerPage() {
   }
 
 
-  // Compute Ready to Assign from income vs expense allocations
+  // Compute Ready to Assign from income vs expense allocations + fund contributions
   const incomeAssigned = groupsWithData
     .filter((g) => g.type === "INCOME")
     .reduce((sum, g) => sum + g.totalAllocated, 0);
   const expenseAssigned = groupsWithData
     .filter((g) => g.type === "EXPENSE")
     .reduce((sum, g) => sum + g.totalAllocated, 0);
-  const readyToAssign = incomeAssigned - expenseAssigned;
+  const fundsData = (fundsQuery.data ?? []) as FundData[];
+  const totalFundContributions = fundsData.reduce((sum, f) => sum + f.monthlyContribution, 0);
+  const readyToAssign = incomeAssigned - expenseAssigned - totalFundContributions;
 
   // Actual Balance: real income received − real expenses paid (from transactions)
   const actualBalance = (summary?.actualIncome ?? 0) - (summary?.totalActualExpenses ?? 0);
 
   const uncategorizedEntry = summaryCategories.find((c) => !c.categoryId);
 
+  // Budget Health scorecard computations
+  const totalIncome = incomeAssigned;
+  const totalAllocatedExpenses = expenseAssigned;
+  const totalAllocatedAll = totalAllocatedExpenses + totalFundContributions;
+  const allocationPct = totalIncome > 0 ? Math.round((totalAllocatedAll / totalIncome) * 100) : 0;
+
+  const totalSpentExpenses = groupsWithData
+    .filter((g) => g.type === "EXPENSE")
+    .reduce((sum, g) => sum + g.totalSpent, 0)
+    + (uncategorizedEntry?.spent ?? 0);
+  const spendingPct = totalAllocatedExpenses > 0
+    ? Math.round((totalSpentExpenses / totalAllocatedExpenses) * 100)
+    : 0;
+
+  // Days left in month
+  const today = new Date();
+  const lastDayOfMonth = new Date(period.year, period.month, 0).getDate();
+  const { month: curMonth, year: curYear } = getCurrentYearMonth();
+  const isCurrentMonth = period.year === curYear && period.month === curMonth;
+  const daysLeft = isCurrentMonth
+    ? Math.max(0, lastDayOfMonth - today.getDate())
+    : period.year < curYear || (period.year === curYear && period.month < curMonth)
+      ? 0
+      : lastDayOfMonth;
 
   return (
     <div className="space-y-4">
@@ -799,7 +678,7 @@ export default function TrackerPage() {
             variant={visibility === "SHARED" ? "shared" : "personal"}
             className="text-[10px] ml-1"
           >
-            {visibility === "SHARED" ? "Shared" : "Personal"}
+            {visibility === "SHARED" ? t(lang, "common.shared") : t(lang, "common.personal")}
           </Badge>
         </div>
 
@@ -819,13 +698,123 @@ export default function TrackerPage() {
         >
           <Copy className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">
-            {copyPreviousMonthMutation.isPending ? "Copying..." : "Copy Last Month"}
+            {copyPreviousMonthMutation.isPending ? t(lang, "common.loading") : `${t(lang, "tracker.copyFrom")} ${new Date(period.year, period.month - 2).toLocaleString("default", { month: "long" })}`}
           </span>
           <span className="sm:hidden">
-            {copyPreviousMonthMutation.isPending ? "..." : "Copy"}
+            {copyPreviousMonthMutation.isPending ? "..." : t(lang, "tracker.copyFrom")}
           </span>
         </Button>
       </div>
+
+      {/* ── Budget Health Scorecard ──────────────────────────────── */}
+      {summary && (
+        <div className="rounded-lg border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {t(lang, "tracker.budgetHealth")}
+            </span>
+          </div>
+
+          {/* Top stats row */}
+          <div className={cn("grid gap-4", totalFundContributions > 0 ? "grid-cols-4" : "grid-cols-3")}>
+            <div>
+              <div className="text-xs text-muted-foreground">{t(lang, "tracker.income")}</div>
+              <MoneyDisplay
+                amount={totalIncome}
+                colorize={false}
+                className="text-lg font-bold"
+              />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">{t(lang, "tracker.funds.expenses")}</div>
+              <MoneyDisplay
+                amount={totalAllocatedExpenses}
+                colorize={false}
+                className="text-lg font-bold"
+              />
+            </div>
+            {totalFundContributions > 0 && (
+              <div>
+                <div className="text-xs text-muted-foreground">{t(lang, "tracker.funds")}</div>
+                <MoneyDisplay
+                  amount={totalFundContributions}
+                  colorize={false}
+                  className="text-lg font-bold"
+                />
+              </div>
+            )}
+            <div>
+              <div className="text-xs text-muted-foreground">{t(lang, "tracker.leftToAssign")}</div>
+              <MoneyDisplay
+                amount={readyToAssign}
+                colorize={false}
+                className={cn(
+                  "text-lg font-bold",
+                  readyToAssign === 0 && incomeAssigned > 0 && "text-green-600 dark:text-green-400",
+                  readyToAssign > 0 && "text-amber-600 dark:text-amber-400",
+                  readyToAssign < 0 && "text-red-600 dark:text-red-400"
+                )}
+              />
+              {readyToAssign === 0 && incomeAssigned > 0 && (
+                <span className="text-[11px] text-green-600 dark:text-green-400 font-medium">{t(lang, "tracker.balanced")}</span>
+              )}
+              {readyToAssign > 0 && (
+                <span className="text-[11px] text-amber-600 dark:text-amber-400">{t(lang, "tracker.unassigned")}</span>
+              )}
+              {readyToAssign < 0 && (
+                <span className="text-[11px] text-red-600 dark:text-red-400">{t(lang, "tracker.overAllocated")}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Allocation progress bar */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{t(lang, "tracker.allocated")}</span>
+              <span>{allocationPct}% {t(lang, "tracker.assigned")}</span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  readyToAssign === 0 && incomeAssigned > 0
+                    ? "bg-green-500"
+                    : readyToAssign < 0
+                      ? "bg-red-500"
+                      : "bg-amber-500"
+                )}
+                style={{ width: `${Math.min(allocationPct, 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Spending progress bar */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {t(lang, "tracker.spent")}: <MoneyDisplay amount={totalSpentExpenses} colorize={false} className="text-xs font-medium inline" />
+                {totalAllocatedExpenses > 0 && <> / <MoneyDisplay amount={totalAllocatedExpenses} colorize={false} className="text-xs inline" /> ({spendingPct}%)</>}
+              </span>
+              {isCurrentMonth && (
+                <span>{daysLeft} {t(lang, "tracker.daysLeft")}</span>
+              )}
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  spendingPct >= 100
+                    ? "bg-red-500"
+                    : spendingPct >= 80
+                      ? "bg-yellow-500"
+                      : "bg-green-500"
+                )}
+                style={{ width: `${Math.min(spendingPct, 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Tracker Grid ────────────────────────────────────────── */}
       <DndContext
@@ -1024,6 +1013,22 @@ export default function TrackerPage() {
                             >
                               {group.name}
                             </span>
+                            <button
+                              onClick={() => {
+                                setEditingCategoryId(group.id);
+                                setEditingName(group.name);
+                                setEditingIcon(group.icon ?? "");
+                                setEditingGroupType(group.type);
+                                setIconSuggestions([]);
+                                if (group.name.trim().length >= 2) {
+                                  suggestIconMutation.mutate({ name: group.name.trim() });
+                                }
+                              }}
+                              className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
+                              title="Rename group"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
                             {isIncomeGroup && (
                               <Badge
                                 variant="outline"
@@ -1039,22 +1044,6 @@ export default function TrackerPage() {
                                 title="Add subcategory"
                               >
                                 <Plus className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingCategoryId(group.id);
-                                  setEditingName(group.name);
-                                  setEditingIcon(group.icon ?? "");
-                                  setEditingGroupType(group.type);
-                                  setIconSuggestions([]);
-                                  if (group.name.trim().length >= 2) {
-                                    suggestIconMutation.mutate({ name: group.name.trim() });
-                                  }
-                                }}
-                                className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
-                                title="Rename group"
-                              >
-                                <Pencil className="h-3 w-3" />
                               </button>
                               {group.childCount === 0 && (
                                 <button
@@ -1256,33 +1245,31 @@ export default function TrackerPage() {
                                 >
                                   {cat.name}
                                 </span>
+                                <button
+                                  onClick={() => {
+                                    setEditingCategoryId(cat.id);
+                                    setEditingName(cat.name);
+                                    setEditingIcon(cat.icon ?? "");
+                                    setIconSuggestions([]);
+                                    if (cat.name.trim().length >= 2) {
+                                      suggestIconMutation.mutate({ name: cat.name.trim() });
+                                    }
+                                  }}
+                                  className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground opacity-0 group-hover/catrow:opacity-100 transition-opacity"
+                                  title="Rename"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
                                 <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover/catrow:opacity-100 transition-opacity">
                                   <button
-                                    onClick={() => {
-                                      setEditingCategoryId(cat.id);
-                                      setEditingName(cat.name);
-                                      setEditingIcon(cat.icon ?? "");
-                                      setIconSuggestions([]);
-                                      if (cat.name.trim().length >= 2) {
-                                        suggestIconMutation.mutate({ name: cat.name.trim() });
-                                      }
-                                    }}
-                                    className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
-                                    title="Rename"
+                                    onClick={() =>
+                                      deleteCategoryMutation.mutate({ id: cat.id })
+                                    }
+                                    className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600"
+                                    title="Delete category"
                                   >
-                                    <Pencil className="h-3 w-3" />
+                                    <Trash2 className="h-3 w-3" />
                                   </button>
-                                  {cat.transactionCount === 0 && (
-                                    <button
-                                      onClick={() =>
-                                        deleteCategoryMutation.mutate({ id: cat.id })
-                                      }
-                                      className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600"
-                                      title="Delete category"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
-                                  )}
                                 </div>
                               </div>
                             )}
@@ -1481,50 +1468,89 @@ export default function TrackerPage() {
           </tbody>
           </SortableContext>
 
-          {/* Uncategorized spending */}
-          {uncategorizedEntry && uncategorizedEntry.spent > 0 && (
+          {/* Unbudgeted spending — categories with actual spend but no allocation */}
+          {(unbudgetedCategories.length > 0 || (uncategorizedEntry && uncategorizedEntry.spent > 0)) && (
             <tbody>
-              <tr className="border-t-2 border-dashed border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
-                <td className="py-2 px-3">
+              <tr className="border-t-2 border-dashed border-amber-500/50">
+                <td colSpan={4} className="py-1.5 px-3">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
-                      Uncategorized
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                      {t(lang, "tracker.unbudgeted")}
                     </span>
                   </div>
                 </td>
-                <td className="py-2 px-3 text-right">
-                  <MoneyDisplay
-                    amount={0}
-                    colorize={false}
-                    className="text-sm text-muted-foreground/50"
-                  />
-                </td>
-                <td className="py-2 px-3 text-right">
-                  <Link
-                    href={(() => {
-                      const mm = String(period.month).padStart(2, "0");
-                      const lastDay = new Date(period.year, period.month, 0).getDate();
-                      return `/transactions?accrualDateFrom=${period.year}-${mm}-01&accrualDateTo=${period.year}-${mm}-${String(lastDay).padStart(2, "0")}`;
-                    })()}
-                    className="hover:underline transition-colors"
-                    title="View uncategorized transactions"
-                  >
-                    <MoneyDisplay
-                      amount={-uncategorizedEntry.spent}
-                      colorize={false}
-                      className="text-sm text-red-600 dark:text-red-400"
-                    />
-                  </Link>
-                </td>
-                <td className="py-2 px-3 text-right">
-                  <AvailableCell
-                    amount={-uncategorizedEntry.spent}
-                    allocated={0}
-                    spent={uncategorizedEntry.spent}
-                  />
-                </td>
               </tr>
+              {uncategorizedEntry && uncategorizedEntry.spent > 0 && (
+                <tr className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
+                  <td className="py-1.5 px-3 pl-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">📄</span>
+                      <span className="text-sm text-muted-foreground">Uncategorized</span>
+                    </div>
+                  </td>
+                  <td className="py-1.5 px-3 text-right">
+                    <span className="text-sm text-muted-foreground/40">—</span>
+                  </td>
+                  <td className="py-1.5 px-3 text-right">
+                    <Link
+                      href={(() => {
+                        const mm = String(period.month).padStart(2, "0");
+                        const ld = new Date(period.year, period.month, 0).getDate();
+                        return `/transactions?accrualDateFrom=${period.year}-${mm}-01&accrualDateTo=${period.year}-${mm}-${String(ld).padStart(2, "0")}&liquidOnly=true`;
+                      })()}
+                      className="hover:underline transition-colors"
+                      title="View uncategorized transactions"
+                    >
+                      <MoneyDisplay
+                        amount={-uncategorizedEntry.spent}
+                        colorize={false}
+                        className="text-sm text-red-600 dark:text-red-400"
+                      />
+                    </Link>
+                  </td>
+                  <td className="py-1.5 px-3 text-right">
+                    <AvailableCell
+                      amount={-uncategorizedEntry.spent}
+                      allocated={0}
+                      spent={uncategorizedEntry.spent}
+                    />
+                  </td>
+                </tr>
+              )}
+              {unbudgetedCategories.map((cat) => (
+                <tr key={cat.id} className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
+                  <td className="py-1.5 px-3 pl-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{cat.icon}</span>
+                      <span className="text-sm text-muted-foreground">{cat.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-1.5 px-3 text-right">
+                    <span className="text-sm text-muted-foreground/40">—</span>
+                  </td>
+                  <td className="py-1.5 px-3 text-right">
+                    <Link
+                      href={buildCategoryTransactionsUrl(cat.id, period)}
+                      className="hover:underline transition-colors"
+                      title="View transactions"
+                    >
+                      <MoneyDisplay
+                        amount={-cat.spent}
+                        colorize={false}
+                        className="text-sm text-red-600 dark:text-red-400"
+                      />
+                    </Link>
+                  </td>
+                  <td className="py-1.5 px-3 text-right">
+                    <AvailableCell
+                      amount={-cat.spent}
+                      allocated={0}
+                      spent={cat.spent}
+                    />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           )}
 
@@ -1664,792 +1690,150 @@ export default function TrackerPage() {
       </DragOverlay>
       </DndContext>
 
-      {/* ── Recurring & Installments Tracker ──────────────────────── */}
-      {tracker && (
-        <div className="rounded-lg border bg-card overflow-x-clip">
-          {/* Collapsible section header */}
-          <div className="sticky top-16 z-10 bg-card flex items-center justify-between px-3 py-2.5 rounded-t-lg">
-            <button
-              onClick={() => setRecurringSectionCollapsed((v) => !v)}
-              className="flex items-center gap-2 text-left hover:bg-muted/50 transition-colors rounded-md px-1 -mx-1"
-            >
-              <ChevronRight
-                className={cn(
-                  "h-4 w-4 text-muted-foreground transition-transform",
-                  !recurringSectionCollapsed && "rotate-90"
-                )}
-              />
-              <Repeat className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold text-sm">Recurring & Installments</span>
-              {recurringQuery.data && (recurringQuery.data.rules.length + (recurringQuery.data.inactiveRules?.length ?? 0)) > 0 && (
-                <span className="text-xs text-muted-foreground ml-1">
-                  ({recurringQuery.data.rules.length}{recurringQuery.data.inactiveRules && recurringQuery.data.inactiveRules.length > 0 ? ` + ${recurringQuery.data.inactiveRules.length} inactive` : ""})
+      {/* ── Funds Section ─────────────────────────────────────────── */}
+      {fundsQuery.data && (
+        <div className="rounded-lg border bg-card overflow-hidden">
+          {/* Section header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                💰 {t(lang, "tracker.funds")}
+              </span>
+            </div>
+            {(() => {
+              const linkedAccount = fundsData.find(f => f.linkedAccount)?.linkedAccount;
+              return linkedAccount ? (
+                <span className="text-xs text-muted-foreground">
+                  {t(lang, "tracker.funds.linkedTo")}: {linkedAccount.name} — <MoneyDisplay amount={linkedAccount.balance} colorize={false} className="text-xs inline font-medium" />
                 </span>
-              )}
-            </button>
-            {!recurringSectionCollapsed && (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "h-7 gap-1 text-xs font-medium transition-colors",
-                    newPatterns.length > 0
-                      ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-500 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-400 dark:hover:bg-amber-950/60"
-                      : "border-input text-muted-foreground hover:text-foreground"
-                  )}
-                  onClick={() => {
-                    setSuggestionsExpanded((v) => {
-                      if (!v) {
-                        setTimeout(() => {
-                          document
-                            .getElementById("detected-patterns-panel")
-                            ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                        }, 120);
-                      }
-                      return true;
-                    });
-                  }}
-                >
-                  <Sparkles className={cn("h-3 w-3", newPatterns.length > 0 ? "text-amber-500" : "text-muted-foreground")} />
-                  Detected
-                  {newPatterns.length > 0 && (
-                    <Badge className="h-4 min-w-4 rounded-full px-1 text-[10px] font-semibold leading-none bg-amber-400 border-amber-400 text-white dark:bg-amber-500 dark:border-amber-500">
-                      {newPatterns.length}
-                    </Badge>
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 text-xs"
-                  onClick={() => {
-                    resetRecurringForm();
-                    setAddingRecurring(true);
-                    setEditingRecurringId(null);
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add
-                </Button>
-              </div>
+              ) : null;
+            })()}
+          </div>
+
+          {/* Fund cards */}
+          <div className="p-3 space-y-2">
+            {fundsData.length === 0 ? (
+              <p className="text-sm text-muted-foreground/50 text-center py-4">
+                No funds yet. Create one to start envelope budgeting.
+              </p>
+            ) : (
+              <>
+                {fundsData.map((fund) => (
+                  <FundCard
+                    key={fund.id}
+                    fund={fund}
+                    lang={lang}
+                    onEdit={(id) => {
+                      setEditingFundId(id);
+                      setShowFundDialog(true);
+                    }}
+                  />
+                ))}
+
+                {/* Summary footer */}
+                {fundsData.length > 0 && (
+                  <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5 mt-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{t(lang, "tracker.funds.fundTotals")}:</span>
+                      <MoneyDisplay
+                        amount={fundsData.reduce((sum, f) => sum + f.balance, 0)}
+                        colorize={false}
+                        className="text-xs font-semibold"
+                      />
+                    </div>
+                    {(() => {
+                      const linkedAccount = fundsData.find(f => f.linkedAccount)?.linkedAccount;
+                      if (!linkedAccount) return null;
+                      const fundTotal = fundsData.reduce((sum, f) => sum + f.balance, 0);
+                      const diff = Math.abs(linkedAccount.balance - fundTotal);
+                      const inSync = diff < 100; // < €1
+                      return (
+                        <>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">{t(lang, "tracker.funds.accountBalance")}:</span>
+                            <MoneyDisplay amount={linkedAccount.balance} colorize={false} className="text-xs font-semibold" />
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">{t(lang, "tracker.funds.difference")}:</span>
+                            <span className={cn("text-xs font-medium", inSync ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>
+                              <MoneyDisplay amount={diff} colorize={false} className="text-xs inline" />
+                              {" "}{inSync ? `✅ ${t(lang, "tracker.funds.inSync")}` : `⚠️ ${t(lang, "tracker.funds.difference")}`}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                    {/* This month totals */}
+                    {fundsData.some(f => f.thisMonthContribution > 0 || f.thisMonthWithdrawal > 0) && (
+                      <div className="text-xs text-muted-foreground pt-1 border-t">
+                        {t(lang, "tracker.funds.thisMonth")}:{" "}
+                        <span className="text-green-600 dark:text-green-400">
+                          +<MoneyDisplay amount={fundsData.reduce((s, f) => s + f.thisMonthContribution, 0)} colorize={false} className="text-xs inline" /> {t(lang, "tracker.funds.contributed")}
+                        </span>
+                        {fundsData.some(f => f.thisMonthWithdrawal > 0) && (
+                          <>
+                            {"  "}
+                            <span className="text-red-600 dark:text-red-400">
+                              -<MoneyDisplay amount={fundsData.reduce((s, f) => s + f.thisMonthWithdrawal, 0)} colorize={false} className="text-xs inline" /> {t(lang, "tracker.funds.spent")}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
-          {!recurringSectionCollapsed && (
-            <>
-              <table className="w-full text-sm min-w-[600px]">
-                <thead>
-                  <tr className="border-t border-b bg-muted/50">
-                    <th className="text-center py-2.5 px-2 font-medium text-muted-foreground text-xs uppercase tracking-wider w-10">
-
-                    </th>
-                    <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="text-center py-2.5 px-2 font-medium text-muted-foreground text-xs uppercase tracking-wider w-16">
-                      Due
-                    </th>
-                    <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-28">
-                      Expected
-                    </th>
-                    <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-28">
-                      Actual
-                    </th>
-                    <th className="text-right py-2.5 px-2 font-medium text-muted-foreground text-xs uppercase tracking-wider w-16">
-
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recurringGroups.map((group) => {
-                    const groupKey = group.categoryId ?? "__uncategorized__";
-                    const isCollapsed = collapsedRecurringGroups.has(groupKey);
-                    const showGroupHeader = recurringGroups.length > 1;
-
-                    return (
-                      <React.Fragment key={groupKey}>
-                        {/* Category group header */}
-                        {showGroupHeader && (
-                          <tr className="bg-muted/30 border-b border-border/50">
-                            <td colSpan={6} className="py-1.5 px-3">
-                              <button
-                                onClick={() => toggleRecurringGroup(groupKey)}
-                                className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-full"
-                              >
-                                <ChevronRight
-                                  className={cn(
-                                    "h-3 w-3 transition-transform",
-                                    !isCollapsed && "rotate-90"
-                                  )}
-                                />
-                                {group.categoryIcon && (
-                                  <span>{group.categoryIcon}</span>
-                                )}
-                                <span>{group.categoryName}</span>
-                                <span className="font-normal normal-case tracking-normal">
-                                  ({group.activeRules.length} active
-                                  {group.inactiveRules.length > 0 &&
-                                    `, ${group.inactiveRules.length} inactive`}
-                                  )
-                                </span>
-                              </button>
-                            </td>
-                          </tr>
-                        )}
-
-                        {/* Active rules */}
-                        {!isCollapsed &&
-                          group.activeRules.map((rule) => {
-                            const isIncome = rule.type === "INCOME";
-                            const statusIcon =
-                              rule.status === "PAID" ? (
-                                <CircleCheck className="h-4 w-4 text-green-500" />
-                              ) : rule.status === "PENDING" ? (
-                                <CircleDashed className="h-4 w-4 text-yellow-500" />
-                              ) : (
-                                <CircleAlert className="h-4 w-4 text-red-500" />
-                              );
-
-                            const borderClass =
-                              rule.status === "PAID"
-                                ? "border-l-2 border-l-green-500"
-                                : rule.status === "PENDING"
-                                  ? "border-l-2 border-l-yellow-500"
-                                  : "border-l-2 border-l-red-500";
-
-                            const dueDay = new Date(rule.expectedDueDate).getDate();
-                            const dueSuffix =
-                              dueDay === 1
-                                ? "st"
-                                : dueDay === 2
-                                  ? "nd"
-                                  : dueDay === 3
-                                    ? "rd"
-                                    : "th";
-
-                            if (editingRecurringId === rule.id) {
-                              return (
-                                <tr
-                                  key={rule.id}
-                                  className="border-b border-border/50 bg-muted/10"
-                                >
-                                  <td colSpan={6} className="p-3">
-                                    <RecurringForm
-                                      form={recurringForm}
-                                      setForm={setRecurringForm}
-                                      accounts={accountsQuery.data ?? []}
-                                      categories={treeQuery.data ?? []}
-                                      isPending={updateRecurringMutation.isPending}
-                                      onSubmit={() => {
-                                        const amt = Math.round(
-                                          parseFloat(recurringForm.amount) * 100
-                                        );
-                                        if (
-                                          !recurringForm.name ||
-                                          isNaN(amt) ||
-                                          amt <= 0 ||
-                                          !recurringForm.accountId
-                                        )
-                                          return;
-                                        updateRecurringMutation.mutate({
-                                          id: rule.id,
-                                          name: recurringForm.name,
-                                          description:
-                                            recurringForm.description || undefined,
-                                          amount: amt,
-                                          type: recurringForm.type,
-                                          frequency: recurringForm.frequency,
-                                          startDate: new Date(
-                                            recurringForm.startDate
-                                          ),
-                                          totalInstallments:
-                                            recurringForm.totalInstallments
-                                              ? parseInt(
-                                                  recurringForm.totalInstallments
-                                                )
-                                              : null,
-                                          categoryId:
-                                            recurringForm.categoryId || null,
-                                          accountId: recurringForm.accountId,
-                                        });
-                                      }}
-                                      onCancel={() => {
-                                        setEditingRecurringId(null);
-                                        resetRecurringForm();
-                                      }}
-                                      submitLabel="Save"
-                                    />
-                                  </td>
-                                </tr>
-                              );
-                            }
-
-                            return (
-                              <tr
-                                key={rule.id}
-                                className={cn(
-                                  "border-b border-border/50 hover:bg-muted/20 group/row",
-                                  borderClass,
-                                  isIncome && "bg-blue-50/30 dark:bg-blue-950/10"
-                                )}
-                              >
-                                <td className="text-center px-2 py-2">
-                                  {statusIcon}
-                                </td>
-                                <td className="py-2 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <Link
-                                      href={`/transactions?search=${encodeURIComponent(
-                                        rule.description
-                                          ? extractDisplayName(rule.description)
-                                          : rule.name
-                                      )}&accountId=${rule.accountId}`}
-                                      className="font-medium text-sm hover:underline hover:text-primary transition-colors"
-                                      title="View all matching transactions"
-                                    >
-                                      {rule.name}
-                                    </Link>
-                                    {rule.installmentNumber !== null &&
-                                      rule.totalInstallments !== null && (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] px-1.5 py-0 font-mono"
-                                        >
-                                          {rule.installmentNumber}/
-                                          {rule.totalInstallments}
-                                        </Badge>
-                                      )}
-                                    {isIncome && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] px-1.5 py-0 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-700"
-                                      >
-                                        Income
-                                      </Badge>
-                                    )}
-                                    {/* Show category badge only when not grouped (single group) */}
-                                    {!showGroupHeader && rule.category && (
-                                      <span className="text-xs text-muted-foreground">
-                                        {rule.category.icon} {rule.category.name}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {rule.frequency !== "MONTHLY" && (
-                                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                                      {rule.frequency.toLowerCase()}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="text-center px-2 py-2 text-xs text-muted-foreground">
-                                  {dueDay}
-                                  {dueSuffix}
-                                </td>
-                                <td className="text-right px-3 py-2">
-                                  <MoneyDisplay
-                                    amount={rule.amount}
-                                    colorize={false}
-                                    className="text-sm font-mono tabular-nums"
-                                  />
-                                </td>
-                                <td className="text-right px-3 py-2">
-                                  {rule.matchedTransaction ? (
-                                    <MoneyDisplay
-                                      amount={Math.abs(
-                                        rule.matchedTransaction.amount
-                                      )}
-                                      colorize={false}
-                                      className="text-sm font-mono tabular-nums text-green-600 dark:text-green-400"
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground/50">
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="text-right px-2 py-2">
-                                  <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                                    <button
-                                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                      title="Edit"
-                                      onClick={() => {
-                                        setEditingRecurringId(rule.id);
-                                        setAddingRecurring(false);
-                                        setRecurringForm({
-                                          name: rule.name,
-                                          description: rule.description ?? "",
-                                          amount: (rule.amount / 100).toFixed(2),
-                                          type: rule.type as "INCOME" | "EXPENSE",
-                                          frequency:
-                                            rule.frequency as typeof recurringForm.frequency,
-                                          startDate: new Date(rule.startDate)
-                                            .toISOString()
-                                            .slice(0, 10),
-                                          totalInstallments:
-                                            rule.totalInstallments?.toString() ??
-                                            "",
-                                          categoryId: rule.categoryId ?? "",
-                                          accountId: rule.accountId,
-                                        });
-                                      }}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </button>
-                                    {rule.categoryId && (
-                                      <button
-                                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-blue-500"
-                                        title="Re-apply category to matching transactions"
-                                        onClick={() =>
-                                          reapplyCategoryMutation.mutate({
-                                            id: rule.id,
-                                          })
-                                        }
-                                      >
-                                        <RotateCcw className="h-3.5 w-3.5" />
-                                      </button>
-                                    )}
-                                    <button
-                                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-orange-500"
-                                      title="Mark as inactive"
-                                      onClick={() =>
-                                        updateRecurringMutation.mutate({
-                                          id: rule.id,
-                                          isActive: false,
-                                        })
-                                      }
-                                    >
-                                      <EyeOff className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                      className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/30 text-muted-foreground hover:text-red-600"
-                                      title="Delete"
-                                      onClick={() =>
-                                        deleteRecurringMutation.mutate({
-                                          id: rule.id,
-                                        })
-                                      }
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-
-                        {/* Inactive rules — collapsible sub-section */}
-                        {!isCollapsed && group.inactiveRules.length > 0 && (
-                          <>
-                            <tr className="border-b border-border/30">
-                              <td colSpan={6} className="py-1 px-3">
-                                <button
-                                  onClick={() => toggleInactiveGroup(groupKey)}
-                                  className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                                >
-                                  <ChevronRight
-                                    className={cn(
-                                      "h-2.5 w-2.5 transition-transform",
-                                      expandedInactiveGroups.has(groupKey) && "rotate-90"
-                                    )}
-                                  />
-                                  <EyeOff className="h-3 w-3" />
-                                  <span>
-                                    {group.inactiveRules.length} inactive
-                                  </span>
-                                </button>
-                              </td>
-                            </tr>
-                            {expandedInactiveGroups.has(groupKey) &&
-                              group.inactiveRules.map((rule) => (
-                                <tr
-                                  key={rule.id}
-                                  className="border-b border-border/50 opacity-40 hover:opacity-70 group/row transition-opacity"
-                                >
-                                  <td className="text-center px-2 py-1.5">
-                                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground/50" />
-                                  </td>
-                                  <td className="py-1.5 px-3">
-                                    <div className="flex items-center gap-2">
-                                      <Link
-                                        href={`/transactions?search=${encodeURIComponent(
-                                          rule.description
-                                            ? extractDisplayName(rule.description)
-                                            : rule.name
-                                        )}&accountId=${rule.accountId}`}
-                                        className="text-xs text-muted-foreground line-through hover:underline hover:text-primary transition-colors"
-                                        title="View all matching transactions"
-                                      >
-                                        {rule.name}
-                                      </Link>
-                                      {rule.lastSeenDate && (
-                                        <span className="text-[10px] text-muted-foreground/60">
-                                          last: {formatShortDate(rule.lastSeenDate)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="text-center px-2 py-1.5 text-xs text-muted-foreground/40">
-                                    —
-                                  </td>
-                                  <td className="text-right px-3 py-1.5">
-                                    <MoneyDisplay
-                                      amount={rule.amount}
-                                      colorize={false}
-                                      className="text-xs font-mono tabular-nums text-muted-foreground/40 line-through"
-                                    />
-                                  </td>
-                                  <td className="text-right px-3 py-1.5">
-                                    <span className="text-xs text-muted-foreground/30">
-                                      —
-                                    </span>
-                                  </td>
-                                  <td className="text-right px-2 py-1.5">
-                                    <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                                      <button
-                                        className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-950/30 text-muted-foreground hover:text-green-600"
-                                        title="Reactivate"
-                                        onClick={() =>
-                                          updateRecurringMutation.mutate({
-                                            id: rule.id,
-                                            isActive: true,
-                                          })
-                                        }
-                                      >
-                                        <RotateCcw className="h-3 w-3" />
-                                      </button>
-                                      <button
-                                        className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/30 text-muted-foreground hover:text-red-600"
-                                        title="Delete"
-                                        onClick={() =>
-                                          deleteRecurringMutation.mutate({
-                                            id: rule.id,
-                                          })
-                                        }
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                          </>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-
-                  {/* Add form row */}
-                  {addingRecurring && (
-                    <tr className="border-b border-border/50 bg-muted/10">
-                      <td colSpan={6} className="p-3">
-                        <RecurringForm
-                          form={recurringForm}
-                          setForm={setRecurringForm}
-                          accounts={accountsQuery.data ?? []}
-                          categories={treeQuery.data ?? []}
-                          isPending={createRecurringMutation.isPending}
-                          onSubmit={() => {
-                            const amt = Math.round(parseFloat(recurringForm.amount) * 100);
-                            if (!recurringForm.name || isNaN(amt) || amt <= 0 || !recurringForm.accountId) return;
-                            createRecurringMutation.mutate({
-                              name: recurringForm.name,
-                              description: recurringForm.description || undefined,
-                              amount: amt,
-                              type: recurringForm.type,
-                              frequency: recurringForm.frequency,
-                              startDate: new Date(recurringForm.startDate),
-                              totalInstallments: recurringForm.totalInstallments ? parseInt(recurringForm.totalInstallments) : undefined,
-                              categoryId: recurringForm.categoryId || undefined,
-                              accountId: recurringForm.accountId,
-                              visibility,
-                            });
-                          }}
-                          onCancel={() => {
-                            setAddingRecurring(false);
-                            resetRecurringForm();
-                          }}
-                          submitLabel="Add"
-                        />
-                      </td>
-                    </tr>
-                  )}
-
-                  {/* Loading state */}
-                  {recurringQuery.isLoading && (
-                    <tr>
-                      <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                        Loading recurring rules...
-                      </td>
-                    </tr>
-                  )}
-
-                  {/* Error state */}
-                  {recurringQuery.isError && (
-                    <tr>
-                      <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                        <p>Failed to load recurring rules.</p>
-                        <button
-                          className="text-primary hover:underline mt-1"
-                          onClick={() => recurringQuery.refetch()}
-                        >
-                          Retry
-                        </button>
-                      </td>
-                    </tr>
-                  )}
-
-                  {/* Empty state */}
-                  {!recurringQuery.isLoading && !recurringQuery.isError && recurringQuery.data?.rules.length === 0 && !addingRecurring && (
-                    <tr>
-                      <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                        {detectQuery.isLoading ? (
-                          <p>Analyzing transactions for recurring patterns...</p>
-                        ) : newPatterns.length > 0 ? (
-                          <p>
-                            No rules yet — we detected{" "}
-                            <button
-                              className="text-primary hover:underline font-medium"
-                              onClick={() => setSuggestionsExpanded(true)}
-                            >
-                              {newPatterns.length} recurring patterns
-                            </button>{" "}
-                            from your transactions. Review them below.
-                          </p>
-                        ) : (
-                          <>
-                            <p>No recurring payments tracked for this month.</p>
-                            <button
-                              className="text-primary hover:underline mt-1"
-                              onClick={() => {
-                                resetRecurringForm();
-                                setAddingRecurring(true);
-                              }}
-                            >
-                              Add manually
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-
-                {/* Summary footer */}
-                {recurringQuery.data && recurringQuery.data.rules.length > 0 && (
-                  <tfoot>
-                    <tr className="border-t bg-muted/30 font-medium text-xs">
-                      <td colSpan={3} className="py-2 px-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-muted-foreground">
-                            Expenses: {recurringQuery.data.rules.filter((r) => r.type === "EXPENSE" && r.status !== "PAID").length} pending
-                          </span>
-                          <span className="text-muted-foreground">
-                            Income: {recurringQuery.data.rules.filter((r) => r.type === "INCOME" && r.status !== "PAID").length} pending
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-right py-2 px-3">
-                        <div className="flex flex-col gap-0.5">
-                          <MoneyDisplay
-                            amount={recurringQuery.data.summary.totalExpected}
-                            colorize={false}
-                            className="text-xs font-mono tabular-nums"
-                          />
-                          <MoneyDisplay
-                            amount={recurringQuery.data.summary.incomeExpected}
-                            colorize={false}
-                            className="text-xs font-mono tabular-nums text-blue-600 dark:text-blue-400"
-                          />
-                        </div>
-                      </td>
-                      <td className="text-right py-2 px-3">
-                        <div className="flex flex-col gap-0.5">
-                          <MoneyDisplay
-                            amount={recurringQuery.data.summary.totalPaid}
-                            colorize={false}
-                            className="text-xs font-mono tabular-nums text-green-600 dark:text-green-400"
-                          />
-                          <MoneyDisplay
-                            amount={recurringQuery.data.summary.incomePaid}
-                            colorize={false}
-                            className="text-xs font-mono tabular-nums text-blue-600 dark:text-blue-400"
-                          />
-                        </div>
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-
-              {/* ── Detected suggestions ── */}
-              {detectQuery.data && (newPatterns.length > 0 || dismissedPatterns.length > 0) && (
-                <div id="detected-patterns-panel" className="border-t">
-                  {/* Collapsible header */}
-                  <button
-                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 transition-colors text-left"
-                    onClick={() => setSuggestionsExpanded((v) => !v)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <ChevronRight
-                        className={cn(
-                          "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                          suggestionsExpanded && "rotate-90"
-                        )}
-                      />
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Detected from transactions
-                      </span>
-                      {newPatterns.length > 0 && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-primary border-primary/30">
-                          {newPatterns.length} new
-                        </Badge>
-                      )}
-                      {dismissedPatterns.length > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          • {dismissedPatterns.length} dismissed
-                        </span>
-                      )}
-                    </div>
-                  </button>
-
-                  {suggestionsExpanded && (
-                    <div className="px-3 pb-3 space-y-1">
-                      {/* New patterns */}
-                      {newPatterns.map((pattern) => (
-                        <div
-                          key={pattern.key}
-                          className="flex items-center gap-3 py-1.5 px-2 rounded-md hover:bg-muted/40"
-                        >
-                          <Repeat className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium truncate">{pattern.name}</span>
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex-shrink-0">
-                                {pattern.frequency.toLowerCase()}
-                              </Badge>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px] px-1.5 py-0 flex-shrink-0",
-                                  pattern.type === "INCOME"
-                                    ? "text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-700"
-                                    : "text-muted-foreground"
-                                )}
-                              >
-                                {pattern.type === "INCOME" ? "Income" : "Expense"}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground flex-shrink-0">
-                                {pattern.occurrences}× • {pattern.accountName}
-                              </span>
-                            </div>
-                          </div>
-                          <MoneyDisplay
-                            amount={pattern.amount}
-                            colorize={false}
-                            className="text-sm font-mono tabular-nums flex-shrink-0"
-                          />
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <button
-                              className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-950/30 text-muted-foreground hover:text-green-600"
-                              title="Accept as recurring rule"
-                              onClick={() =>
-                                createRecurringMutation.mutate({
-                                  name: pattern.name,
-                                  description: pattern.description.slice(0, 200) || undefined,
-                                  amount: pattern.amount,
-                                  type: pattern.type,
-                                  frequency: pattern.frequency,
-                                  startDate: pattern.firstDate,
-                                  categoryId: pattern.categoryId ?? undefined,
-                                  accountId: pattern.accountId,
-                                  visibility,
-                                })
-                              }
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                              title="Dismiss"
-                              onClick={() =>
-                                dismissPatternMutation.mutate({
-                                  patternKey: pattern.key,
-                                  visibility,
-                                })
-                              }
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Dismissed sub-section */}
-                      {dismissedPatterns.length > 0 && (
-                        <div className="mt-2">
-                          <button
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground py-1"
-                            onClick={() => setDismissedSubExpanded((v) => !v)}
-                          >
-                            <ChevronRight
-                              className={cn(
-                                "h-3 w-3 transition-transform",
-                                dismissedSubExpanded && "rotate-90"
-                              )}
-                            />
-                            Dismissed ({dismissedPatterns.length})
-                          </button>
-                          {dismissedSubExpanded && (
-                            <div className="space-y-1 mt-1">
-                              {dismissedPatterns.map((pattern) => (
-                                <div
-                                  key={pattern.key}
-                                  className="flex items-center gap-3 py-1.5 px-2 rounded-md hover:bg-muted/30 opacity-60"
-                                >
-                                  <Repeat className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm truncate line-through text-muted-foreground">{pattern.name}</span>
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex-shrink-0">
-                                        {pattern.frequency.toLowerCase()}
-                                      </Badge>
-                                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                                        {pattern.occurrences}× • {pattern.accountName}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <MoneyDisplay
-                                    amount={pattern.amount}
-                                    colorize={false}
-                                    className="text-sm font-mono tabular-nums flex-shrink-0 text-muted-foreground"
-                                  />
-                                  <button
-                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground flex-shrink-0"
-                                    title="Restore"
-                                    onClick={() =>
-                                      undismissPatternMutation.mutate({
-                                        patternKey: pattern.key,
-                                        visibility,
-                                      })
-                                    }
-                                  >
-                                    <RotateCcw className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
+          {/* Action buttons */}
+          <div className="flex items-center justify-center gap-3 px-4 py-3 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => {
+                setEditingFundId(null);
+                setShowFundDialog(true);
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t(lang, "tracker.funds.addFund")}
+            </Button>
+            {fundsData.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => {
+                  const now = new Date();
+                  contributeAllMutation.mutate({
+                    year: now.getFullYear(),
+                    month: now.getMonth() + 1,
+                    visibility,
+                  });
+                }}
+                disabled={contributeAllMutation.isPending}
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+                {contributeAllMutation.isPending ? t(lang, "common.loading") : t(lang, "tracker.funds.contributeAll")}
+              </Button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Fund Edit/Create Dialog */}
+      <FundEditDialog
+        fundId={editingFundId}
+        open={showFundDialog}
+        onClose={() => {
+          setShowFundDialog(false);
+          setEditingFundId(null);
+        }}
+        visibility={visibility}
+        lang={lang}
+      />
 
     </div>
   );
@@ -2506,170 +1890,5 @@ function DragHandle({
     >
       <GripVertical className="h-3.5 w-3.5" />
     </span>
-  );
-}
-
-// ── Recurring form component ──────────────────────────────────────
-
-interface RecurringFormData {
-  name: string;
-  description: string;
-  amount: string;
-  type: "INCOME" | "EXPENSE";
-  frequency: "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
-  startDate: string;
-  totalInstallments: string;
-  categoryId: string;
-  accountId: string;
-}
-
-function RecurringForm({
-  form,
-  setForm,
-  accounts,
-  categories,
-  isPending,
-  onSubmit,
-  onCancel,
-  submitLabel,
-}: {
-  form: RecurringFormData;
-  setForm: React.Dispatch<React.SetStateAction<RecurringFormData>>;
-  accounts: { id: string; name: string; type: string }[];
-  categories: { id: string; name: string; icon: string | null; type: string; children: { id: string; name: string; icon: string | null }[] }[];
-  isPending: boolean;
-  onSubmit: () => void;
-  onCancel: () => void;
-  submitLabel: string;
-}) {
-  const flatCategories = categories.flatMap((group) =>
-    group.children.map((c) => ({
-      id: c.id,
-      name: c.name,
-      icon: c.icon,
-      groupName: group.name,
-    }))
-  );
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit();
-      }}
-      className="space-y-3"
-    >
-      {/* Row 1: Name, Amount, Type */}
-      <div className="flex gap-2 flex-wrap">
-        <input
-          autoFocus
-          placeholder="Name (e.g. Netflix, Rent)"
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          className="h-8 px-2 text-sm bg-background border rounded flex-1 min-w-[140px]"
-        />
-        <input
-          placeholder="Amount"
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={form.amount}
-          onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-          className="h-8 px-2 text-sm bg-background border rounded w-24 font-mono"
-        />
-        <select
-          value={form.type}
-          onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as RecurringFormData["type"] }))}
-          className="h-8 px-2 text-sm bg-background border rounded w-28"
-        >
-          <option value="EXPENSE">Expense</option>
-          <option value="INCOME">Income</option>
-        </select>
-        <select
-          value={form.frequency}
-          onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value as RecurringFormData["frequency"] }))}
-          className="h-8 px-2 text-sm bg-background border rounded w-28"
-        >
-          <option value="DAILY">Daily</option>
-          <option value="WEEKLY">Weekly</option>
-          <option value="BIWEEKLY">Biweekly</option>
-          <option value="MONTHLY">Monthly</option>
-          <option value="QUARTERLY">Quarterly</option>
-          <option value="YEARLY">Yearly</option>
-        </select>
-      </div>
-
-      {/* Row 2: Start Date, Installments, Account, Category */}
-      <div className="flex gap-2 flex-wrap">
-        <div className="flex items-center gap-1">
-          <label className="text-xs text-muted-foreground whitespace-nowrap">Start:</label>
-          <input
-            type="date"
-            value={form.startDate}
-            onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
-            className="h-8 px-2 text-sm bg-background border rounded w-36"
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          <label className="text-xs text-muted-foreground whitespace-nowrap">Installments:</label>
-          <input
-            type="number"
-            min="2"
-            placeholder="∞"
-            value={form.totalInstallments}
-            onChange={(e) => setForm((f) => ({ ...f, totalInstallments: e.target.value }))}
-            className="h-8 px-2 text-sm bg-background border rounded w-16 font-mono"
-          />
-        </div>
-        <select
-          value={form.accountId}
-          onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}
-          className="h-8 px-2 text-sm bg-background border rounded flex-1 min-w-[120px]"
-        >
-          <option value="">Select account…</option>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={form.categoryId}
-          onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-          className="h-8 px-2 text-sm bg-background border rounded flex-1 min-w-[120px]"
-        >
-          <option value="">No category</option>
-          {flatCategories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.icon} {c.name} ({c.groupName})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Row 3: Description (optional) + Actions */}
-      <div className="flex gap-2 items-center">
-        <input
-          placeholder="Description for matching (optional)"
-          value={form.description}
-          onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-          className="h-8 px-2 text-sm bg-background border rounded flex-1"
-        />
-        <button
-          type="submit"
-          disabled={isPending || !form.name || !form.amount || !form.accountId}
-          className="h-8 px-3 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-        >
-          {isPending ? "…" : submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-8 px-2 text-sm text-muted-foreground hover:text-foreground rounded hover:bg-muted"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
   );
 }
