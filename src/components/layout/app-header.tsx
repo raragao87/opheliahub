@@ -19,6 +19,7 @@ import { useOwnership } from "@/lib/ownership-context";
 import { navSections } from "@/lib/nav-config";
 import { SidebarAccounts } from "./sidebar-accounts";
 import { FeedbackDialog } from "@/components/shared/feedback-dialog";
+import { QuickCalculator } from "@/components/shared/quick-calculator";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { useTRPC } from "@/trpc/client";
 import { useQuery } from "@tanstack/react-query";
@@ -78,6 +79,9 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
         </Link>
 
         <div className="flex-1" />
+
+        {/* Quick calculator */}
+        <QuickCalculator />
 
         {/* User menu dropdown */}
         <DropdownMenu>
