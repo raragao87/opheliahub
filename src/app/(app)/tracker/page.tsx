@@ -1111,7 +1111,18 @@ export default function TrackerPage() {
             {/* Row 2: Circular gauge + Left to assign */}
             <div className="flex items-center gap-2.5 mt-auto">
               <div className="text-right">
-                <span className="text-[8px] text-muted-foreground uppercase tracking-wider block">{t(lang, "tracker.leftToAssign")}</span>
+                <span className={cn(
+                  "text-[8px] uppercase tracking-wider block",
+                  readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
+                  readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
+                  "text-muted-foreground"
+                )}>
+                  {readyToAssign === 0 && incomeAssigned > 0
+                    ? t(lang, "tracker.balanced")
+                    : readyToAssign < 0
+                      ? t(lang, "tracker.overAllocated")
+                      : t(lang, "tracker.unassigned")}
+                </span>
                 <span className={cn(
                   "text-lg font-medium leading-tight",
                   readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
