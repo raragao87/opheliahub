@@ -250,6 +250,7 @@ export default function TrackerPage() {
   const [headerHeight, setHeaderHeight] = useState(80);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const [hoveredBar, setHoveredBar] = useState<"budget" | "actual" | null>(null);
 
   // Measure sticky bar height for table header offsets
   useEffect(() => {
@@ -806,31 +807,34 @@ export default function TrackerPage() {
         className="sticky top-16 z-30 rounded-lg border bg-card p-2.5 px-3.5 shadow-sm"
       >
         <div className="flex gap-3.5 items-stretch">
-          {/* ── LEFT: Bars + Legend ── */}
-          <div className="flex-1 min-w-0 flex flex-col gap-1">
+          {/* ── LEFT: Bars ── */}
+          <div className="flex-1 min-w-0 flex flex-col gap-2.5 justify-center">
 
             {/* Budget bar */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Budget</span>
-              <div className="flex-1 relative h-7" style={{ marginRight: '50px' }}>
+              <div
+                className="flex-1 relative h-5"
+                style={{ marginRight: '50px' }}
+                onMouseEnter={() => setHoveredBar("budget")}
+                onMouseLeave={() => setHoveredBar(null)}
+              >
                 {/* Green border = income budget (full width) */}
                 {totalIncome > 0 && (
                   <div className="absolute -inset-px rounded-md border-2 border-green-600 dark:border-green-500" />
                 )}
                 {/* Filled segments */}
                 <div className="absolute inset-0 rounded-[5px] overflow-hidden flex">
-                  {/* Expenses segment */}
                   {expenseAssigned > 0 && (
                     <div
                       style={{ flex: `${expenseAssigned} 0 0` }}
-                      className="bg-red-500/75 flex items-center px-2 min-w-0"
+                      className="bg-red-500/75 flex items-center px-1.5 min-w-0"
                     >
                       <span className="text-[10px] font-medium text-white truncate">
                         <MoneyDisplay amount={expenseAssigned} colorize={false} className="text-[10px] inline" />
                       </span>
                     </div>
                   )}
-                  {/* Funds segment */}
                   {totalFundContributions > 0 && (
                     <div
                       style={{ flex: `${totalFundContributions} 0 0` }}
@@ -843,17 +847,60 @@ export default function TrackerPage() {
                       )}
                     </div>
                   )}
-                  {/* Unassigned gap */}
                   {readyToAssign > 0 && (
                     <div style={{ flex: `${readyToAssign} 0 0` }} />
                   )}
                 </div>
-                {/* Income total label — right of the bar */}
+                {/* Income total label */}
                 {totalIncome > 0 && (
                   <div className="absolute -right-[50px] top-1/2 -translate-y-1/2">
                     <span className="text-[9px] text-green-600 dark:text-green-400 font-medium">
                       <MoneyDisplay amount={totalIncome} colorize={false} className="text-[9px] inline" />
                     </span>
+                  </div>
+                )}
+                {/* Hover tooltip */}
+                {hoveredBar === "budget" && (
+                  <div className="absolute left-0 top-full mt-2 z-50 rounded-lg border bg-card shadow-lg p-2.5 min-w-[220px]">
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between gap-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-sm border-2 border-green-600 inline-block" />
+                          {t(lang, "tracker.income")}
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          <MoneyDisplay amount={totalIncome} colorize={false} className="text-xs inline" />
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-sm bg-red-500/75 inline-block" />
+                          {t(lang, "tracker.expenses")}
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          <MoneyDisplay amount={expenseAssigned} colorize={false} className="text-xs inline" />
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-sm bg-amber-500/75 inline-block" />
+                          {t(lang, "tracker.funds")}
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          <MoneyDisplay amount={totalFundContributions} colorize={false} className="text-xs inline" />
+                        </span>
+                      </div>
+                      {readyToAssign !== 0 && (
+                        <div className="flex justify-between gap-4 border-t pt-1.5">
+                          <span className="text-muted-foreground">{t(lang, "tracker.leftToAssign")}</span>
+                          <span className={cn("font-medium tabular-nums",
+                            readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"
+                          )}>
+                            <MoneyDisplay amount={readyToAssign} colorize={false} className="text-xs inline" />
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -862,14 +909,25 @@ export default function TrackerPage() {
             {/* Actual bar */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
-              <div className="flex-1 relative h-7" style={{ marginRight: '50px' }}>
+              <div
+                className="flex-1 relative h-5"
+                style={{ marginRight: '50px' }}
+                onMouseEnter={() => setHoveredBar("actual")}
+                onMouseLeave={() => setHoveredBar(null)}
+              >
                 {(() => {
                   const incomeReceivedPct = totalIncome > 0
                     ? Math.min(100, (totalIncomeActual / totalIncome) * 100)
                     : 0;
+                  const spentPct = totalIncome > 0
+                    ? (totalSpentExpenses / totalIncome) * 100
+                    : 0;
+                  const fundSpentPct = totalIncome > 0
+                    ? (totalFundActual / totalIncome) * 100
+                    : 0;
                   return (
                     <>
-                      {/* Green border = income received (proportional width) */}
+                      {/* Green border = income received */}
                       {totalIncomeActual > 0 && (
                         <div
                           className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
@@ -879,32 +937,25 @@ export default function TrackerPage() {
                           }}
                         />
                       )}
-                      {/* Spending fills inside the green frame */}
-                      {totalIncomeActual > 0 && (
-                        <div
-                          className="absolute inset-y-0 left-0 rounded-[5px] overflow-hidden flex"
-                          style={{ width: `${incomeReceivedPct}%` }}
-                        >
-                          {/* Expense spending */}
-                          {totalSpentExpenses > 0 && (
-                            <div
-                              style={{ flex: `${totalSpentExpenses} 0 0` }}
-                              className="bg-red-500/45 flex items-center px-2 min-w-0"
-                            >
-                              <span className="text-[10px] font-medium text-foreground/70 truncate">
-                                <MoneyDisplay amount={-totalSpentExpenses} colorize={false} className="text-[10px] inline" />
-                              </span>
-                            </div>
-                          )}
-                          {/* Fund spending */}
-                          {totalFundActual > 0 && (
-                            <div
-                              style={{ flex: `${totalFundActual} 0 0` }}
-                              className="bg-amber-500/40"
-                            />
-                          )}
-                        </div>
-                      )}
+                      {/* Spending fills — full bar width, same scale as budget bar */}
+                      <div className="absolute inset-0 rounded-[5px] overflow-hidden flex">
+                        {totalSpentExpenses > 0 && (
+                          <div
+                            style={{ width: `${spentPct}%` }}
+                            className="bg-red-500/45 flex items-center px-1.5 min-w-0 shrink-0"
+                          >
+                            <span className="text-[10px] font-medium text-foreground/70 truncate">
+                              <MoneyDisplay amount={-totalSpentExpenses} colorize={false} className="text-[10px] inline" />
+                            </span>
+                          </div>
+                        )}
+                        {totalFundActual > 0 && (
+                          <div
+                            style={{ width: `${fundSpentPct}%` }}
+                            className="bg-amber-500/40 shrink-0"
+                          />
+                        )}
+                      </div>
                       {/* Income received label at edge of green border */}
                       {totalIncomeActual > 0 && (
                         <div
@@ -919,30 +970,49 @@ export default function TrackerPage() {
                     </>
                   );
                 })()}
+                {/* Hover tooltip */}
+                {hoveredBar === "actual" && (
+                  <div className="absolute left-0 top-full mt-2 z-50 rounded-lg border bg-card shadow-lg p-2.5 min-w-[220px]">
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between gap-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-sm border-2 border-green-600 inline-block" />
+                          {t(lang, "tracker.income")} received
+                        </span>
+                        <span className="font-medium tabular-nums text-green-600 dark:text-green-400">
+                          <MoneyDisplay amount={totalIncomeActual} colorize={false} className="text-xs inline" />
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-sm bg-red-500/45 inline-block" />
+                          {t(lang, "tracker.expenses")} {t(lang, "tracker.spent").toLowerCase()}
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          <MoneyDisplay amount={-totalSpentExpenses} colorize={false} className="text-xs inline" />
+                        </span>
+                      </div>
+                      {totalFundActual > 0 && (
+                        <div className="flex justify-between gap-4">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm bg-amber-500/40 inline-block" />
+                            {t(lang, "tracker.funds")} {t(lang, "tracker.spent").toLowerCase()}
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            <MoneyDisplay amount={-totalFundActual} colorize={false} className="text-xs inline" />
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between gap-4 border-t pt-1.5 text-muted-foreground">
+                        <span>{spendingPct}% {t(lang, "tracker.spent")}</span>
+                        {isCurrentMonth && <span>{daysLeftInMonth} {t(lang, "tracker.daysLeft")}</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Legend */}
-            <div className="flex gap-3 text-[9px] text-muted-foreground items-center">
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-sm bg-red-500/75 inline-block" />
-                {t(lang, "tracker.expenses")}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-sm bg-amber-500/75 inline-block" />
-                {t(lang, "tracker.funds")}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-sm border-[1.5px] border-green-600 dark:border-green-500 inline-block" />
-                {t(lang, "tracker.income")}
-              </span>
-              {(totalSpentExpenses > 0 || totalFundActual > 0) && (
-                <span className="ml-auto">
-                  {spendingPct}% {t(lang, "tracker.spent")}
-                  {isCurrentMonth && <> · {daysLeftInMonth} {t(lang, "tracker.daysLeft")}</>}
-                </span>
-              )}
-            </div>
           </div>
 
           {/* ── RIGHT: Left to assign + Actions + Month nav ── */}
