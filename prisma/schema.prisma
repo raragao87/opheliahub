@@ -238,6 +238,7 @@ model Transaction {
   isInitialBalance    Boolean   @default(false) // true for the synthetic "Initial Balance" transaction created per account
   accountId           String
   categoryId          String?
+  fundId              String?
   userId              String // creator / owner
   importBatchId       String?
   externalId          String? // for duplicate detection on import
@@ -257,6 +258,7 @@ model Transaction {
 
   account         FinancialAccount @relation(fields: [accountId], references: [id])
   category        Category?        @relation("UserCategory", fields: [categoryId], references: [id])
+  fund            Fund?            @relation(fields: [fundId], references: [id])
   opheliaCategory Category?        @relation("OpheliaCategory", fields: [opheliaCategoryId], references: [id])
   user            User             @relation(fields: [userId], references: [id])
   importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id])
@@ -271,6 +273,7 @@ model Transaction {
   @@index([opheliaProcessedAt])
   @@index([visibility, userId])
   @@index([categoryId, date])
+  @@index([fundId, date])
   @@map("transactions")
 }
 
@@ -371,8 +374,9 @@ model Tracker {
 
   household      Household              @relation(fields: [householdId], references: [id])
   user           User                   @relation(fields: [userId], references: [id])
-  allocations    TrackerAllocation[]
-  tagAllocations TagTrackerAllocation[]
+  allocations     TrackerAllocation[]
+  tagAllocations  TagTrackerAllocation[]
+  fundAllocations FundTrackerAllocation[]
 
   @@unique([householdId, userId, month, year, visibility])
   @@map("budgets")
@@ -402,6 +406,19 @@ model TagTrackerAllocation {
 
   @@unique([trackerId, tagId])
   @@map("tag_budget_allocations")
+}
+
+model FundTrackerAllocation {
+  id        String @id @default(cuid())
+  trackerId String
+  fundId    String
+  amount    Int // cents allocated to this fund for this month
+
+  tracker Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  fund    Fund    @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@unique([trackerId, fundId])
+  @@map("fund_budget_allocations")
 }
 
 // ─── NET WORTH: ASSETS & DEBTS ──────────────────────────────────────
@@ -565,13 +582,6 @@ model Fund {
   // Link to a real account whose balance should match fund totals
   linkedAccountId String?
 
-  // Optional goal
-  targetAmount    Int?       // cents
-  targetDate      DateTime?
-
-  // Default monthly contribution amount
-  monthlyContribution Int    @default(0) // cents
-
   sortOrder       Int        @default(0)
   isArchived      Boolean    @default(false)
   createdAt       DateTime   @default(now())
@@ -581,9 +591,26 @@ model Fund {
   user          User              @relation(fields: [userId], references: [id])
   linkedAccount FinancialAccount? @relation(fields: [linkedAccountId], references: [id])
   entries       FundEntry[]
+  lineItems     FundLineItem[]
+  transactions  Transaction[]
+  allocations   FundTrackerAllocation[]
 
   @@unique([householdId, name, visibility])
   @@map("funds")
+}
+
+model FundLineItem {
+  id          String @id @default(cuid())
+  fundId      String
+  description String
+  period      Int    // times per year (1=yearly, 2=biannual, 4=quarterly, 12=monthly)
+  amount      Int    // cents — cost per single occurrence
+  sortOrder   Int    @default(0)
+
+  fund Fund @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@index([fundId])
+  @@map("fund_line_items")
 }
 
 model FundEntry {

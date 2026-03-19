@@ -19,6 +19,7 @@ export const transactionRouter = router({
         visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
         tagId: z.string().optional(),
         tagIds: z.array(z.string()).optional(),
+        fundId: z.string().optional(),
         uncategorized: z.boolean().optional(),
         noTags: z.boolean().optional(),
         // Parse as local (Amsterdam) start/end of day so that transactions
@@ -78,6 +79,8 @@ export const transactionRouter = router({
                 ? { type: input.type }
                 : {}),
             ...(input.visibility && { visibility: input.visibility }),
+            // Fund filter
+            ...(input.fundId && { fundId: input.fundId }),
             // Tag filter: noTags overrides tagIds; array takes precedence over single
             ...(input.noTags
               ? { tags: { none: {} } }
@@ -166,6 +169,7 @@ export const transactionRouter = router({
         include: {
           account: { select: { id: true, name: true, type: true, institution: true } },
           category: { select: { id: true, name: true, icon: true, color: true } },
+          fund: { select: { id: true, name: true, icon: true } },
           opheliaCategory: { select: { id: true, name: true } },
           tags: {
             include: {
@@ -223,6 +227,7 @@ export const transactionRouter = router({
         accountId: z.string(),
         toAccountId: z.string().optional(),
         categoryId: z.string().optional(),
+        fundId: z.string().optional(),
         visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
         notes: z.string().optional(),
         tagIds: z.array(z.string()).default([]),
@@ -348,6 +353,7 @@ export const transactionRouter = router({
         include: {
           account: { select: { id: true, name: true } },
           category: { select: { id: true, name: true, icon: true } },
+          fund: { select: { id: true, name: true, icon: true } },
           tags: { include: { tag: true } },
         },
       });
@@ -372,6 +378,7 @@ export const transactionRouter = router({
         date: z.coerce.date().optional(),
         accrualDate: z.coerce.date().nullable().optional(),
         categoryId: z.string().nullable().optional(),
+        fundId: z.string().nullable().optional(),
         visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
         notes: z.string().nullable().optional(),
         tagIds: z.array(z.string()).optional(),
@@ -565,6 +572,7 @@ export const transactionRouter = router({
         include: {
           account: { select: { id: true, name: true } },
           category: { select: { id: true, name: true, icon: true } },
+          fund: { select: { id: true, name: true, icon: true } },
           tags: { include: { tag: true } },
         },
       });

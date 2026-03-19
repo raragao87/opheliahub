@@ -1034,16 +1034,21 @@ export default function TrackerPage() {
           <div key={tableType} className="rounded-lg border bg-card overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]">
               <thead className="sticky top-16 z-10">
+                {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
-                  <th colSpan={4} className="text-left py-2.5 px-4 bg-card">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      {tableTitle}
-                    </span>
-                  </th>
-                </tr>
-                <tr className="border-b bg-card">
-                  <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
-                    {isIncome ? t(lang, "tracker.income") : t(lang, "tracker.expenses")}
+                  <th className="text-left py-2.5 px-3 bg-card">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {tableTitle}
+                      </span>
+                      <button
+                        onClick={() => setShowAddGroup(tableType)}
+                        className="p-0.5 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+                        title={isIncome ? t(lang, "tracker.addIncomeGroup") : t(lang, "tracker.addExpenseGroup")}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </th>
                   <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
                     Budget
@@ -1055,6 +1060,58 @@ export default function TrackerPage() {
                     Available
                   </th>
                 </tr>
+                {/* Row 2: Totals */}
+                {groups.length > 0 && (
+                  <tr className="border-b bg-card">
+                    <td className="py-2 px-3 text-xs font-semibold text-muted-foreground bg-card">
+                      {isIncome ? t(lang, "tracker.totalIncome") : t(lang, "tracker.totalExpenses")}
+                    </td>
+                    <td className="py-2 px-3 text-right bg-card">
+                      {tableTotalBudget === 0
+                        ? <span className="text-xs text-muted-foreground/40">—</span>
+                        : <MoneyDisplay amount={tableTotalBudget} colorize={false} className="text-xs font-semibold" />
+                      }
+                    </td>
+                    <td className="py-2 px-3 text-right bg-card">
+                      {(() => {
+                        const hasActual = isIncome
+                          ? (incomeGroups.some(g => g.totalIncomeActual > 0 || g.totalExpenseActual > 0))
+                          : totalSpentExpenses > 0;
+                        return hasActual ? (
+                          <MoneyDisplay
+                            amount={tableTotalActual}
+                            colorize={false}
+                            className={cn(
+                              "text-xs font-semibold",
+                              isIncome
+                                ? tableTotalActual >= 0
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                                : "text-red-600 dark:text-red-400"
+                            )}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground/40">—</span>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-2 px-3 text-right bg-card">
+                      {isIncome ? (
+                        <IncomeAvailableCell
+                          amount={tableTotalAvail}
+                          allocated={tableTotalBudget}
+                          incomeActual={totalIncomeActual}
+                        />
+                      ) : (
+                        <AvailableCell
+                          amount={tableTotalAvail}
+                          allocated={tableTotalBudget}
+                          spent={totalSpentExpenses}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                )}
               </thead>
 
               <SortableContext items={sortIds} strategy={verticalListSortingStrategy}>
@@ -1735,63 +1792,9 @@ export default function TrackerPage() {
                 </tbody>
               )}
 
-              {/* Summary + Add Group */}
-              <tfoot>
-                {/* Total row */}
-                {groups.length > 0 && (
-                  <tr className="border-t bg-muted/30 text-xs font-medium">
-                    <td className="py-2 px-3 text-muted-foreground">
-                      {isIncome ? t(lang, "tracker.totalIncome") : t(lang, "tracker.totalExpenses")}
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      {tableTotalBudget === 0
-                        ? <span className="text-xs text-muted-foreground/40">—</span>
-                        : <MoneyDisplay amount={tableTotalBudget} colorize={false} className="text-xs font-semibold" />
-                      }
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      {(() => {
-                        const hasActual = isIncome
-                          ? (incomeGroups.some(g => g.totalIncomeActual > 0 || g.totalExpenseActual > 0))
-                          : totalSpentExpenses > 0;
-                        return hasActual ? (
-                          <MoneyDisplay
-                            amount={tableTotalActual}
-                            colorize={false}
-                            className={cn(
-                              "text-xs font-semibold",
-                              isIncome
-                                ? tableTotalActual >= 0
-                                  ? "text-green-600 dark:text-green-400"
-                                  : "text-red-600 dark:text-red-400"
-                                : "text-red-600 dark:text-red-400"
-                            )}
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground/40">—</span>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      {isIncome ? (
-                        <IncomeAvailableCell
-                          amount={tableTotalAvail}
-                          allocated={tableTotalBudget}
-                          incomeActual={totalIncomeActual}
-                        />
-                      ) : (
-                        <AvailableCell
-                          amount={tableTotalAvail}
-                          allocated={tableTotalBudget}
-                          spent={totalSpentExpenses}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                )}
-
-                {/* Add group button/form */}
-                {showAddGroup === tableType ? (
+              {/* Add group form (shown when triggered from header [+] button) */}
+              {showAddGroup === tableType && (
+                <tfoot>
                   <tr className="border-t">
                     <td className="py-2 px-3" colSpan={4}>
                       <form
@@ -1851,20 +1854,8 @@ export default function TrackerPage() {
                       </form>
                     </td>
                   </tr>
-                ) : (
-                  <tr className="border-t">
-                    <td className="py-2 px-3" colSpan={4}>
-                      <button
-                        onClick={() => setShowAddGroup(tableType)}
-                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Plus className="h-4 w-4" />
-                        {isIncome ? t(lang, "tracker.addIncomeGroup") : t(lang, "tracker.addExpenseGroup")}
-                      </button>
-                    </td>
-                  </tr>
-                )}
-              </tfoot>
+                </tfoot>
+              )}
             </table>
 
             {/* Error display for category mutations */}
@@ -1938,9 +1929,10 @@ export default function TrackerPage() {
         >
         <div className="rounded-lg border bg-card overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]">
-              <thead>
+              <thead className="sticky top-16 z-10">
+                {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
-                  <th colSpan={4} className="text-left py-2.5 px-4 bg-card">
+                  <th className="text-left py-2.5 px-3 bg-card">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">💰 {t(lang, "tracker.funds")}</span>
                       <button
@@ -1952,11 +1944,6 @@ export default function TrackerPage() {
                       </button>
                     </div>
                   </th>
-                </tr>
-                <tr className="border-b bg-card">
-                  <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
-                    {t(lang, "tracker.funds")}
-                  </th>
                   <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
                     Budget
                   </th>
@@ -1967,6 +1954,28 @@ export default function TrackerPage() {
                     Available
                   </th>
                 </tr>
+                {/* Row 2: Fund totals */}
+                {fundsData.length > 0 && (
+                  <tr className="border-b bg-card">
+                    <td className="py-2 px-3 text-xs font-semibold text-muted-foreground bg-card">{t(lang, "tracker.funds.fundTotals")}</td>
+                    <td className="py-2 px-3 text-right bg-card">
+                      <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.budget, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
+                    </td>
+                    <td className="py-2 px-3 text-right bg-card">
+                      {(() => {
+                        const totalActual = fundsData.reduce((s, f) => s + f.thisMonthActual, 0);
+                        return totalActual > 0 ? (
+                          <MoneyDisplay amount={-totalActual} className="text-xs font-semibold font-mono tabular-nums" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground/40">—</span>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-2 px-3 text-right bg-card">
+                      <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.available, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
+                    </td>
+                  </tr>
+                )}
               </thead>
               <SortableContext
                 items={fundsData.map((f) => `fund-${f.id}`)}
@@ -2399,29 +2408,10 @@ export default function TrackerPage() {
               </tbody>
               </SortableContext>
 
-              {/* Summary footer */}
+              {/* Linked account footer */}
               <tfoot>
                 {fundsData.length > 0 && (
                   <>
-                    <tr className="border-t bg-muted/30 text-xs font-medium">
-                      <td className="py-2 px-3 text-muted-foreground">{t(lang, "tracker.funds.fundTotals")}</td>
-                      <td className="py-2 px-3 text-right">
-                        <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.budget, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        {(() => {
-                          const totalActual = fundsData.reduce((s, f) => s + f.thisMonthActual, 0);
-                          return totalActual > 0 ? (
-                            <MoneyDisplay amount={-totalActual} className="text-xs font-semibold font-mono tabular-nums" />
-                          ) : (
-                            <span className="text-xs text-muted-foreground/40">—</span>
-                          );
-                        })()}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.available, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
-                      </td>
-                    </tr>
                     {(() => {
                       const linkedAccount = fundsData.find(f => f.linkedAccount)?.linkedAccount;
                       if (!linkedAccount) return null;

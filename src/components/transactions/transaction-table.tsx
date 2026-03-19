@@ -50,6 +50,7 @@ export interface TransactionItem {
   visibility: string;
   account: TransactionAccount;
   category?: TransactionCategory | null;
+  fund?: { id: string; name: string; icon?: string | null } | null;
   tags: TransactionTag[];
   linkedTransaction?: TransactionLinked | null;
   linkedBy?: TransactionLinked | null;
@@ -92,9 +93,16 @@ export interface ColumnFilters {
   transferType: string;
 }
 
+interface FundOption {
+  id: string;
+  name: string;
+  icon?: string | null;
+}
+
 interface TransactionTableProps {
   transactions: TransactionItem[];
   flatCategories: CategoryOption[];
+  funds?: FundOption[];
   allTags: TagOption[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   updatingId?: string;
@@ -685,6 +693,7 @@ function ColumnAmountRange({
 export function TransactionTable({
   transactions,
   flatCategories,
+  funds = [],
   allTags,
   onUpdate,
   updatingId,
@@ -732,10 +741,24 @@ export function TransactionTable({
     onSelectionChange(next);
   };
 
-  const categoryOptions = flatCategories.map((c) => ({
-    value: c.id,
-    label: `${c.icon ?? ""} ${c.name}`.trim(),
-  }));
+  const categoryOptions = [
+    ...flatCategories.map((c) => ({
+      value: c.id,
+      label: `${c.icon ?? ""} ${c.name}`.trim(),
+    })),
+    ...funds.map((f) => ({
+      value: `__FUND__${f.id}`,
+      label: `${f.icon ?? "💰"} ${f.name}`.trim(),
+    })),
+  ];
+
+  const fundOptions = useMemo(() =>
+    funds.map((f) => ({
+      value: `__FUND__${f.id}`,
+      label: `${f.icon ?? "💰"} ${f.name}`.trim(),
+    })),
+    [funds]
+  );
 
   const categoryOptionGroups = useMemo(() => {
     const groupMap = new Map<string, { value: string; label: string }[]>();
@@ -744,8 +767,13 @@ export function TransactionTable({
       if (!groupMap.has(group)) groupMap.set(group, []);
       groupMap.get(group)!.push({ value: c.id, label: `${c.icon ?? ""} ${c.name}`.trim() });
     }
-    return Array.from(groupMap.entries()).map(([label, options]) => ({ label, options }));
-  }, [flatCategories]);
+    const groups = Array.from(groupMap.entries()).map(([label, options]) => ({ label, options }));
+    // Add funds as a separate group at the bottom
+    if (fundOptions.length > 0) {
+      groups.push({ label: "💰 Funds", options: fundOptions });
+    }
+    return groups;
+  }, [flatCategories, fundOptions]);
 
   // Compute amount bounds from loaded transactions (display values, not cents)
   const amountBounds = useMemo(() => {
@@ -1002,6 +1030,7 @@ function TransactionRow({
   const categoryDisplay = isTransfer
     ? partnerAccount ? "↔" : "→"
     : isIlliquid && AccountIcon ? ""
+    : txn.fund ? `${txn.fund.icon ?? "💰"} ${txn.fund.name}`.trim()
     : txn.category ? `${txn.category.icon ?? ""} ${txn.category.name}`.trim() : "";
 
   const categoryIcon = isTransfer ? (
@@ -1103,7 +1132,11 @@ function TransactionRow({
                 topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
                 onSave={(value) => {
                   if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
-                  onUpdate(txn.id, { categoryId: value || null });
+                  if (value.startsWith("__FUND__")) {
+                    onUpdate(txn.id, { fundId: value.replace("__FUND__", ""), categoryId: null });
+                  } else {
+                    onUpdate(txn.id, { categoryId: value || null, fundId: null });
+                  }
                 }}
                 emptyLabel="Uncategorized"
                 placeholder="—"
@@ -1119,14 +1152,18 @@ function TransactionRow({
             </div>
           ) : (
             <InlineSelectEdit
-              value={txn.category?.id ?? ""}
+              value={txn.fund ? `__FUND__${txn.fund.id}` : txn.category?.id ?? ""}
               displayValue={categoryDisplay}
               options={categoryOptions}
               optionGroups={categoryOptionGroups}
               topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
               onSave={(value) => {
                 if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
-                onUpdate(txn.id, { categoryId: value || null });
+                if (value.startsWith("__FUND__")) {
+                  onUpdate(txn.id, { fundId: value.replace("__FUND__", ""), categoryId: null });
+                } else {
+                  onUpdate(txn.id, { categoryId: value || null, fundId: null });
+                }
               }}
               emptyLabel="Uncategorized"
               placeholder="—"

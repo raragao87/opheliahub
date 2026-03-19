@@ -54,6 +54,7 @@ interface Filters {
   amountMin: string; // stored as display value (e.g. "10.00"), converted to cents for query
   amountMax: string;
   liquidOnly: string;
+  fundId: string;
   uncategorized: boolean;
   noTags: boolean;
 }
@@ -74,6 +75,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     amountMin: sp.get("amountMin") ?? "",
     amountMax: sp.get("amountMax") ?? "",
     liquidOnly: sp.get("liquidOnly") ?? "",
+    fundId: sp.get("fundId") ?? "",
     uncategorized: sp.get("uncategorized") === "true",
     noTags: sp.get("noTags") === "true",
   };
@@ -95,6 +97,7 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.amountMin) sp.set("amountMin", f.amountMin);
   if (f.amountMax) sp.set("amountMax", f.amountMax);
   if (f.liquidOnly) sp.set("liquidOnly", f.liquidOnly);
+  if (f.fundId) sp.set("fundId", f.fundId);
   if (f.uncategorized) sp.set("uncategorized", "true");
   if (f.noTags) sp.set("noTags", "true");
   return sp;
@@ -116,6 +119,7 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.amountMin === b.amountMin &&
     a.amountMax === b.amountMax &&
     a.liquidOnly === b.liquidOnly &&
+    a.fundId === b.fundId &&
     a.uncategorized === b.uncategorized &&
     a.noTags === b.noTags
   );
@@ -136,6 +140,7 @@ const EMPTY_FILTERS: Filters = {
   amountMin: "",
   amountMax: "",
   liquidOnly: "",
+  fundId: "",
   uncategorized: false,
   noTags: false,
 };
@@ -200,6 +205,9 @@ function TransactionsContent() {
   const tagsQuery = useQuery(
     trpc.tag.list.queryOptions({ visibility: visibilityParam })
   );
+  const fundsQuery = useQuery(
+    trpc.fund.listForDropdown.queryOptions({ visibility: visibilityParam })
+  );
 
   // ── Build query input ──────────────────────────────────────────────
   const PAGE_SIZE = 50;
@@ -222,6 +230,7 @@ function TransactionsContent() {
       amountMin: !isNaN(amountMinCents ?? NaN) ? amountMinCents : undefined,
       amountMax: !isNaN(amountMaxCents ?? NaN) ? amountMaxCents : undefined,
       liquidOnly: filters.liquidOnly === "true" || undefined,
+      fundId: filters.fundId || undefined,
       uncategorized: filters.uncategorized || undefined,
       noTags: filters.noTags || undefined,
       limit: PAGE_SIZE,
@@ -930,6 +939,7 @@ function TransactionsContent() {
           <TransactionTable
             transactions={transactions}
             flatCategories={flatCategories}
+            funds={fundsQuery.data ?? []}
             allTags={tagsQuery.data ?? []}
             onUpdate={handleUpdate}
             onDelete={handleDelete}

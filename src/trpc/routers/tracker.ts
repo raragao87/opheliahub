@@ -567,6 +567,31 @@ export const trackerRouter = router({
       };
     }),
 
+  setFundAllocation: householdProcedure
+    .input(
+      z.object({
+        trackerId: z.string(),
+        fundId: z.string(),
+        amount: z.number().int().min(0),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.fundTrackerAllocation.upsert({
+        where: {
+          trackerId_fundId: {
+            trackerId: input.trackerId,
+            fundId: input.fundId,
+          },
+        },
+        update: { amount: input.amount },
+        create: {
+          trackerId: input.trackerId,
+          fundId: input.fundId,
+          amount: input.amount,
+        },
+      });
+    }),
+
   setTagAllocation: householdProcedure
     .input(
       z.object({
@@ -808,6 +833,33 @@ export const trackerRouter = router({
               create: {
                 trackerId: currentTracker.id,
                 tagId: alloc.tagId,
+                amount: alloc.amount,
+              },
+            })
+          )
+        );
+      }
+
+      // Copy fund allocations
+      const prevFundAllocations =
+        await ctx.prisma.fundTrackerAllocation.findMany({
+          where: { trackerId: prevTracker.id },
+        });
+
+      if (prevFundAllocations.length > 0) {
+        await ctx.prisma.$transaction(
+          prevFundAllocations.map((alloc) =>
+            ctx.prisma.fundTrackerAllocation.upsert({
+              where: {
+                trackerId_fundId: {
+                  trackerId: currentTracker.id,
+                  fundId: alloc.fundId,
+                },
+              },
+              update: { amount: alloc.amount },
+              create: {
+                trackerId: currentTracker.id,
+                fundId: alloc.fundId,
                 amount: alloc.amount,
               },
             })

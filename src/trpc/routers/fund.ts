@@ -1,13 +1,18 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
+import { getMonthRange } from "@/lib/date";
+import { visibleTransactionsWhere } from "@/lib/privacy";
+import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
 
 export const fundRouter = router({
-  // List all active funds for visibility scope with computed balances
+  // List all active funds with transaction-based computation
   list: householdProcedure
     .input(
       z.object({
         visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        month: z.number().int().min(1).max(12),
+        year: z.number().int(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -19,7 +24,13 @@ export const fundRouter = router({
           isArchived: false,
         },
         include: {
-          entries: true,
+          allocations: true, // ALL months' allocations
+          entries: {
+            where: { type: "ADJUSTMENT" },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, amount: true, note: true, year: true, month: true, createdAt: true },
+          },
+          lineItems: { orderBy: { sortOrder: "asc" } },
           linkedAccount: {
             select: { id: true, name: true, balance: true, currency: true },
           },
@@ -27,85 +38,190 @@ export const fundRouter = router({
         orderBy: { sortOrder: "asc" },
       });
 
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
+      const { start: monthStart, end: monthEnd } = getMonthRange(
+        input.year,
+        input.month
+      );
 
-      return funds.map((fund) => {
-        let balance = 0;
-        let thisMonthContribution = 0;
-        let thisMonthWithdrawal = 0;
+      // Privacy + liquid filter for transaction queries
+      const visibilityFilter = visibleTransactionsWhere(
+        ctx.userId,
+        ctx.householdId
+      );
+      const liquidFilter = {
+        account: { type: { in: LIQUID_ACCOUNT_TYPES } },
+      };
 
-        for (const entry of fund.entries) {
-          if (entry.type === "CONTRIBUTION") balance += entry.amount;
-          else if (entry.type === "WITHDRAWAL") balance -= entry.amount;
-          else if (entry.type === "ADJUSTMENT") balance += entry.amount;
-
-          if (entry.year === currentYear && entry.month === currentMonth) {
-            if (entry.type === "CONTRIBUTION")
-              thisMonthContribution += entry.amount;
-            if (entry.type === "WITHDRAWAL")
-              thisMonthWithdrawal += entry.amount;
-          }
-        }
-
-        const targetProgress =
-          fund.targetAmount && fund.targetAmount > 0
-            ? Math.min(
-                100,
-                Math.round((balance / fund.targetAmount) * 100)
-              )
-            : null;
-
-        let monthsToTarget: number | null = null;
-        if (fund.targetDate) {
-          const target = new Date(fund.targetDate);
-          monthsToTarget = Math.max(
-            0,
-            (target.getFullYear() - currentYear) * 12 +
-              (target.getMonth() + 1 - currentMonth)
-          );
-        }
-
-        return {
-          id: fund.id,
-          name: fund.name,
-          icon: fund.icon,
-          color: fund.color,
-          balance,
-          monthlyContribution: fund.monthlyContribution,
-          targetAmount: fund.targetAmount,
-          targetDate: fund.targetDate,
-          targetProgress,
-          monthsToTarget,
-          thisMonthContribution,
-          thisMonthWithdrawal,
-          thisMonthNet: thisMonthContribution - thisMonthWithdrawal,
-          linkedAccount: fund.linkedAccount,
-          sortOrder: fund.sortOrder,
-        };
+      // Effective date filter (respects accrualDate)
+      const effectiveDateFilterUpTo = (endDate: Date) => ({
+        OR: [
+          { accrualDate: { lte: endDate } },
+          { accrualDate: null, date: { lte: endDate } },
+        ],
       });
-    }),
+      const effectiveDateFilterRange = (rangeStart: Date, rangeEnd: Date) => ({
+        OR: [
+          { accrualDate: { gte: rangeStart, lte: rangeEnd } },
+          {
+            accrualDate: null,
+            date: { gte: rangeStart, lte: rangeEnd },
+          },
+        ],
+      });
 
-  // Get fund with all entries for edit dialog
-  getWithEntries: householdProcedure
-    .input(z.object({ fundId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const fund = await ctx.prisma.fund.findFirst({
+      // Find this month's tracker
+      const thisMonthTracker = await ctx.prisma.tracker.findUnique({
         where: {
-          id: input.fundId,
-          householdId: ctx.householdId,
-          userId: ctx.userId,
-        },
-        include: {
-          entries: { orderBy: { createdAt: "desc" } },
-          linkedAccount: {
-            select: { id: true, name: true, balance: true, currency: true },
+          householdId_userId_month_year_visibility: {
+            householdId: ctx.householdId,
+            userId: ctx.userId,
+            month: input.month,
+            year: input.year,
+            visibility: input.visibility,
           },
         },
       });
-      if (!fund) throw new TRPCError({ code: "NOT_FOUND" });
-      return fund;
+
+      // Fetch all tracker metadata to map allocation -> month/year
+      const allTrackerIds = [
+        ...new Set(funds.flatMap((f) => f.allocations.map((a) => a.trackerId))),
+      ];
+      const trackers =
+        allTrackerIds.length > 0
+          ? await ctx.prisma.tracker.findMany({
+              where: { id: { in: allTrackerIds } },
+              select: { id: true, month: true, year: true },
+            })
+          : [];
+      const trackerDateMap = new Map(trackers.map((t) => [t.id, t]));
+
+      // Compute historical account balance for the linked account
+      const linkedAccount = funds.find((f) => f.linkedAccount)?.linkedAccount ?? null;
+      let historicalAccountBalance: number | null = null;
+      if (linkedAccount) {
+        const endOfSelectedMonth = new Date(input.year, input.month, 1); // start of next month
+        const now = new Date();
+
+        if (endOfSelectedMonth >= now) {
+          // Current or future month — use live balance
+          historicalAccountBalance = linkedAccount.balance;
+        } else {
+          // Past month — subtract transactions that happened AFTER that month
+          const transactionsAfter = await ctx.prisma.transaction.aggregate({
+            where: {
+              accountId: linkedAccount.id,
+              date: { gte: endOfSelectedMonth },
+            },
+            _sum: { amount: true },
+          });
+          historicalAccountBalance = linkedAccount.balance - (transactionsAfter._sum.amount ?? 0);
+        }
+      }
+
+      const fundResults = await Promise.all(
+        funds.map(async (fund) => {
+          // This month's allocation
+          const thisMonthAllocation = thisMonthTracker
+            ? fund.allocations.find(
+                (a) => a.trackerId === thisMonthTracker.id
+              )?.amount ?? 0
+            : 0;
+
+          // Total budgeted across all months up to and including this month
+          let totalBudgeted = 0;
+          for (const alloc of fund.allocations) {
+            const t = trackerDateMap.get(alloc.trackerId);
+            if (
+              t &&
+              (t.year < input.year ||
+                (t.year === input.year && t.month <= input.month))
+            ) {
+              totalBudgeted += alloc.amount;
+            }
+          }
+
+          // Total spending from transactions assigned to this fund (up to end of selected month)
+          const spendingAgg = await ctx.prisma.transaction.aggregate({
+            where: {
+              AND: [
+                visibilityFilter,
+                liquidFilter,
+                { fundId: fund.id },
+                { isInitialBalance: false },
+                effectiveDateFilterUpTo(monthEnd),
+              ],
+            },
+            _sum: { amount: true },
+          });
+          const totalSpending = Math.abs(spendingAgg._sum.amount ?? 0);
+
+          // This month's spending only
+          const thisMonthAgg = await ctx.prisma.transaction.aggregate({
+            where: {
+              AND: [
+                visibilityFilter,
+                liquidFilter,
+                { fundId: fund.id },
+                { isInitialBalance: false },
+                effectiveDateFilterRange(monthStart, monthEnd),
+              ],
+            },
+            _sum: { amount: true },
+          });
+          const thisMonthActual = Math.abs(thisMonthAgg._sum.amount ?? 0);
+
+          // Adjustments from FundEntry (ADJUSTMENT type only)
+          const adjustments = fund.entries.reduce(
+            (sum, e) => sum + e.amount,
+            0
+          );
+
+          // Available = total budgeted − total spending + adjustments
+          const available = totalBudgeted - totalSpending + adjustments;
+
+          return {
+            id: fund.id,
+            name: fund.name,
+            icon: fund.icon,
+            color: fund.color,
+            budget: thisMonthAllocation, // Budget column (this month only)
+            thisMonthActual,
+            available,
+            totalBudgeted,
+            totalSpending,
+            adjustments,
+            entries: fund.entries,
+            lineItems: fund.lineItems,
+            linkedAccount: fund.linkedAccount,
+            sortOrder: fund.sortOrder,
+          };
+        })
+      );
+
+      return {
+        funds: fundResults,
+        historicalAccountBalance,
+      };
+    }),
+
+  // Lightweight list for dropdowns (no transaction computation)
+  listForDropdown: householdProcedure
+    .input(
+      z.object({
+        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.fund.findMany({
+        where: {
+          householdId: ctx.householdId,
+          userId: ctx.userId,
+          visibility: input.visibility,
+          isArchived: false,
+        },
+        select: { id: true, name: true, icon: true },
+        orderBy: { sortOrder: "asc" },
+      });
     }),
 
   // Create a new fund
@@ -116,9 +232,6 @@ export const fundRouter = router({
         icon: z.string().max(10).optional(),
         color: z.string().max(20).optional(),
         linkedAccountId: z.string().optional(),
-        targetAmount: z.number().int().min(0).optional(),
-        targetDate: z.string().optional(), // ISO date string
-        monthlyContribution: z.number().int().min(0).default(0),
         visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
@@ -138,11 +251,6 @@ export const fundRouter = router({
           icon: input.icon,
           color: input.color,
           linkedAccountId: input.linkedAccountId,
-          targetAmount: input.targetAmount,
-          targetDate: input.targetDate
-            ? new Date(input.targetDate)
-            : undefined,
-          monthlyContribution: input.monthlyContribution,
           visibility: input.visibility,
           householdId: ctx.householdId,
           userId: ctx.userId,
@@ -160,34 +268,27 @@ export const fundRouter = router({
         icon: z.string().max(10).optional(),
         color: z.string().max(20).optional(),
         linkedAccountId: z.string().nullable().optional(),
-        targetAmount: z.number().int().min(0).nullable().optional(),
-        targetDate: z.string().nullable().optional(),
-        monthlyContribution: z.number().int().min(0).optional(),
         isArchived: z.boolean().optional(),
         sortOrder: z.number().int().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, targetDate, ...rest } = input;
+      const { id, ...rest } = input;
       return ctx.prisma.fund.update({
         where: { id },
-        data: {
-          ...rest,
-          ...(targetDate !== undefined && {
-            targetDate: targetDate ? new Date(targetDate) : null,
-          }),
-        },
+        data: rest,
       });
     }),
 
-  // Delete fund (only if no entries; otherwise archive)
+  // Delete fund (only if no entries/transactions; otherwise archive)
   delete: householdProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const entryCount = await ctx.prisma.fundEntry.count({
-        where: { fundId: input.id },
-      });
-      if (entryCount > 0) {
+      const [entryCount, txnCount] = await Promise.all([
+        ctx.prisma.fundEntry.count({ where: { fundId: input.id } }),
+        ctx.prisma.transaction.count({ where: { fundId: input.id } }),
+      ]);
+      if (entryCount > 0 || txnCount > 0) {
         return ctx.prisma.fund.update({
           where: { id: input.id },
           data: { isArchived: true },
@@ -196,25 +297,23 @@ export const fundRouter = router({
       return ctx.prisma.fund.delete({ where: { id: input.id } });
     }),
 
-  // Add entry to a fund
+  // Add adjustment entry to a fund
   addEntry: householdProcedure
     .input(
       z.object({
         fundId: z.string(),
-        year: z.number().int(),
-        month: z.number().int().min(1).max(12),
-        type: z.enum(["CONTRIBUTION", "WITHDRAWAL", "ADJUSTMENT"]),
-        amount: z.number().int().min(1), // always positive cents
+        amount: z.number().int(), // can be positive or negative
         note: z.string().max(200).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const now = new Date();
       return ctx.prisma.fundEntry.create({
         data: {
           fundId: input.fundId,
-          year: input.year,
-          month: input.month,
-          type: input.type,
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          type: "ADJUSTMENT",
           amount: input.amount,
           note: input.note,
         },
@@ -228,56 +327,85 @@ export const fundRouter = router({
       return ctx.prisma.fundEntry.delete({ where: { id: input.entryId } });
     }),
 
-  // Contribute all: add monthly contribution to all funds for the current month
-  contributeAll: householdProcedure
+  // Set line items for contribution calculator
+  setLineItems: householdProcedure
     .input(
       z.object({
-        year: z.number().int(),
-        month: z.number().int().min(1).max(12),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        fundId: z.string(),
+        items: z
+          .array(
+            z.object({
+              description: z.string().min(1).max(200),
+              period: z.number().int().min(1).max(365),
+              amount: z.number().int().min(0),
+              sortOrder: z.number().int(),
+            })
+          )
+          .max(20),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const funds = await ctx.prisma.fund.findMany({
+      const fund = await ctx.prisma.fund.findFirst({
+        where: {
+          id: input.fundId,
+          householdId: ctx.householdId,
+          userId: ctx.userId,
+        },
+      });
+      if (!fund) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const yearlyTotal = input.items.reduce(
+        (s, li) => s + li.period * li.amount,
+        0
+      );
+      const computedMonthly = Math.round(yearlyTotal / 12);
+
+      await ctx.prisma.$transaction([
+        ctx.prisma.fundLineItem.deleteMany({
+          where: { fundId: input.fundId },
+        }),
+        ...(input.items.length > 0
+          ? [
+              ctx.prisma.fundLineItem.createMany({
+                data: input.items.map((li) => ({
+                  fundId: input.fundId,
+                  description: li.description,
+                  period: li.period,
+                  amount: li.amount,
+                  sortOrder: li.sortOrder,
+                })),
+              }),
+            ]
+          : []),
+      ]);
+
+      return {
+        computedMonthly,
+        yearlyTotal,
+        itemCount: input.items.length,
+      };
+    }),
+
+  // Update linked account for all funds in a visibility scope
+  updateLinkedAccount: householdProcedure
+    .input(
+      z.object({
+        visibility: z.enum(["SHARED", "PERSONAL"]),
+        linkedAccountId: z.string().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.fund.updateMany({
         where: {
           householdId: ctx.householdId,
           userId: ctx.userId,
           visibility: input.visibility,
           isArchived: false,
-          monthlyContribution: { gt: 0 },
         },
-        include: {
-          entries: {
-            where: {
-              year: input.year,
-              month: input.month,
-              type: "CONTRIBUTION",
-            },
-          },
+        data: {
+          linkedAccountId: input.linkedAccountId,
         },
       });
-
-      // Skip funds that already have a contribution this month
-      const fundsToContribute = funds.filter((f) => f.entries.length === 0);
-
-      if (fundsToContribute.length === 0) {
-        return { count: 0, totalAmount: 0 };
-      }
-
-      const entries = fundsToContribute.map((f) => ({
-        fundId: f.id,
-        year: input.year,
-        month: input.month,
-        type: "CONTRIBUTION" as const,
-        amount: f.monthlyContribution,
-      }));
-
-      await ctx.prisma.fundEntry.createMany({ data: entries });
-
-      return {
-        count: fundsToContribute.length,
-        totalAmount: entries.reduce((sum, e) => sum + e.amount, 0),
-      };
     }),
 
   // Reorder funds

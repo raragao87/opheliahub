@@ -83,7 +83,7 @@ export const tagRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const tag = await ctx.prisma.tag.findFirst({
-        where: { id: input.id, userId: ctx.userId },
+        where: { id: input.id, ...visibleTagsWhere(ctx.userId, ctx.householdId) },
       });
 
       if (!tag) {
@@ -474,5 +474,100 @@ export const tagRouter = router({
       }));
 
       return { tags: results };
+    }),
+
+  /** Lightweight totals per tag for the Tags tab table columns */
+  getTagTotals: householdProcedure
+    .input(z.object({
+      visibility: z.enum(["SHARED", "PERSONAL"]),
+      dateFrom: z.coerce.date().optional(),
+      dateTo: z.coerce.date().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const dateFilter = {
+        ...(input.dateFrom && { gte: input.dateFrom }),
+        ...(input.dateTo && { lte: input.dateTo }),
+      };
+
+      const tags = await ctx.prisma.tag.findMany({
+        where: { ...visibleTagsWhere(ctx.userId, ctx.householdId), visibility: input.visibility },
+        select: { id: true },
+      });
+      const tagIds = tags.map(t => t.id);
+      if (tagIds.length === 0) return { totals: [] };
+
+      const txns = await ctx.prisma.transaction.findMany({
+        where: {
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          visibility: input.visibility,
+          tags: { some: { tagId: { in: tagIds } } },
+          isInitialBalance: false,
+          type: { not: "TRANSFER" },
+          ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
+        },
+        select: {
+          id: true,
+          amount: true,
+          date: true,
+          tags: { select: { tagId: true } },
+        },
+      });
+
+      const tagTotals = new Map<string, { totalAmount: number; count: number; firstDate: Date | null; lastDate: Date | null }>();
+      for (const tx of txns) {
+        for (const tt of tx.tags) {
+          if (!tagIds.includes(tt.tagId)) continue;
+          const entry = tagTotals.get(tt.tagId) ?? { totalAmount: 0, count: 0, firstDate: null, lastDate: null };
+          entry.totalAmount += tx.amount;
+          entry.count++;
+          const txDate = new Date(tx.date);
+          if (!entry.firstDate || txDate < entry.firstDate) entry.firstDate = txDate;
+          if (!entry.lastDate || txDate > entry.lastDate) entry.lastDate = txDate;
+          tagTotals.set(tt.tagId, entry);
+        }
+      }
+
+      const totals = Array.from(tagTotals.entries()).map(([tagId, data]) => {
+        let monthsSpanned = 1;
+        if (data.firstDate && data.lastDate) {
+          const ms = data.lastDate.getTime() - data.firstDate.getTime();
+          monthsSpanned = Math.max(1, Math.round(ms / (30.44 * 24 * 60 * 60 * 1000)));
+        }
+        return {
+          tagId,
+          totalAmount: data.totalAmount,
+          count: data.count,
+          monthlyAverage: data.count > 0 ? Math.round(data.totalAmount / monthsSpanned) : 0,
+        };
+      });
+
+      return { totals };
+    }),
+
+  /** Sum of tag budget allocations across all months in a year */
+  getYearlyBudgets: householdProcedure
+    .input(z.object({
+      year: z.number().int(),
+      visibility: z.enum(["SHARED", "PERSONAL"]),
+    }))
+    .query(async ({ ctx, input }) => {
+      const allocations = await ctx.prisma.tagTrackerAllocation.findMany({
+        where: {
+          tracker: {
+            householdId: ctx.householdId,
+            userId: ctx.userId,
+            year: input.year,
+            visibility: input.visibility,
+          },
+        },
+        select: { tagId: true, amount: true },
+      });
+
+      const totals = new Map<string, number>();
+      for (const a of allocations) {
+        totals.set(a.tagId, (totals.get(a.tagId) ?? 0) + a.amount);
+      }
+
+      return { budgets: Array.from(totals.entries()).map(([tagId, amount]) => ({ tagId, amount })) };
     }),
 });

@@ -10,6 +10,8 @@ interface InlineMoneyEditProps {
   onSave: (cents: number) => void;
   placeholder?: string;
   className?: string;
+  /** Rendered to the left of the input when in edit mode */
+  editingPrefix?: React.ReactNode;
 }
 
 export function InlineMoneyEdit({
@@ -18,6 +20,7 @@ export function InlineMoneyEdit({
   onSave,
   placeholder,
   className,
+  editingPrefix,
 }: InlineMoneyEditProps) {
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,7 +50,7 @@ export function InlineMoneyEdit({
   };
 
   if (editing) {
-    return (
+    const input = (
       <input
         ref={inputRef}
         type="number"
@@ -61,6 +64,15 @@ export function InlineMoneyEdit({
         )}
       />
     );
+    if (editingPrefix) {
+      return (
+        <div className="flex items-center gap-1">
+          {editingPrefix}
+          {input}
+        </div>
+      );
+    }
+    return input;
   }
 
   const isZero = value === 0;

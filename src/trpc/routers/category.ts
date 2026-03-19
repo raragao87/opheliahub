@@ -143,7 +143,14 @@ export const categoryRouter = router({
     }),
 
   delete: householdProcedure
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        id: z.string(),
+        reassignTo: z.enum(["uncategorized", "category", "fund"]).optional(),
+        targetCategoryId: z.string().optional(),
+        targetFundId: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const category = await ctx.prisma.category.findFirst({
         where: { id: input.id, householdId: ctx.householdId },
@@ -156,18 +163,49 @@ export const categoryRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
-      if (category._count.transactions > 0) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Cannot delete a category with transactions. Reassign them first.",
-        });
-      }
-
       if (category._count.children > 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Cannot delete a group that has subcategories. Remove them first.",
         });
+      }
+
+      if (category._count.transactions > 0) {
+        if (!input.reassignTo) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `HAS_TRANSACTIONS:${category._count.transactions}`,
+          });
+        }
+
+        if (input.reassignTo === "uncategorized") {
+          await ctx.prisma.transaction.updateMany({
+            where: { categoryId: input.id },
+            data: { categoryId: null },
+          });
+        } else if (input.reassignTo === "category" && input.targetCategoryId) {
+          const target = await ctx.prisma.category.findFirst({
+            where: { id: input.targetCategoryId, householdId: ctx.householdId },
+          });
+          if (!target) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Target category not found." });
+          }
+          await ctx.prisma.transaction.updateMany({
+            where: { categoryId: input.id },
+            data: { categoryId: input.targetCategoryId },
+          });
+        } else if (input.reassignTo === "fund" && input.targetFundId) {
+          const targetFund = await ctx.prisma.fund.findFirst({
+            where: { id: input.targetFundId, householdId: ctx.householdId },
+          });
+          if (!targetFund) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Target fund not found." });
+          }
+          await ctx.prisma.transaction.updateMany({
+            where: { categoryId: input.id },
+            data: { categoryId: null, fundId: input.targetFundId },
+          });
+        }
       }
 
       return ctx.prisma.category.delete({ where: { id: input.id } });

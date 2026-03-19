@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { Providers } from "@/components/layout/providers";
-import { FeedbackButton } from "@/components/layout/feedback-button";
+
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
-      <FeedbackButton />
+
     </Providers>
   );
 }
