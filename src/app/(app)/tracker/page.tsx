@@ -556,16 +556,14 @@ export default function TrackerPage() {
   }, [groupsWithData, deleteCategoryTarget]);
 
   // ── DnD: build flat sortable ID lists (one per table) ──
+  // Income is flat (no group headers) — only category IDs
   const incomeSortableIds = useMemo(() => {
     const ids: string[] = [];
     for (const group of incomeGroups) {
-      ids.push(`group-${group.id}`);
-      if (!collapsedGroups.has(group.id)) {
-        for (const cat of group.children) ids.push(`cat-${cat.id}`);
-      }
+      for (const cat of group.children) ids.push(`cat-${cat.id}`);
     }
     return ids;
-  }, [incomeGroups, collapsedGroups]);
+  }, [incomeGroups]);
 
   const expenseSortableIds = useMemo(() => {
     const ids: string[] = [];
@@ -1042,7 +1040,20 @@ export default function TrackerPage() {
                         {tableTitle}
                       </span>
                       <button
-                        onClick={() => setShowAddGroup(tableType)}
+                        onClick={() => {
+                          if (isIncome) {
+                            // Income is flat — add category to first income group
+                            const firstGroup = incomeGroups[0];
+                            if (firstGroup) {
+                              setAddingCategoryToGroup(firstGroup.id);
+                            } else {
+                              // No income group yet — create one first
+                              setShowAddGroup("INCOME");
+                            }
+                          } else {
+                            setShowAddGroup(tableType);
+                          }
+                        }}
                         className="p-0.5 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
                         title={isIncome ? t(lang, "tracker.addIncomeGroup") : t(lang, "tracker.addExpenseGroup")}
                       >
@@ -1125,14 +1136,13 @@ export default function TrackerPage() {
 
                   return (
                     <GroupRows key={group.id}>
-                      {/* Group header row */}
+                      {/* Group header row — expenses only (income is flat) */}
+                      {!isIncome && (
                       <SortableTr
                         id={`group-${group.id}`}
                         className={cn(
                           "border-b select-none group/row",
-                          isIncomeGroup
-                            ? "bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-950/30"
-                            : "bg-muted/30 hover:bg-muted/50"
+                          "bg-muted/30 hover:bg-muted/50"
                         )}
                       >
                         {(dragHandleProps) => (<>
@@ -1226,10 +1236,7 @@ export default function TrackerPage() {
                                   {group.icon}
                                 </span>
                                 <span
-                                  className={cn(
-                                    "font-semibold cursor-pointer",
-                                    isIncomeGroup && "text-blue-700 dark:text-blue-300"
-                                  )}
+                                  className="font-semibold cursor-pointer"
                                   onClick={() => toggleGroup(group.id)}
                                 >
                                   {group.name}
@@ -1295,24 +1302,13 @@ export default function TrackerPage() {
                               onClick={() => toggleGroup(group.id)}
                             >
                               {(() => {
-                                const groupActual = isIncomeGroup
-                                  ? group.totalIncomeActual - group.totalExpenseActual
-                                  : -group.totalSpent;
-                                const hasActual = isIncomeGroup
-                                  ? group.totalIncomeActual > 0 || group.totalExpenseActual > 0
-                                  : group.totalSpent > 0;
+                                const groupActual = -group.totalSpent;
+                                const hasActual = group.totalSpent > 0;
                                 return hasActual ? (
                                   <MoneyDisplay
                                     amount={groupActual}
                                     colorize={false}
-                                    className={cn(
-                                      "text-sm font-semibold",
-                                      isIncomeGroup
-                                        ? groupActual >= 0
-                                          ? "text-green-600 dark:text-green-400"
-                                          : "text-red-600 dark:text-red-400"
-                                        : "text-red-600 dark:text-red-400"
-                                    )}
+                                    className="text-sm font-semibold text-red-600 dark:text-red-400"
                                   />
                                 ) : (
                                   <span className="text-sm text-muted-foreground/40">—</span>
@@ -1323,19 +1319,11 @@ export default function TrackerPage() {
                               className="py-2 px-3 text-right cursor-pointer"
                               onClick={() => toggleGroup(group.id)}
                             >
-                              {isIncomeGroup ? (
-                                <IncomeAvailableCell
-                                  amount={group.totalAllocated - group.totalIncomeActual}
-                                  allocated={group.totalAllocated}
-                                  incomeActual={group.totalIncomeActual}
-                                />
-                              ) : (
-                                <AvailableCell
-                                  amount={groupRemaining}
-                                  allocated={group.totalAllocated}
-                                  spent={group.totalSpent}
-                                />
-                              )}
+                              <AvailableCell
+                                amount={groupRemaining}
+                                allocated={group.totalAllocated}
+                                spent={group.totalSpent}
+                              />
                             </td>
                           </>
                         ) : (
@@ -1347,8 +1335,9 @@ export default function TrackerPage() {
                         )}
                       </>)}
                       </SortableTr>
-                      {/* Ophelia icon suggestions row for group edit */}
-                      {editingCategoryId === group.id && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
+                      )}
+                      {/* Ophelia icon suggestions row for group edit — expenses only */}
+                      {!isIncome && editingCategoryId === group.id && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
                         <tr className="border-b border-border/50 bg-muted/5">
                           <td className="py-1 px-3 pl-6" colSpan={4}>
                             <div className="flex items-center gap-1">
@@ -1379,8 +1368,8 @@ export default function TrackerPage() {
                         </tr>
                       )}
 
-                      {/* Category rows */}
-                      {!isCollapsed &&
+                      {/* Category rows — income: always shown flat; expenses: collapsible */}
+                      {(isIncome || !isCollapsed) &&
                         group.children.map((cat) => {
                           const isEditingCat = editingCategoryId === cat.id;
 
@@ -1602,10 +1591,10 @@ export default function TrackerPage() {
                         })}
 
                       {/* Add category inline row */}
-                      {!isCollapsed && addingCategoryToGroup === group.id && (
+                      {(isIncome || !isCollapsed) && addingCategoryToGroup === group.id && (
                         <>
                         <tr className={cn("bg-muted/10", iconSuggestions.length > 0 || suggestIconMutation.isPending ? "" : "border-b border-border/50")}>
-                          <td className="py-1.5 px-3 pl-6" colSpan={4}>
+                          <td className={cn("py-1.5 px-3", !isIncome && "pl-6")} colSpan={4}>
                             <form
                               className="flex items-center gap-2"
                               onSubmit={(e) => {
@@ -1630,7 +1619,7 @@ export default function TrackerPage() {
                               )}
                               <input
                                 autoFocus
-                                placeholder="New category name..."
+                                placeholder={isIncome ? "New income source..." : "New category name..."}
                                 value={newCategoryName}
                                 onChange={(e) => { setNewCategoryName(e.target.value); triggerIconSuggestion(e.target.value); }}
                                 onKeyDown={(e) => {
@@ -1670,7 +1659,7 @@ export default function TrackerPage() {
                         {/* Ophelia icon suggestions row for new category */}
                         {(iconSuggestions.length > 0 || suggestIconMutation.isPending) && addingCategoryToGroup === group.id && (
                           <tr className="border-b border-border/50 bg-muted/5">
-                            <td className="py-1 px-3 pl-6" colSpan={4}>
+                            <td className={cn("py-1 px-3", !isIncome && "pl-6")} colSpan={4}>
                               <div className="flex items-center gap-1">
                                 <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                                 {suggestIconMutation.isPending ? (
@@ -1792,8 +1781,8 @@ export default function TrackerPage() {
                 </tbody>
               )}
 
-              {/* Add group form (shown when triggered from header [+] button) */}
-              {showAddGroup === tableType && (
+              {/* Add group form — expenses, or income fallback when no groups exist */}
+              {showAddGroup === tableType && (!isIncome || incomeGroups.length === 0) && (
                 <tfoot>
                   <tr className="border-t">
                     <td className="py-2 px-3" colSpan={4}>
