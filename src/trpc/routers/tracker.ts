@@ -880,4 +880,42 @@ export const trackerRouter = router({
         },
       });
     }),
+
+  resetAllocations: householdProcedure
+    .input(
+      z.object({
+        month: z.number().int().min(1).max(12),
+        year: z.number().int().min(2020).max(2100),
+        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const tracker = await ctx.prisma.tracker.findUnique({
+        where: {
+          householdId_userId_month_year_visibility: {
+            householdId: ctx.householdId,
+            userId: ctx.userId,
+            month: input.month,
+            year: input.year,
+            visibility: input.visibility,
+          },
+        },
+      });
+
+      if (!tracker) return { reset: 0 };
+
+      const [catDeleted, fundDeleted, tagDeleted] = await ctx.prisma.$transaction([
+        ctx.prisma.trackerAllocation.deleteMany({
+          where: { trackerId: tracker.id },
+        }),
+        ctx.prisma.fundTrackerAllocation.deleteMany({
+          where: { trackerId: tracker.id },
+        }),
+        ctx.prisma.tagTrackerAllocation.deleteMany({
+          where: { trackerId: tracker.id },
+        }),
+      ]);
+
+      return { reset: catDeleted.count + fundDeleted.count + tagDeleted.count };
+    }),
 });

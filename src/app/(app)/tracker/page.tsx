@@ -249,6 +249,8 @@ export default function TrackerPage() {
   const monthPickerRef = useRef<HTMLDivElement>(null);
   const trackerHeaderRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(80);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   // Measure sticky bar height for table header offsets
   useEffect(() => {
@@ -272,6 +274,18 @@ export default function TrackerPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showMonthPicker]);
+
+  // Close actions menu on click outside
+  useEffect(() => {
+    if (!showActionsMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showActionsMenu]);
 
   // Tracker is per-visibility
   const visibility = visibilityParam ?? "SHARED";
@@ -410,10 +424,21 @@ export default function TrackerPage() {
 
   const copyPreviousMonthMutation = useMutation(
     trpc.tracker.copyPreviousMonth.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        toast.success(t(lang, "tracker.copyFromDesc"));
+      },
     })
   );
 
+  const resetAllocationsMutation = useMutation(
+    trpc.tracker.resetAllocations.mutationOptions({
+      onSuccess: (data) => {
+        queryClient.invalidateQueries();
+        toast.success(`Reset ${data.reset} allocations`);
+      },
+    })
+  );
 
   // Category mutations
   const createCategoryMutation = useMutation(
@@ -862,27 +887,67 @@ export default function TrackerPage() {
             </Button>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() =>
-              copyPreviousMonthMutation.mutate({
-                month: period.month,
-                year: period.year,
-                visibility,
-              })
-            }
-            disabled={copyPreviousMonthMutation.isPending}
-          >
-            <Copy className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">
-              {copyPreviousMonthMutation.isPending ? t(lang, "common.loading") : `${t(lang, "tracker.copyFrom")} ${new Date(period.year, period.month - 2).toLocaleString("default", { month: "long" })}`}
-            </span>
-            <span className="sm:hidden">
-              {copyPreviousMonthMutation.isPending ? "..." : t(lang, "tracker.copyFrom")}
-            </span>
-          </Button>
+          {/* Actions dropdown */}
+          <div className="relative" ref={actionsMenuRef}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => setShowActionsMenu((prev) => !prev)}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Actions</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </Button>
+
+            {showActionsMenu && (
+              <div className="absolute right-0 top-full mt-1 w-64 rounded-lg border bg-card shadow-lg py-1 z-50">
+                <button
+                  onClick={() => {
+                    copyPreviousMonthMutation.mutate({
+                      month: period.month,
+                      year: period.year,
+                      visibility,
+                    });
+                    setShowActionsMenu(false);
+                  }}
+                  disabled={copyPreviousMonthMutation.isPending}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <div>
+                    <span className="font-medium">
+                      {t(lang, "tracker.copyFrom")} {new Date(period.year, period.month - 2).toLocaleString("default", { month: "long" })}
+                    </span>
+                    <p className="text-[10px] text-muted-foreground">{t(lang, "tracker.copyFromDesc")}</p>
+                  </div>
+                </button>
+
+                <div className="border-t my-1" />
+
+                <button
+                  onClick={() => {
+                    if (confirm(t(lang, "tracker.resetConfirm"))) {
+                      resetAllocationsMutation.mutate({
+                        month: period.month,
+                        year: period.year,
+                        visibility,
+                      });
+                      setShowActionsMenu(false);
+                    }
+                  }}
+                  disabled={resetAllocationsMutation.isPending}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center gap-2 text-red-600 dark:text-red-400 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                  <div>
+                    <span className="font-medium">{t(lang, "tracker.resetAll")}</span>
+                    <p className="text-[10px] text-muted-foreground">{t(lang, "tracker.resetAllDesc")}</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Row 2: Budget summary as 4 columns */}
