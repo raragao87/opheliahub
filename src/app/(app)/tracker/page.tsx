@@ -799,6 +799,30 @@ export default function TrackerPage() {
       ? 0
       : daysInMonth;
 
+  // Shared bar scale — both bars use the same denominator
+  const maxBarValue = Math.max(
+    totalIncome,
+    expenseAssigned + totalFundContributions,
+    totalIncomeActual,
+    totalSpentExpenses + totalFundActual,
+    1
+  );
+  const incomeBudgetPct = (totalIncome / maxBarValue) * 100;
+  const expenseBudgetPct = (expenseAssigned / maxBarValue) * 100;
+  const fundsBudgetPct = (totalFundContributions / maxBarValue) * 100;
+  const incomeReceivedPct = (totalIncomeActual / maxBarValue) * 100;
+  const expenseSpentPct = (totalSpentExpenses / maxBarValue) * 100;
+  const fundSpentPct = (totalFundActual / maxBarValue) * 100;
+
+  // Circular gauge
+  const gaugePct = totalIncome > 0
+    ? Math.round(((expenseAssigned + totalFundContributions) / totalIncome) * 100)
+    : 0;
+  const gaugeDisplayPct = Math.min(gaugePct, 100);
+  const gaugeRadius = 17;
+  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
+  const gaugeDashOffset = gaugeCircumference - (gaugeDisplayPct / 100) * gaugeCircumference;
+
   return (
     <div className="space-y-4">
       {/* ── Sticky Tracker Header — Stacked Bar Visualization ── */}
@@ -813,59 +837,51 @@ export default function TrackerPage() {
             onMouseEnter={() => setShowBarTooltip(true)}
             onMouseLeave={() => setShowBarTooltip(false)}
           >
-
             {/* Budget bar */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Budget</span>
-              <div className="flex-1 relative h-5">
+              <div className="flex-1 relative h-[18px]">
                 {totalIncome > 0 && (
-                  <div className="absolute -inset-px rounded-md border-2 border-green-600 dark:border-green-500" />
+                  <div
+                    className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
+                    style={{ width: `calc(${incomeBudgetPct}% + 2px)`, height: 'calc(100% + 2px)' }}
+                  />
                 )}
-                <div className="absolute inset-0 rounded-[5px] overflow-hidden flex">
-                  {expenseAssigned > 0 && (
-                    <div style={{ flex: expenseAssigned }} className="bg-red-500/75" />
-                  )}
-                  {totalFundContributions > 0 && (
-                    <div style={{ flex: totalFundContributions }} className="bg-amber-500/75" />
-                  )}
-                  {readyToAssign > 0 && (
-                    <div style={{ flex: readyToAssign }} />
-                  )}
-                </div>
+                {(expenseAssigned > 0 || totalFundContributions > 0) && (
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-[4px] overflow-hidden flex"
+                    style={{ width: `${expenseBudgetPct + fundsBudgetPct}%` }}
+                  >
+                    <div style={{ flex: expenseAssigned || 1 }} className="bg-red-500/75" />
+                    {totalFundContributions > 0 && (
+                      <div style={{ flex: totalFundContributions }} className="bg-amber-500/75" />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Actual bar */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
-              <div className="flex-1 relative h-5">
-                {(() => {
-                  const incomeReceivedPct = totalIncome > 0
-                    ? Math.min(100, (totalIncomeActual / totalIncome) * 100)
-                    : 0;
-                  return (
-                    <>
-                      {totalIncomeActual > 0 && (
-                        <div
-                          className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
-                          style={{
-                            width: `calc(${incomeReceivedPct}% + 2px)`,
-                            height: 'calc(100% + 2px)',
-                          }}
-                        />
-                      )}
-                      <div className="absolute inset-0 rounded-[5px] overflow-hidden flex">
-                        {totalSpentExpenses > 0 && (
-                          <div style={{ flex: totalSpentExpenses }} className="bg-red-500/45" />
-                        )}
-                        {totalFundActual > 0 && (
-                          <div style={{ flex: totalFundActual }} className="bg-amber-500/40" />
-                        )}
-                        <div style={{ flex: Math.max(0, totalIncome - totalSpentExpenses - totalFundActual) }} />
-                      </div>
-                    </>
-                  );
-                })()}
+              <div className="flex-1 relative h-[18px]">
+                {totalIncomeActual > 0 && (
+                  <div
+                    className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
+                    style={{ width: `calc(${incomeReceivedPct}% + 2px)`, height: 'calc(100% + 2px)' }}
+                  />
+                )}
+                {(totalSpentExpenses > 0 || totalFundActual > 0) && (
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-[4px] overflow-hidden flex"
+                    style={{ width: `${expenseSpentPct + fundSpentPct}%` }}
+                  >
+                    <div style={{ flex: totalSpentExpenses || 1 }} className="bg-red-500/45" />
+                    {totalFundActual > 0 && (
+                      <div style={{ flex: totalFundActual }} className="bg-amber-500/40" />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -949,30 +965,99 @@ export default function TrackerPage() {
             )}
           </div>
 
-          {/* ── RIGHT: Left to assign + Actions + Month nav ── */}
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            {/* Left to assign + action button */}
+          {/* ── RIGHT: Month + Actions top, Gauge + Amount bottom ── */}
+          <div className="flex flex-col items-end gap-1.5 shrink-0 min-w-[140px]">
+            {/* Row 1: Month nav + Action button */}
             <div className="flex items-center gap-1.5">
-              <div className="text-right">
-                <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{t(lang, "tracker.leftToAssign")}</span>
-                <div className={cn(
-                  "text-base font-medium leading-tight",
-                  readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
-                  readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
-                  readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
-                  "text-muted-foreground"
-                )}>
-                  <MoneyDisplay amount={readyToAssign} colorize={false} className="text-base inline font-medium" />
-                  {readyToAssign === 0 && incomeAssigned > 0 && <span className="text-xs ml-0.5">✓</span>}
-                </div>
+              <div className="relative flex items-center rounded-md border border-border overflow-visible" ref={monthPickerRef}>
+                <button
+                  onClick={() => setPeriod(getPreviousMonth(period.year, period.month))}
+                  className="px-1 py-0.5 flex items-center border-r border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <ChevronLeft className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  onClick={() => {
+                    setPickerYear(period.year);
+                    setShowMonthPicker((v) => !v);
+                  }}
+                  className="px-2 py-0.5 text-[10px] font-medium hover:bg-muted transition-colors"
+                >
+                  {new Date(period.year, period.month - 1).toLocaleString("default", { month: "short", year: "numeric" })}
+                </button>
+                <button
+                  onClick={() => setPeriod(getNextMonth(period.year, period.month))}
+                  className="px-1 py-0.5 flex items-center border-l border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <ChevronRight className="h-2.5 w-2.5" />
+                </button>
+
+                {/* Month picker dropdown */}
+                {showMonthPicker && (
+                  <div className="absolute right-0 top-full mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 w-[260px]">
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        onClick={() => setPickerYear((y) => y - 1)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-sm font-semibold">{pickerYear}</span>
+                      <button
+                        onClick={() => setPickerYear((y) => y + 1)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const m = i + 1;
+                        const label = new Date(pickerYear, i).toLocaleString("default", { month: "short" });
+                        const isSelected = pickerYear === period.year && m === period.month;
+                        const isCurMonth = pickerYear === curYear && m === curMonth;
+                        return (
+                          <button
+                            key={m}
+                            onClick={() => {
+                              setPeriod({ year: pickerYear, month: m });
+                              setShowMonthPicker(false);
+                            }}
+                            className={cn(
+                              "text-xs py-1.5 px-2 rounded-md transition-colors font-medium",
+                              isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : isCurMonth
+                                  ? "bg-muted font-semibold ring-1 ring-primary/30"
+                                  : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const { month, year } = getCurrentYearMonth();
+                        setPeriod({ year, month });
+                        setShowMonthPicker(false);
+                      }}
+                      className="mt-2 w-full text-xs text-center py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Go to current month
+                    </button>
+                  </div>
+                )}
               </div>
+
               {/* Actions ⋮ */}
               <div className="relative" ref={actionsMenuRef}>
                 <button
                   onClick={() => setShowActionsMenu((prev) => !prev)}
-                  className="w-7 h-7 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  className="w-6 h-6 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
-                  <MoreVertical className="h-3.5 w-3.5" />
+                  <MoreVertical className="h-3 w-3" />
                 </button>
 
                 {showActionsMenu && (
@@ -1023,89 +1108,60 @@ export default function TrackerPage() {
               </div>
             </div>
 
-            <div className="flex-1" />
+            {/* Row 2: Circular gauge + Left to assign */}
+            <div className="flex items-center gap-2.5 mt-auto">
+              <div className="text-right">
+                <span className="text-[8px] text-muted-foreground uppercase tracking-wider block">{t(lang, "tracker.leftToAssign")}</span>
+                <span className={cn(
+                  "text-lg font-medium leading-tight",
+                  readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
+                  readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
+                  readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
+                  "text-muted-foreground"
+                )}>
+                  <MoneyDisplay amount={readyToAssign} colorize={false} className="text-lg inline font-medium" />
+                </span>
+              </div>
 
-            {/* Month navigation — compact segmented control */}
-            <div className="relative flex items-center rounded-md border border-border overflow-visible" ref={monthPickerRef}>
-              <button
-                onClick={() => setPeriod(getPreviousMonth(period.year, period.month))}
-                className="px-1.5 py-1 flex items-center border-r border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <ChevronLeft className="h-3 w-3" />
-              </button>
-              <button
-                onClick={() => {
-                  setPickerYear(period.year);
-                  setShowMonthPicker((v) => !v);
-                }}
-                className="px-2 py-1 text-[10px] font-medium hover:bg-muted transition-colors"
-              >
-                {new Date(period.year, period.month - 1).toLocaleString("default", { month: "short", year: "numeric" })}
-              </button>
-              <button
-                onClick={() => setPeriod(getNextMonth(period.year, period.month))}
-                className="px-1.5 py-1 flex items-center border-l border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <ChevronRight className="h-3 w-3" />
-              </button>
-
-              {/* Month picker dropdown */}
-              {showMonthPicker && (
-                <div className="absolute right-0 top-full mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 w-[260px]">
-                  <div className="flex items-center justify-between mb-2">
-                    <button
-                      onClick={() => setPickerYear((y) => y - 1)}
-                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <span className="text-sm font-semibold">{pickerYear}</span>
-                    <button
-                      onClick={() => setPickerYear((y) => y + 1)}
-                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    {Array.from({ length: 12 }, (_, i) => {
-                      const m = i + 1;
-                      const label = new Date(pickerYear, i).toLocaleString("default", { month: "short" });
-                      const isSelected = pickerYear === period.year && m === period.month;
-                      const isCurMonth = pickerYear === curYear && m === curMonth;
-                      return (
-                        <button
-                          key={m}
-                          onClick={() => {
-                            setPeriod({ year: pickerYear, month: m });
-                            setShowMonthPicker(false);
-                          }}
-                          className={cn(
-                            "text-xs py-1.5 px-2 rounded-md transition-colors font-medium",
-                            isSelected
-                              ? "bg-primary text-primary-foreground"
-                              : isCurMonth
-                                ? "bg-muted font-semibold ring-1 ring-primary/30"
-                                : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    onClick={() => {
-                      const { month, year } = getCurrentYearMonth();
-                      setPeriod({ year, month });
-                      setShowMonthPicker(false);
-                    }}
-                    className="mt-2 w-full text-xs text-center py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Go to current month
-                  </button>
+              {/* Circular gauge */}
+              <div className="relative shrink-0" style={{ width: 40, height: 40 }}>
+                <svg width="40" height="40" viewBox="0 0 40 40" className="block">
+                  <circle cx="20" cy="20" r={gaugeRadius} fill="none"
+                    className="stroke-border" strokeWidth="2.5" />
+                  <circle cx="20" cy="20" r={gaugeRadius} fill="none"
+                    className={cn(
+                      readyToAssign === 0 && incomeAssigned > 0 ? "stroke-green-600 dark:stroke-green-400" :
+                      readyToAssign > 0 ? "stroke-amber-600 dark:stroke-amber-400" :
+                      readyToAssign < 0 ? "stroke-red-600 dark:stroke-red-400" :
+                      "stroke-muted-foreground"
+                    )}
+                    strokeWidth="2.5"
+                    strokeDasharray={gaugeCircumference}
+                    strokeDashoffset={gaugeDashOffset}
+                    strokeLinecap="round"
+                    transform="rotate(-90 20 20)"
+                    style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {readyToAssign === 0 && incomeAssigned > 0 ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      className="stroke-green-600 dark:stroke-green-400"
+                      strokeWidth="3" strokeLinecap="round">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  ) : (
+                    <span className={cn(
+                      "text-[9px] font-medium",
+                      readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
+                      readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
+                      "text-muted-foreground"
+                    )}>
+                      {gaugePct}%
+                    </span>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
