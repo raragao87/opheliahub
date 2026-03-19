@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
@@ -68,6 +67,8 @@ import {
   GripVertical,
   Sparkles,
   Calculator,
+  Users,
+  User,
 } from "lucide-react";
 
 // ── Color coding helpers ──────────────────────────────────────────
@@ -219,7 +220,7 @@ function buildFundTransactionsUrl(
 export default function TrackerPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { visibilityParam } = useOwnership();
+  const { visibilityParam, setVisibility } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
@@ -248,6 +249,19 @@ export default function TrackerPage() {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(period.year);
   const monthPickerRef = useRef<HTMLDivElement>(null);
+  const trackerHeaderRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(80);
+
+  // Measure sticky bar height for table header offsets
+  useEffect(() => {
+    const el = trackerHeaderRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setHeaderHeight(entry.contentRect.height + 24); // +24 for padding + border
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Close month picker on click outside
   useEffect(() => {
@@ -769,205 +783,197 @@ export default function TrackerPage() {
 
   return (
     <div className="space-y-4">
-      {/* ── Header bar ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
-        {/* Left: Month nav */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setPeriod(getPreviousMonth(period.year, period.month))}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
-          {/* Month picker */}
-          <div className="relative" ref={monthPickerRef}>
-            <button
-              onClick={() => {
-                setPickerYear(period.year);
-                setShowMonthPicker((v) => !v);
-              }}
-              className="flex items-center gap-1.5 text-sm font-semibold min-w-[130px] justify-center rounded-md px-2 py-1 hover:bg-muted transition-colors"
+      {/* ── Sticky Tracker Header ──────────────────────────────── */}
+      <div
+        ref={trackerHeaderRef}
+        className="sticky top-16 z-30 bg-card border rounded-lg p-3 -mx-4 md:-mx-6 lg:-mx-8 md:px-6 lg:px-8 px-4 space-y-2 shadow-sm"
+      >
+        {/* Row 1: Month nav + visibility toggle + copy button */}
+        <div className="flex items-center justify-between gap-3">
+          {/* Left: Month navigation */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setPeriod(getPreviousMonth(period.year, period.month))}
             >
-              {monthName}
-              <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", showMonthPicker && "rotate-180")} />
-            </button>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
 
-            {showMonthPicker && (
-              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 w-[260px]">
-                {/* Year nav */}
-                <div className="flex items-center justify-between mb-2">
+            {/* Month picker */}
+            <div className="relative" ref={monthPickerRef}>
+              <button
+                onClick={() => {
+                  setPickerYear(period.year);
+                  setShowMonthPicker((v) => !v);
+                }}
+                className="flex items-center gap-1.5 text-sm font-semibold min-w-[130px] justify-center rounded-md px-2 py-1 hover:bg-muted transition-colors"
+              >
+                {monthName}
+                <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", showMonthPicker && "rotate-180")} />
+              </button>
+
+              {showMonthPicker && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 w-[260px]">
+                  {/* Year nav */}
+                  <div className="flex items-center justify-between mb-2">
+                    <button
+                      onClick={() => setPickerYear((y) => y - 1)}
+                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="text-sm font-semibold">{pickerYear}</span>
+                    <button
+                      onClick={() => setPickerYear((y) => y + 1)}
+                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Month grid */}
+                  <div className="grid grid-cols-3 gap-1">
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const m = i + 1;
+                      const label = new Date(pickerYear, i).toLocaleString("default", { month: "short" });
+                      const isSelected = pickerYear === period.year && m === period.month;
+                      const { month: curMonth, year: curYear } = getCurrentYearMonth();
+                      const isCurrent = pickerYear === curYear && m === curMonth;
+
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => {
+                            setPeriod({ year: pickerYear, month: m });
+                            setShowMonthPicker(false);
+                          }}
+                          className={cn(
+                            "text-xs py-1.5 px-2 rounded-md transition-colors font-medium",
+                            isSelected
+                              ? "bg-primary text-primary-foreground"
+                              : isCurrent
+                                ? "bg-muted font-semibold ring-1 ring-primary/30"
+                                : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Today shortcut */}
                   <button
-                    onClick={() => setPickerYear((y) => y - 1)}
-                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      const { month, year } = getCurrentYearMonth();
+                      setPeriod({ year, month });
+                      setShowMonthPicker(false);
+                    }}
+                    className="mt-2 w-full text-xs text-center py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="text-sm font-semibold">{pickerYear}</span>
-                  <button
-                    onClick={() => setPickerYear((y) => y + 1)}
-                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                  >
-                    <ChevronRight className="h-4 w-4" />
+                    Go to current month
                   </button>
                 </div>
+              )}
+            </div>
 
-                {/* Month grid */}
-                <div className="grid grid-cols-3 gap-1">
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const m = i + 1;
-                    const label = new Date(pickerYear, i).toLocaleString("default", { month: "short" });
-                    const isSelected = pickerYear === period.year && m === period.month;
-                    const { month: curMonth, year: curYear } = getCurrentYearMonth();
-                    const isCurrent = pickerYear === curYear && m === curMonth;
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setPeriod(getNextMonth(period.year, period.month))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
 
-                    return (
-                      <button
-                        key={m}
-                        onClick={() => {
-                          setPeriod({ year: pickerYear, month: m });
-                          setShowMonthPicker(false);
-                        }}
-                        className={cn(
-                          "text-xs py-1.5 px-2 rounded-md transition-colors font-medium",
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : isCurrent
-                              ? "bg-muted font-semibold ring-1 ring-primary/30"
-                              : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Today shortcut */}
-                <button
-                  onClick={() => {
-                    const { month, year } = getCurrentYearMonth();
-                    setPeriod({ year, month });
-                    setShowMonthPicker(false);
-                  }}
-                  className="mt-2 w-full text-xs text-center py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Go to current month
-                </button>
-              </div>
-            )}
+            {/* Shared / Personal toggle */}
+            <div className="flex gap-0.5 p-0.5 bg-muted rounded-lg ml-2">
+              <button
+                onClick={() => setVisibility("SHARED")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5",
+                  visibility === "SHARED"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Users className="h-3 w-3" />
+                {t(lang, "common.shared")}
+              </button>
+              <button
+                onClick={() => setVisibility("PERSONAL")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5",
+                  visibility === "PERSONAL"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <User className="h-3 w-3" />
+                {t(lang, "common.personal")}
+              </button>
+            </div>
           </div>
 
+          {/* Right: Copy from previous month */}
           <Button
             variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setPeriod(getNextMonth(period.year, period.month))}
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() =>
+              copyPreviousMonthMutation.mutate({
+                month: period.month,
+                year: period.year,
+                visibility,
+              })
+            }
+            disabled={copyPreviousMonthMutation.isPending}
           >
-            <ChevronRight className="h-4 w-4" />
+            <Copy className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">
+              {copyPreviousMonthMutation.isPending ? t(lang, "common.loading") : `${t(lang, "tracker.copyFrom")} ${new Date(period.year, period.month - 2).toLocaleString("default", { month: "long" })}`}
+            </span>
+            <span className="sm:hidden">
+              {copyPreviousMonthMutation.isPending ? "..." : t(lang, "tracker.copyFrom")}
+            </span>
           </Button>
-          <Badge
-            variant={visibility === "SHARED" ? "shared" : "personal"}
-            className="text-[10px] ml-1"
-          >
-            {visibility === "SHARED" ? t(lang, "common.shared") : t(lang, "common.personal")}
-          </Badge>
         </div>
 
-        {/* Right: Copy Last Month */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5"
-          onClick={() =>
-            copyPreviousMonthMutation.mutate({
-              month: period.month,
-              year: period.year,
-              visibility,
-            })
-          }
-          disabled={copyPreviousMonthMutation.isPending}
-        >
-          <Copy className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">
-            {copyPreviousMonthMutation.isPending ? t(lang, "common.loading") : `${t(lang, "tracker.copyFrom")} ${new Date(period.year, period.month - 2).toLocaleString("default", { month: "long" })}`}
-          </span>
-          <span className="sm:hidden">
-            {copyPreviousMonthMutation.isPending ? "..." : t(lang, "tracker.copyFrom")}
-          </span>
-        </Button>
-      </div>
-
-      {/* ── Budget Health Scorecard ──────────────────────────────── */}
-      {summary && (
-        <div className="rounded-lg border bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              {t(lang, "tracker.budgetHealth")}
+        {/* Row 2: Budget summary + progress bar */}
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Summary chips */}
+          <div className="flex items-center gap-3 text-xs flex-wrap">
+            <span className="text-muted-foreground">
+              {t(lang, "tracker.income")}{" "}
+              <MoneyDisplay amount={totalIncome} colorize={false} className="text-xs font-semibold text-foreground inline" />
+            </span>
+            <span className="text-muted-foreground">
+              {t(lang, "tracker.expenses")}{" "}
+              <MoneyDisplay amount={expenseAssigned} colorize={false} className="text-xs font-semibold text-foreground inline" />
+            </span>
+            {totalFundContributions > 0 && (
+              <span className="text-muted-foreground">
+                {t(lang, "tracker.funds")}{" "}
+                <MoneyDisplay amount={totalFundContributions} colorize={false} className="text-xs font-semibold text-foreground inline" />
+              </span>
+            )}
+            <span className={cn(
+              "font-semibold",
+              readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
+              readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
+              readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
+              "text-muted-foreground"
+            )}>
+              {t(lang, "tracker.leftToAssign")}: <MoneyDisplay amount={readyToAssign} colorize={false} className="text-xs inline" />
+              {readyToAssign === 0 && incomeAssigned > 0 && " ✓"}
             </span>
           </div>
 
-          {/* Top stats row */}
-          <div className={cn("grid gap-4", totalFundContributions > 0 ? "grid-cols-4" : "grid-cols-3")}>
-            <div>
-              <div className="text-xs text-muted-foreground">{t(lang, "tracker.income")}</div>
-              <MoneyDisplay
-                amount={totalIncome}
-                colorize={false}
-                className="text-lg font-bold"
-              />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">{t(lang, "tracker.funds.expenses")}</div>
-              <MoneyDisplay
-                amount={totalAllocatedExpenses}
-                colorize={false}
-                className="text-lg font-bold"
-              />
-            </div>
-            {totalFundContributions > 0 && (
-              <div>
-                <div className="text-xs text-muted-foreground">{t(lang, "tracker.funds")}</div>
-                <MoneyDisplay
-                  amount={totalFundContributions}
-                  colorize={false}
-                  className="text-lg font-bold"
-                />
-              </div>
-            )}
-            <div>
-              <div className="text-xs text-muted-foreground">{t(lang, "tracker.leftToAssign")}</div>
-              <MoneyDisplay
-                amount={readyToAssign}
-                colorize={false}
-                className={cn(
-                  "text-lg font-bold",
-                  readyToAssign === 0 && incomeAssigned > 0 && "text-green-600 dark:text-green-400",
-                  readyToAssign > 0 && "text-amber-600 dark:text-amber-400",
-                  readyToAssign < 0 && "text-red-600 dark:text-red-400"
-                )}
-              />
-              {readyToAssign === 0 && incomeAssigned > 0 && (
-                <span className="text-[11px] text-green-600 dark:text-green-400 font-medium">{t(lang, "tracker.balanced")}</span>
-              )}
-              {readyToAssign > 0 && (
-                <span className="text-[11px] text-amber-600 dark:text-amber-400">{t(lang, "tracker.unassigned")}</span>
-              )}
-              {readyToAssign < 0 && (
-                <span className="text-[11px] text-red-600 dark:text-red-400">{t(lang, "tracker.overAllocated")}</span>
-              )}
-            </div>
-          </div>
-
           {/* Allocation progress bar */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{t(lang, "tracker.allocated")}</span>
-              <span>{allocationPct}% {t(lang, "tracker.assigned")}</span>
-            </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div className="flex-1 min-w-[100px] max-w-[300px]">
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
@@ -980,35 +986,19 @@ export default function TrackerPage() {
                 style={{ width: `${Math.min(allocationPct, 100)}%` }}
               />
             </div>
+            <span className="text-[10px] text-muted-foreground">{allocationPct}% {t(lang, "tracker.assigned")}</span>
           </div>
 
-          {/* Spending progress bar */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                {t(lang, "tracker.spent")}: <MoneyDisplay amount={totalSpentExpenses} colorize={false} className="text-xs font-medium inline" />
-                {totalAllocatedExpenses > 0 && <> / <MoneyDisplay amount={totalAllocatedExpenses} colorize={false} className="text-xs inline" /> ({spendingPct}%)</>}
-              </span>
-              {isCurrentMonth && (
-                <span>{daysLeft} {t(lang, "tracker.daysLeft")}</span>
-              )}
+          {/* Spending summary */}
+          {totalSpentExpenses > 0 && (
+            <div className="text-[10px] text-muted-foreground">
+              {t(lang, "tracker.spent")}: <MoneyDisplay amount={totalSpentExpenses} colorize={false} className="text-[10px] font-medium inline" />
+              {totalAllocatedExpenses > 0 && <> ({spendingPct}%)</>}
+              {isCurrentMonth && <> · {daysLeft} {t(lang, "tracker.daysLeft")}</>}
             </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all",
-                  spendingPct >= 100
-                    ? "bg-red-500"
-                    : spendingPct >= 80
-                      ? "bg-yellow-500"
-                      : "bg-green-500"
-                )}
-                style={{ width: `${Math.min(spendingPct, 100)}%` }}
-              />
-            </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* ── Tracker Tables ───────────────────────────────────────── */}
       <DndContext
@@ -1031,7 +1021,7 @@ export default function TrackerPage() {
         return (
           <div key={tableType} className="rounded-lg border bg-card overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]">
-              <thead className="sticky top-16 z-10">
+              <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
                   <th className="text-left py-2.5 px-3 bg-card">
@@ -1918,7 +1908,7 @@ export default function TrackerPage() {
         >
         <div className="rounded-lg border bg-card overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]">
-              <thead className="sticky top-16 z-10">
+              <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
                   <th className="text-left py-2.5 px-3 bg-card">
