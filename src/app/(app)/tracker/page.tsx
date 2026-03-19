@@ -16,8 +16,27 @@ import { toast } from "sonner";
 import { t } from "@/lib/translations";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { EmojiPickerButton } from "@/components/ui/emoji-picker";
-import { FundCard, type FundData } from "@/components/tracker/fund-card";
-import { FundEditDialog } from "@/components/tracker/fund-edit-dialog";
+import { FundCalculator } from "@/components/tracker/fund-calculator";
+import { toCents } from "@/lib/money";
+
+// FundData type — matches the shape returned by fund.list
+interface FundData {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  budget: number;
+  thisMonthActual: number;
+  available: number;
+  totalBudgeted: number;
+  totalSpending: number;
+  adjustments: number;
+  entries: Array<{ id: string; amount: number; note: string | null; year: number; month: number; createdAt: Date }>;
+  lineItems: Array<{ id: string; description: string; period: number; amount: number; sortOrder: number }>;
+  linkedAccount: { id: string; name: string; balance: number; currency: string } | null;
+  sortOrder: number;
+}
+import { DeleteCategoryDialog } from "@/components/tracker/delete-category-dialog";
 import {
   DndContext,
   closestCenter,
@@ -48,6 +67,7 @@ import {
   X,
   GripVertical,
   Sparkles,
+  Calculator,
 } from "lucide-react";
 
 // ── Color coding helpers ──────────────────────────────────────────
@@ -122,6 +142,54 @@ function AvailableCell({
   );
 }
 
+// ── Income Available Cell (different semantics) ─────────────────
+
+function IncomeAvailableCell({
+  amount,
+  allocated,
+  incomeActual,
+}: {
+  amount: number;
+  allocated: number;
+  incomeActual: number;
+}) {
+  if (allocated === 0 && incomeActual === 0) {
+    return <span className="text-sm text-muted-foreground/40">—</span>;
+  }
+
+  // Income available: 0 = all received (green), >0 = pending (amber), <0 = bonus (green)
+  const colorClass = amount <= 0
+    ? "text-green-600 dark:text-green-400"
+    : "text-amber-600 dark:text-amber-400";
+  const bgClass = amount <= 0
+    ? "bg-green-100 dark:bg-green-950/40"
+    : "bg-amber-100 dark:bg-amber-950/40";
+
+  const showProgress = allocated > 0 && incomeActual > 0;
+  const pct = showProgress ? Math.min((incomeActual / allocated) * 100, 100) : 0;
+  const barColor = pct >= 100 ? "bg-green-500" : pct >= 80 ? "bg-blue-500" : "bg-amber-500";
+
+  return (
+    <div className="inline-flex flex-col items-end gap-0.5">
+      <span className={cn("inline-block rounded-sm px-1.5 py-0.5", bgClass)}>
+        <MoneyDisplay
+          amount={amount}
+          colorize={false}
+          className={cn("text-sm font-medium", colorClass)}
+        />
+      </span>
+      {showProgress && (
+        <div className="w-16 h-1 rounded-full bg-muted overflow-hidden">
+          <div
+            className={cn("h-full rounded-full transition-all", barColor)}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Link builder for Actual column → Transactions page ────────────
 
 function buildCategoryTransactionsUrl(
@@ -133,6 +201,17 @@ function buildCategoryTransactionsUrl(
   const accrualDateFrom = `${period.year}-${mm}-01`;
   const accrualDateTo = `${period.year}-${mm}-${String(lastDay).padStart(2, "0")}`;
   return `/transactions?categoryId=${categoryId}&accrualDateFrom=${accrualDateFrom}&accrualDateTo=${accrualDateTo}&liquidOnly=true`;
+}
+
+function buildFundTransactionsUrl(
+  fundId: string,
+  period: { year: number; month: number }
+) {
+  const mm = String(period.month).padStart(2, "0");
+  const lastDay = new Date(period.year, period.month, 0).getDate();
+  const accrualDateFrom = `${period.year}-${mm}-01`;
+  const accrualDateTo = `${period.year}-${mm}-${String(lastDay).padStart(2, "0")}`;
+  return `/transactions?fundId=${fundId}&accrualDateFrom=${accrualDateFrom}&accrualDateTo=${accrualDateTo}&liquidOnly=true`;
 }
 
 // ── Main Component ────────────────────────────────────────────────
@@ -153,14 +232,19 @@ export default function TrackerPage() {
   const [addingCategoryToGroup, setAddingCategoryToGroup] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryIcon, setNewCategoryIcon] = useState("");
-  const [showAddGroup, setShowAddGroup] = useState(false);
+  const [showAddGroup, setShowAddGroup] = useState<"INCOME" | "EXPENSE" | null>(null);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupIcon, setNewGroupIcon] = useState("");
-  const [newGroupType, setNewGroupType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [editingGroupType, setEditingGroupType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [editingIcon, setEditingIcon] = useState("");
   const [iconSuggestions, setIconSuggestions] = useState<string[]>([]);
   const suggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<{
+    id: string;
+    name: string;
+    icon: string | null;
+    transactionCount: number;
+  } | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(period.year);
   const monthPickerRef = useRef<HTMLDivElement>(null);
@@ -200,26 +284,110 @@ export default function TrackerPage() {
 
   // Funds query
   const fundsQuery = useQuery(
-    trpc.fund.list.queryOptions({ visibility })
+    trpc.fund.list.queryOptions({ visibility, month: period.month, year: period.year })
   );
 
   // Fund UI state
   const [editingFundId, setEditingFundId] = useState<string | null>(null);
-  const [showFundDialog, setShowFundDialog] = useState(false);
+  const [editingFundName, setEditingFundName] = useState("");
+  const [editingFundIcon, setEditingFundIcon] = useState("");
+  const [fundIconSuggestions, setFundIconSuggestions] = useState<string[]>([]);
+  const fundSuggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [calculatorFundId, setCalculatorFundId] = useState<string | null>(null);
+  const [showAddFund, setShowAddFund] = useState(false);
+  const [newFundName, setNewFundName] = useState("");
+  const [newFundIcon, setNewFundIcon] = useState("");
+  const [expandedFundId, setExpandedFundId] = useState<string | null>(null);
+  const [adjustingFundId, setAdjustingFundId] = useState<string | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
 
   // Fund mutations
-  const contributeAllMutation = useMutation(
-    trpc.fund.contributeAll.mutationOptions({
-      onSuccess: (data) => {
+  const setFundAllocationMutation = useMutation(
+    trpc.tracker.setFundAllocation.mutationOptions({
+      onSuccess: () => queryClient.invalidateQueries(),
+    })
+  );
+
+  const createFundMutation = useMutation(
+    trpc.fund.create.mutationOptions({
+      onSuccess: () => {
         queryClient.invalidateQueries();
-        if (data.count > 0) {
-          toast.success(`Added contributions to ${data.count} funds`);
-        } else {
-          toast("All funds already have contributions this month");
-        }
+        setShowAddFund(false);
+        setNewFundName("");
+        setNewFundIcon("");
       },
     })
   );
+
+  const updateFundMutation = useMutation(
+    trpc.fund.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        setEditingFundId(null);
+        setEditingFundName("");
+        setEditingFundIcon("");
+        setFundIconSuggestions([]);
+      },
+    })
+  );
+
+  const deleteFundMutation = useMutation(
+    trpc.fund.delete.mutationOptions({
+      onSuccess: () => queryClient.invalidateQueries(),
+    })
+  );
+
+  const reorderFundsMutation = useMutation(
+    trpc.fund.reorder.mutationOptions({
+      onSettled: () => queryClient.invalidateQueries(),
+    })
+  );
+
+  const updateLinkedAccountMutation = useMutation(
+    trpc.fund.updateLinkedAccount.mutationOptions({
+      onSuccess: () => queryClient.invalidateQueries(),
+    })
+  );
+
+  const addFundEntryMutation = useMutation(
+    trpc.fund.addEntry.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        setAdjustingFundId(null);
+        setAdjustAmount("");
+        setAdjustNote("");
+      },
+    })
+  );
+
+  const deleteFundEntryMutation = useMutation(
+    trpc.fund.deleteEntry.mutationOptions({
+      onSuccess: () => queryClient.invalidateQueries(),
+    })
+  );
+
+  // Accounts query for linked account dropdown
+  const accountsQuery = useQuery(trpc.account.list.queryOptions());
+
+  const suggestFundIconMutation = useMutation(
+    trpc.category.suggestIcon.mutationOptions({
+      onSuccess: (data) => {
+        setFundIconSuggestions(data.emojis);
+      },
+    })
+  );
+
+  function triggerFundIconSuggestion(name: string) {
+    if (fundSuggestDebounceRef.current) clearTimeout(fundSuggestDebounceRef.current);
+    if (!name.trim() || name.trim().length < 2) {
+      setFundIconSuggestions([]);
+      return;
+    }
+    fundSuggestDebounceRef.current = setTimeout(() => {
+      suggestFundIconMutation.mutate({ name: name.trim() });
+    }, 600);
+  }
 
   // Tracker mutations
   const setAllocationMutation = useMutation(
@@ -243,7 +411,7 @@ export default function TrackerPage() {
         setAddingCategoryToGroup(null);
         setNewCategoryName("");
         setNewCategoryIcon("");
-        setShowAddGroup(false);
+        setShowAddGroup(null);
         setNewGroupName("");
         setNewGroupIcon("");
       },
@@ -370,19 +538,45 @@ export default function TrackerPage() {
       return aIdx - bIdx;
     });
 
-  // ── DnD: build flat sortable ID list ──
-  const sortableIds = useMemo(() => {
+  const incomeGroups = groupsWithData.filter(g => g.type === "INCOME");
+  const expenseGroups = groupsWithData.filter(g => g.type === "EXPENSE");
+
+  // Flat list of leaf categories for the delete dialog dropdown
+  const flatCategoriesForDelete = useMemo(() => {
+    return groupsWithData
+      .flatMap((g) =>
+        g.children.map((c) => ({
+          id: c.id,
+          name: c.name,
+          icon: c.icon,
+          parentName: g.name,
+        }))
+      )
+      .filter((c) => c.id !== deleteCategoryTarget?.id);
+  }, [groupsWithData, deleteCategoryTarget]);
+
+  // ── DnD: build flat sortable ID lists (one per table) ──
+  const incomeSortableIds = useMemo(() => {
     const ids: string[] = [];
-    for (const group of groupsWithData) {
+    for (const group of incomeGroups) {
       ids.push(`group-${group.id}`);
       if (!collapsedGroups.has(group.id)) {
-        for (const cat of group.children) {
-          ids.push(`cat-${cat.id}`);
-        }
+        for (const cat of group.children) ids.push(`cat-${cat.id}`);
       }
     }
     return ids;
-  }, [groupsWithData, collapsedGroups]);
+  }, [incomeGroups, collapsedGroups]);
+
+  const expenseSortableIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const group of expenseGroups) {
+      ids.push(`group-${group.id}`);
+      if (!collapsedGroups.has(group.id)) {
+        for (const cat of group.children) ids.push(`cat-${cat.id}`);
+      }
+    }
+    return ids;
+  }, [expenseGroups, collapsedGroups]);
 
   // Active drag item for overlay
   const activeDragItem = useMemo(() => {
@@ -539,9 +733,11 @@ export default function TrackerPage() {
   const expenseAssigned = groupsWithData
     .filter((g) => g.type === "EXPENSE")
     .reduce((sum, g) => sum + g.totalAllocated, 0);
-  const fundsData = (fundsQuery.data ?? []) as FundData[];
-  const totalFundContributions = fundsData.reduce((sum, f) => sum + f.monthlyContribution, 0);
+  const fundsData = (fundsQuery.data?.funds ?? []) as FundData[];
+  const historicalAccountBalance = fundsQuery.data?.historicalAccountBalance ?? null;
+  const totalFundContributions = fundsData.reduce((sum, f) => sum + f.budget, 0);
   const readyToAssign = incomeAssigned - expenseAssigned - totalFundContributions;
+  const totalIncomeActual = incomeGroups.reduce((s, g) => s + g.totalIncomeActual - g.totalExpenseActual, 0);
 
   // Actual Balance: real income received − real expenses paid (from transactions)
   const actualBalance = (summary?.actualIncome ?? 0) - (summary?.totalActualExpenses ?? 0);
@@ -816,375 +1012,102 @@ export default function TrackerPage() {
         </div>
       )}
 
-      {/* ── Tracker Grid ────────────────────────────────────────── */}
+      {/* ── Tracker Tables ───────────────────────────────────────── */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={isEditing ? undefined : handleDragStart}
         onDragEnd={isEditing ? undefined : handleDragEnd}
       >
-      <div className="rounded-lg border bg-card overflow-x-clip">
-        <table className="w-full text-sm min-w-[600px]">
-          <thead className="sticky top-16 z-10">
-            <tr className="border-b bg-muted/50">
-              <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                Budget Tracker
-              </th>
-              <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32">
-                Budget
-              </th>
-              <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32">
-                Actual
-              </th>
-              <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-36">
-                Available
-              </th>
-            </tr>
-            {/* ── Balance row (sticky with header) ── */}
-            <tr className={cn(
-              "border-b",
-              readyToAssign > 0 && "bg-green-50/80 dark:bg-green-950/30",
-              readyToAssign < 0 && "bg-red-50/80 dark:bg-red-950/30",
-              readyToAssign === 0 && "bg-blue-50/80 dark:bg-blue-950/30"
-            )}>
-              <th className="text-left py-2 px-3 font-semibold text-xs uppercase tracking-wider">
-                <span className="text-muted-foreground">Balance</span>
-                {readyToAssign === 0 && incomeAssigned > 0 && (
-                  <span className="ml-2 text-[10px] font-normal text-blue-600 dark:text-blue-400">
-                    Every euro has a job!
-                  </span>
-                )}
-                {readyToAssign > 0 && (
-                  <span className="ml-2 text-[10px] font-normal text-green-600 dark:text-green-400">
-                    You have money to assign
-                  </span>
-                )}
-                {readyToAssign < 0 && (
-                  <span className="ml-2 text-[10px] font-normal text-red-600 dark:text-red-400">
-                    You assigned more than your income
-                  </span>
-                )}
-              </th>
-              <th className="text-right py-2 px-3">
-                <MoneyDisplay
-                  amount={readyToAssign}
-                  colorize={false}
-                  className={cn(
-                    "text-sm font-bold",
-                    readyToAssign > 0 && "text-green-600 dark:text-green-400",
-                    readyToAssign < 0 && "text-red-600 dark:text-red-400",
-                    readyToAssign === 0 && "text-blue-600 dark:text-blue-400"
-                  )}
-                />
-              </th>
-              <th className="text-right py-2 px-3">
-                <MoneyDisplay
-                  amount={actualBalance}
-                  colorize={false}
-                  className={cn(
-                    "text-sm font-bold",
-                    actualBalance > 0 && "text-green-600 dark:text-green-400",
-                    actualBalance < 0 && "text-red-600 dark:text-red-400",
-                    actualBalance === 0 && "text-muted-foreground"
-                  )}
-                />
-              </th>
-              <th />
-            </tr>
-          </thead>
+      {(["INCOME", "EXPENSE"] as const).map((tableType) => {
+        const groups = tableType === "INCOME" ? incomeGroups : expenseGroups;
+        const sortIds = tableType === "INCOME" ? incomeSortableIds : expenseSortableIds;
+        const isIncome = tableType === "INCOME";
+        const tableTitle = isIncome ? `💰 ${t(lang, "tracker.income")}` : `📊 ${t(lang, "tracker.expenses")}`;
+        const tableTotalBudget = isIncome ? incomeAssigned : expenseAssigned;
+        const tableTotalActual = isIncome ? totalIncomeActual : -totalSpentExpenses;
+        const tableTotalAvail = isIncome
+          ? incomeAssigned - totalIncomeActual
+          : expenseAssigned - totalSpentExpenses;
 
-          <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-          <tbody>
+        return (
+          <div key={tableType} className="rounded-lg border bg-card overflow-x-clip">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="sticky top-16 z-10">
+                <tr className="border-b bg-card">
+                  <th colSpan={4} className="text-left py-2.5 px-4 bg-card">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {tableTitle}
+                    </span>
+                  </th>
+                </tr>
+                <tr className="border-b bg-card">
+                  <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
+                    {isIncome ? t(lang, "tracker.income") : t(lang, "tracker.expenses")}
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                    Budget
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                    Actual
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-36 bg-card">
+                    Available
+                  </th>
+                </tr>
+              </thead>
 
-            {groupsWithData.map((group) => {
-              const groupRemaining = group.totalAllocated - group.totalSpent;
-              const isCollapsed = collapsedGroups.has(group.id);
-              const isIncomeGroup = group.type === "INCOME";
-              const isEditingGroup = editingCategoryId === group.id;
+              <SortableContext items={sortIds} strategy={verticalListSortingStrategy}>
+              <tbody>
 
-              return (
-                <GroupRows key={group.id}>
-                  {/* Group header row */}
-                  <SortableTr
-                    id={`group-${group.id}`}
-                    className={cn(
-                      "border-b select-none group/row",
-                      isIncomeGroup
-                        ? "bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-950/30"
-                        : "bg-muted/30 hover:bg-muted/50"
-                    )}
-                  >
-                    {(dragHandleProps) => (<>
-                    <td className="py-2 px-3">
-                      <div className="flex items-center gap-2">
-                        <DragHandle
-                          listeners={dragHandleProps}
-                          className="opacity-0 group-hover/row:opacity-100 transition-opacity"
-                        />
-                        <span
-                          className="cursor-pointer"
-                          onClick={() => toggleGroup(group.id)}
-                        >
-                          <ChevronRight
-                            className={cn(
-                              "h-4 w-4 text-muted-foreground transition-transform",
-                              !isCollapsed && "rotate-90"
-                            )}
-                          />
-                        </span>
+                {groups.map((group) => {
+                  const groupRemaining = group.totalAllocated - group.totalSpent;
+                  const isCollapsed = collapsedGroups.has(group.id);
+                  const isIncomeGroup = group.type === "INCOME";
+                  const isEditingGroup = editingCategoryId === group.id;
 
-                        {isEditingGroup ? (
-                          <form
-                            className="flex items-center gap-2 flex-1"
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              if (editingName.trim()) {
-                                updateCategoryMutation.mutate({
-                                  id: group.id,
-                                  name: editingName.trim(),
-                                  icon: editingIcon.trim() || undefined,
-                                  type: editingGroupType,
-                                });
-                                setIconSuggestions([]);
-                              }
-                            }}
-                          >
-                            <EmojiPickerButton
-                              value={editingIcon}
-                              onChange={(emoji) => setEditingIcon(emoji)}
-                            />
-                            <input
-                              autoFocus
-                              value={editingName}
-                              onChange={(e) => { setEditingName(e.target.value); triggerIconSuggestion(e.target.value); }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Escape") {
-                                  setEditingCategoryId(null);
-                                  setEditingName("");
-                                  setIconSuggestions([]);
-                                }
-                              }}
-                              className="bg-transparent border-0 border-b border-primary/50 outline-none font-semibold text-sm py-0 px-1 w-full max-w-[200px]"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setEditingGroupType((t) => t === "INCOME" ? "EXPENSE" : "INCOME")}
-                              className={cn(
-                                "text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0",
-                                editingGroupType === "INCOME"
-                                  ? "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
-                                  : "border-muted text-muted-foreground hover:text-foreground"
-                              )}
-                            >
-                              {editingGroupType === "INCOME" ? "Income" : "Expense"}
-                            </button>
-                            <button
-                              type="submit"
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingCategoryId(null);
-                                setEditingName("");
-                                setIconSuggestions([]);
-                              }}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </form>
-                        ) : (
-                          <>
-                            <span
-                              className="text-sm cursor-pointer"
-                              onClick={() => toggleGroup(group.id)}
-                            >
-                              {group.icon}
-                            </span>
-                            <span
-                              className={cn(
-                                "font-semibold cursor-pointer",
-                                isIncomeGroup && "text-blue-700 dark:text-blue-300"
-                              )}
-                              onClick={() => toggleGroup(group.id)}
-                            >
-                              {group.name}
-                            </span>
-                            <button
-                              onClick={() => {
-                                setEditingCategoryId(group.id);
-                                setEditingName(group.name);
-                                setEditingIcon(group.icon ?? "");
-                                setEditingGroupType(group.type);
-                                setIconSuggestions([]);
-                                if (group.name.trim().length >= 2) {
-                                  suggestIconMutation.mutate({ name: group.name.trim() });
-                                }
-                              }}
-                              className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
-                              title="Rename group"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                            {isIncomeGroup && (
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] px-1 py-0 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400"
-                              >
-                                Income
-                              </Badge>
-                            )}
-                            <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => setAddingCategoryToGroup(group.id)}
-                                className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
-                                title="Add subcategory"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                              {group.childCount === 0 && (
-                                <button
-                                  onClick={() =>
-                                    deleteCategoryMutation.mutate({ id: group.id })
-                                  }
-                                  className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600"
-                                  title="Delete empty group"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              )}
-                            </div>
-                          </>
+                  return (
+                    <GroupRows key={group.id}>
+                      {/* Group header row */}
+                      <SortableTr
+                        id={`group-${group.id}`}
+                        className={cn(
+                          "border-b select-none group/row",
+                          isIncomeGroup
+                            ? "bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-950/30"
+                            : "bg-muted/30 hover:bg-muted/50"
                         )}
-                      </div>
-                    </td>
-                    {!isEditingGroup ? (
-                      <>
-                        <td
-                          className="py-2 px-3 text-right cursor-pointer"
-                          onClick={() => toggleGroup(group.id)}
-                        >
-                          {group.totalAllocated === 0
-                            ? <span className="text-sm text-muted-foreground/40">—</span>
-                            : <MoneyDisplay
-                                amount={group.totalAllocated}
-                                colorize={false}
-                                className="text-sm font-semibold"
-                              />
-                          }
-                        </td>
-                        <td
-                          className="py-2 px-3 text-right cursor-pointer"
-                          onClick={() => toggleGroup(group.id)}
-                        >
-                          {(() => {
-                            const groupActual = isIncomeGroup
-                              ? group.totalIncomeActual - group.totalExpenseActual
-                              : -group.totalSpent;
-                            const hasActual = isIncomeGroup
-                              ? group.totalIncomeActual > 0 || group.totalExpenseActual > 0
-                              : group.totalSpent > 0;
-                            return hasActual ? (
-                              <MoneyDisplay
-                                amount={groupActual}
-                                colorize={false}
+                      >
+                        {(dragHandleProps) => (<>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <DragHandle
+                              listeners={dragHandleProps}
+                              className="opacity-0 group-hover/row:opacity-100 transition-opacity"
+                            />
+                            <span
+                              className="cursor-pointer"
+                              onClick={() => toggleGroup(group.id)}
+                            >
+                              <ChevronRight
                                 className={cn(
-                                  "text-sm font-semibold",
-                                  isIncomeGroup
-                                    ? groupActual >= 0
-                                      ? "text-green-600 dark:text-green-400"
-                                      : "text-red-600 dark:text-red-400"
-                                    : "text-red-600 dark:text-red-400"
+                                  "h-4 w-4 text-muted-foreground transition-transform",
+                                  !isCollapsed && "rotate-90"
                                 )}
                               />
-                            ) : (
-                              <span className="text-sm text-muted-foreground/40">—</span>
-                            );
-                          })()}
-                        </td>
-                        <td
-                          className="py-2 px-3 text-right cursor-pointer"
-                          onClick={() => toggleGroup(group.id)}
-                        >
-                          <AvailableCell
-                            amount={groupRemaining}
-                            allocated={group.totalAllocated}
-                            spent={group.totalSpent}
-                          />
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td />
-                        <td />
-                        <td />
-                      </>
-                    )}
-                  </>)}
-                  </SortableTr>
-                  {/* Ophelia icon suggestions row for group edit */}
-                  {editingCategoryId === group.id && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
-                    <tr className="border-b border-border/50 bg-muted/5">
-                      <td className="py-1 px-3 pl-10" colSpan={4}>
-                        <div className="flex items-center gap-1">
-                          <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                          {suggestIconMutation.isPending ? (
-                            <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
-                          ) : (
-                            <>
-                              <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
-                              {iconSuggestions.map((emoji) => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingIcon(emoji);
-                                    setIconSuggestions([]);
-                                  }}
-                                  className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
-                                  title={`Use ${emoji}`}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                            </span>
 
-                  {/* Category rows */}
-                  {!isCollapsed &&
-                    group.children.map((cat) => {
-                      const isEditingCat = editingCategoryId === cat.id;
-
-                      return (
-                        <React.Fragment key={cat.id}>
-                        <SortableTr
-                          id={`cat-${cat.id}`}
-                          className={cn(
-                            "border-b border-border/50 hover:bg-muted/20 group/catrow",
-                            isEditingCat && (iconSuggestions.length > 0 || suggestIconMutation.isPending)
-                              ? "border-b-0"
-                              : getRowBorder(cat.remaining, cat.allocated, cat.spent)
-                          )}
-                        >
-                          {(catDragHandleProps) => (<>
-                          <td className="py-1.5 px-3 pl-6">
-                            {isEditingCat ? (
+                            {isEditingGroup ? (
                               <form
-                                className="flex items-center gap-2"
+                                className="flex items-center gap-2 flex-1"
                                 onSubmit={(e) => {
                                   e.preventDefault();
                                   if (editingName.trim()) {
                                     updateCategoryMutation.mutate({
-                                      id: cat.id,
+                                      id: group.id,
                                       name: editingName.trim(),
                                       icon: editingIcon.trim() || undefined,
+                                      type: editingGroupType,
                                     });
                                     setIconSuggestions([]);
                                   }
@@ -1194,9 +1117,6 @@ export default function TrackerPage() {
                                   value={editingIcon}
                                   onChange={(emoji) => setEditingIcon(emoji)}
                                 />
-                                {suggestIconMutation.isPending && isEditingCat && (
-                                  <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
-                                )}
                                 <input
                                   autoFocus
                                   value={editingName}
@@ -1208,8 +1128,20 @@ export default function TrackerPage() {
                                       setIconSuggestions([]);
                                     }
                                   }}
-                                  className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 w-full max-w-[200px]"
+                                  className="bg-transparent border-0 border-b border-primary/50 outline-none font-semibold text-sm py-0 px-1 w-full max-w-[200px]"
                                 />
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingGroupType((t) => t === "INCOME" ? "EXPENSE" : "INCOME")}
+                                  className={cn(
+                                    "text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0",
+                                    editingGroupType === "INCOME"
+                                      ? "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
+                                      : "border-muted text-muted-foreground hover:text-foreground"
+                                  )}
+                                >
+                                  {editingGroupType === "INCOME" ? "Income" : "Expense"}
+                                </button>
                                 <button
                                   type="submit"
                                   className="text-muted-foreground hover:text-foreground"
@@ -1229,109 +1161,459 @@ export default function TrackerPage() {
                                 </button>
                               </form>
                             ) : (
-                              <div className="flex items-center gap-2">
-                                <DragHandle
-                                  listeners={catDragHandleProps}
-                                  className="opacity-0 group-hover/catrow:opacity-100 transition-opacity"
-                                />
-                                <span className="text-sm">{cat.icon}</span>
+                              <>
+                                <span
+                                  className="text-sm cursor-pointer"
+                                  onClick={() => toggleGroup(group.id)}
+                                >
+                                  {group.icon}
+                                </span>
                                 <span
                                   className={cn(
-                                    "text-sm",
-                                    cat.allocated === 0 &&
-                                      cat.spent === 0 &&
-                                      "text-muted-foreground"
+                                    "font-semibold cursor-pointer",
+                                    isIncomeGroup && "text-blue-700 dark:text-blue-300"
                                   )}
+                                  onClick={() => toggleGroup(group.id)}
                                 >
-                                  {cat.name}
+                                  {group.name}
                                 </span>
                                 <button
                                   onClick={() => {
-                                    setEditingCategoryId(cat.id);
-                                    setEditingName(cat.name);
-                                    setEditingIcon(cat.icon ?? "");
+                                    setEditingCategoryId(group.id);
+                                    setEditingName(group.name);
+                                    setEditingIcon(group.icon ?? "");
+                                    setEditingGroupType(group.type);
                                     setIconSuggestions([]);
-                                    if (cat.name.trim().length >= 2) {
-                                      suggestIconMutation.mutate({ name: cat.name.trim() });
+                                    if (group.name.trim().length >= 2) {
+                                      suggestIconMutation.mutate({ name: group.name.trim() });
                                     }
                                   }}
-                                  className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground opacity-0 group-hover/catrow:opacity-100 transition-opacity"
-                                  title="Rename"
+                                  className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
+                                  title="Rename group"
                                 >
                                   <Pencil className="h-3 w-3" />
                                 </button>
-                                <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover/catrow:opacity-100 transition-opacity">
+                                <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
                                   <button
-                                    onClick={() =>
-                                      deleteCategoryMutation.mutate({ id: cat.id })
-                                    }
-                                    className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600"
-                                    title="Delete category"
+                                    onClick={() => setAddingCategoryToGroup(group.id)}
+                                    className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+                                    title="Add subcategory"
                                   >
-                                    <Trash2 className="h-3 w-3" />
+                                    <Plus className="h-3.5 w-3.5" />
                                   </button>
+                                  {group.childCount === 0 && (
+                                    <button
+                                      onClick={() =>
+                                        deleteCategoryMutation.mutate({ id: group.id })
+                                      }
+                                      className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600"
+                                      title="Delete empty group"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  )}
                                 </div>
-                              </div>
+                              </>
                             )}
-                          </td>
-                          <td className="py-1.5 px-3 text-right">
-                            <InlineMoneyEdit
-                              key={`alloc-${tracker.id}-${cat.id}`}
-                              value={cat.allocated}
-                              onSave={(cents) => {
-                                setAllocationMutation.mutate({
-                                  trackerId: tracker.id,
-                                  categoryId: cat.id,
-                                  amount: cents,
-                                });
-                              }}
-                            />
-                          </td>
-                          <td className="py-1.5 px-3 text-right">
-                            {(() => {
-                              const catActual = isIncomeGroup
-                                ? cat.incomeActual - cat.expenseActual
-                                : -cat.spent;
-                              const hasActual = isIncomeGroup
-                                ? cat.incomeActual > 0 || cat.expenseActual > 0
-                                : cat.spent > 0;
-                              return hasActual ? (
-                                <Link
-                                  href={buildCategoryTransactionsUrl(cat.id, period)}
-                                  className="hover:underline transition-colors"
-                                  title="View transactions"
-                                >
+                          </div>
+                        </td>
+
+                        {!isEditingGroup ? (
+                          <>
+                            <td
+                              className="py-2 px-3 text-right cursor-pointer"
+                              onClick={() => toggleGroup(group.id)}
+                            >
+                              {group.totalAllocated === 0
+                                ? <span className="text-sm text-muted-foreground/40">—</span>
+                                : <MoneyDisplay
+                                    amount={group.totalAllocated}
+                                    colorize={false}
+                                    className="text-sm font-semibold"
+                                  />
+                              }
+                            </td>
+                            <td
+                              className="py-2 px-3 text-right cursor-pointer"
+                              onClick={() => toggleGroup(group.id)}
+                            >
+                              {(() => {
+                                const groupActual = isIncomeGroup
+                                  ? group.totalIncomeActual - group.totalExpenseActual
+                                  : -group.totalSpent;
+                                const hasActual = isIncomeGroup
+                                  ? group.totalIncomeActual > 0 || group.totalExpenseActual > 0
+                                  : group.totalSpent > 0;
+                                return hasActual ? (
                                   <MoneyDisplay
-                                    amount={catActual}
+                                    amount={groupActual}
                                     colorize={false}
                                     className={cn(
-                                      "text-sm",
+                                      "text-sm font-semibold",
                                       isIncomeGroup
-                                        ? catActual >= 0
+                                        ? groupActual >= 0
                                           ? "text-green-600 dark:text-green-400"
                                           : "text-red-600 dark:text-red-400"
                                         : "text-red-600 dark:text-red-400"
                                     )}
                                   />
-                                </Link>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground/40">—</span>
+                                );
+                              })()}
+                            </td>
+                            <td
+                              className="py-2 px-3 text-right cursor-pointer"
+                              onClick={() => toggleGroup(group.id)}
+                            >
+                              {isIncomeGroup ? (
+                                <IncomeAvailableCell
+                                  amount={group.totalAllocated - group.totalIncomeActual}
+                                  allocated={group.totalAllocated}
+                                  incomeActual={group.totalIncomeActual}
+                                />
                               ) : (
-                                <span className="text-sm text-muted-foreground/40">—</span>
-                              );
-                            })()}
+                                <AvailableCell
+                                  amount={groupRemaining}
+                                  allocated={group.totalAllocated}
+                                  spent={group.totalSpent}
+                                />
+                              )}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td />
+                            <td />
+                            <td />
+                          </>
+                        )}
+                      </>)}
+                      </SortableTr>
+                      {/* Ophelia icon suggestions row for group edit */}
+                      {editingCategoryId === group.id && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
+                        <tr className="border-b border-border/50 bg-muted/5">
+                          <td className="py-1 px-3 pl-6" colSpan={4}>
+                            <div className="flex items-center gap-1">
+                              <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                              {suggestIconMutation.isPending ? (
+                                <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
+                              ) : (
+                                <>
+                                  <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
+                                  {iconSuggestions.map((emoji) => (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingIcon(emoji);
+                                        setIconSuggestions([]);
+                                      }}
+                                      className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                      title={`Use ${emoji}`}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </>
+                              )}
+                            </div>
                           </td>
-                          <td className="py-1.5 px-3 text-right">
-                            <AvailableCell
-                              amount={cat.remaining}
-                              allocated={cat.allocated}
-                              spent={cat.spent}
-                            />
+                        </tr>
+                      )}
+
+                      {/* Category rows */}
+                      {!isCollapsed &&
+                        group.children.map((cat) => {
+                          const isEditingCat = editingCategoryId === cat.id;
+
+                          return (
+                            <React.Fragment key={cat.id}>
+                            <SortableTr
+                              id={`cat-${cat.id}`}
+                              className={cn(
+                                "border-b border-border/50 hover:bg-muted/20 group/catrow",
+                                isEditingCat && (iconSuggestions.length > 0 || suggestIconMutation.isPending)
+                                  ? "border-b-0"
+                                  : getRowBorder(cat.remaining, cat.allocated, cat.spent)
+                              )}
+                            >
+                              {(catDragHandleProps) => (<>
+                              <td className="py-1.5 px-3">
+                                {isEditingCat ? (
+                                  <form
+                                    className="flex items-center gap-2"
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      if (editingName.trim()) {
+                                        updateCategoryMutation.mutate({
+                                          id: cat.id,
+                                          name: editingName.trim(),
+                                          icon: editingIcon.trim() || undefined,
+                                        });
+                                        setIconSuggestions([]);
+                                      }
+                                    }}
+                                  >
+                                    <EmojiPickerButton
+                                      value={editingIcon}
+                                      onChange={(emoji) => setEditingIcon(emoji)}
+                                    />
+                                    {suggestIconMutation.isPending && isEditingCat && (
+                                      <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
+                                    )}
+                                    <input
+                                      autoFocus
+                                      value={editingName}
+                                      onChange={(e) => { setEditingName(e.target.value); triggerIconSuggestion(e.target.value); }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape") {
+                                          setEditingCategoryId(null);
+                                          setEditingName("");
+                                          setIconSuggestions([]);
+                                        }
+                                      }}
+                                      className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 w-full max-w-[200px]"
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingCategoryId(null);
+                                        setEditingName("");
+                                        setIconSuggestions([]);
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/catrow:opacity-100 transition-opacity">
+                                      <DragHandle
+                                        listeners={catDragHandleProps}
+                                      />
+                                      <button
+                                        onClick={() => {
+                                          setEditingCategoryId(cat.id);
+                                          setEditingName(cat.name);
+                                          setEditingIcon(cat.icon ?? "");
+                                          setIconSuggestions([]);
+                                          if (cat.name.trim().length >= 2) {
+                                            suggestIconMutation.mutate({ name: cat.name.trim() });
+                                          }
+                                        }}
+                                        className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+                                        title="Rename"
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          if (cat.transactionCount > 0) {
+                                            setDeleteCategoryTarget({
+                                              id: cat.id,
+                                              name: cat.name,
+                                              icon: cat.icon,
+                                              transactionCount: cat.transactionCount,
+                                            });
+                                          } else {
+                                            deleteCategoryMutation.mutate({ id: cat.id });
+                                          }
+                                        }}
+                                        className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600"
+                                        title="Delete category"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                    <span className="text-sm">{cat.icon}</span>
+                                    <span
+                                      className={cn(
+                                        "text-sm",
+                                        cat.allocated === 0 &&
+                                          cat.spent === 0 &&
+                                          "text-muted-foreground"
+                                      )}
+                                    >
+                                      {cat.name}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-1.5 px-3 text-right">
+                                <InlineMoneyEdit
+                                  key={`alloc-${tracker.id}-${cat.id}`}
+                                  value={cat.allocated}
+                                  onSave={(cents) => {
+                                    setAllocationMutation.mutate({
+                                      trackerId: tracker.id,
+                                      categoryId: cat.id,
+                                      amount: cents,
+                                    });
+                                  }}
+                                />
+                              </td>
+                              <td className="py-1.5 px-3 text-right">
+                                {(() => {
+                                  const catActual = isIncomeGroup
+                                    ? cat.incomeActual - cat.expenseActual
+                                    : -cat.spent;
+                                  const hasActual = isIncomeGroup
+                                    ? cat.incomeActual > 0 || cat.expenseActual > 0
+                                    : cat.spent > 0;
+                                  return hasActual ? (
+                                    <Link
+                                      href={buildCategoryTransactionsUrl(cat.id, period)}
+                                      className="hover:underline transition-colors"
+                                      title="View transactions"
+                                    >
+                                      <MoneyDisplay
+                                        amount={catActual}
+                                        colorize={false}
+                                        className={cn(
+                                          "text-sm",
+                                          isIncomeGroup
+                                            ? catActual >= 0
+                                              ? "text-green-600 dark:text-green-400"
+                                              : "text-red-600 dark:text-red-400"
+                                            : "text-red-600 dark:text-red-400"
+                                        )}
+                                      />
+                                    </Link>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground/40">—</span>
+                                  );
+                                })()}
+                              </td>
+                              <td className="py-1.5 px-3 text-right">
+                                {isIncomeGroup ? (
+                                  <IncomeAvailableCell
+                                    amount={cat.allocated - cat.incomeActual}
+                                    allocated={cat.allocated}
+                                    incomeActual={cat.incomeActual}
+                                  />
+                                ) : (
+                                  <AvailableCell
+                                    amount={cat.remaining}
+                                    allocated={cat.allocated}
+                                    spent={cat.spent}
+                                  />
+                                )}
+                              </td>
+                            </>)}
+                            </SortableTr>
+                            {/* Ophelia icon suggestions row for category edit */}
+                            {isEditingCat && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
+                              <tr className="border-b border-border/50 bg-muted/5">
+                                <td className="py-1 px-3 pl-6" colSpan={4}>
+                                  <div className="flex items-center gap-1">
+                                    <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                                    {suggestIconMutation.isPending ? (
+                                      <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
+                                    ) : (
+                                      <>
+                                        <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
+                                        {iconSuggestions.map((emoji) => (
+                                          <button
+                                            key={emoji}
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingIcon(emoji);
+                                              setIconSuggestions([]);
+                                            }}
+                                            className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                            title={`Use ${emoji}`}
+                                          >
+                                            {emoji}
+                                          </button>
+                                        ))}
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            </React.Fragment>
+                          );
+                        })}
+
+                      {/* Add category inline row */}
+                      {!isCollapsed && addingCategoryToGroup === group.id && (
+                        <>
+                        <tr className={cn("bg-muted/10", iconSuggestions.length > 0 || suggestIconMutation.isPending ? "" : "border-b border-border/50")}>
+                          <td className="py-1.5 px-3 pl-6" colSpan={4}>
+                            <form
+                              className="flex items-center gap-2"
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                if (newCategoryName.trim()) {
+                                  createCategoryMutation.mutate({
+                                    name: newCategoryName.trim(),
+                                    parentId: group.id,
+                                    visibility,
+                                    icon: newCategoryIcon.trim() || undefined,
+                                  });
+                                  setIconSuggestions([]);
+                                }
+                              }}
+                            >
+                              <EmojiPickerButton
+                                value={newCategoryIcon}
+                                onChange={(emoji) => setNewCategoryIcon(emoji)}
+                              />
+                              {suggestIconMutation.isPending && addingCategoryToGroup === group.id && (
+                                <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
+                              )}
+                              <input
+                                autoFocus
+                                placeholder="New category name..."
+                                value={newCategoryName}
+                                onChange={(e) => { setNewCategoryName(e.target.value); triggerIconSuggestion(e.target.value); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Escape") {
+                                    setAddingCategoryToGroup(null);
+                                    setNewCategoryName("");
+                                    setNewCategoryIcon("");
+                                    setIconSuggestions([]);
+                                  }
+                                }}
+                                className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 flex-1 max-w-[250px]"
+                              />
+                              <button
+                                type="submit"
+                                disabled={
+                                  !newCategoryName.trim() || createCategoryMutation.isPending
+                                }
+                                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAddingCategoryToGroup(null);
+                                  setNewCategoryName("");
+                                  setNewCategoryIcon("");
+                                  setIconSuggestions([]);
+                                }}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </form>
                           </td>
-                        </>)}
-                        </SortableTr>
-                        {/* Ophelia icon suggestions row for category edit */}
-                        {isEditingCat && (iconSuggestions.length > 0 || suggestIconMutation.isPending) && (
+                        </tr>
+                        {/* Ophelia icon suggestions row for new category */}
+                        {(iconSuggestions.length > 0 || suggestIconMutation.isPending) && addingCategoryToGroup === group.id && (
                           <tr className="border-b border-border/50 bg-muted/5">
-                            <td className="py-1 px-3 pl-10" colSpan={4}>
+                            <td className="py-1 px-3 pl-6" colSpan={4}>
                               <div className="flex items-center gap-1">
                                 <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                                 {suggestIconMutation.isPending ? (
@@ -1344,7 +1626,7 @@ export default function TrackerPage() {
                                         key={emoji}
                                         type="button"
                                         onClick={() => {
-                                          setEditingIcon(emoji);
+                                          setNewCategoryIcon(emoji);
                                           setIconSuggestions([]);
                                         }}
                                         className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
@@ -1359,304 +1641,243 @@ export default function TrackerPage() {
                             </td>
                           </tr>
                         )}
-                        </React.Fragment>
-                      );
-                    })}
+                        </>
+                      )}
+                    </GroupRows>
+                  );
+                })}
+              </tbody>
+              </SortableContext>
 
-                  {/* Add category inline row */}
-                  {!isCollapsed && addingCategoryToGroup === group.id && (
-                    <>
-                    <tr className={cn("bg-muted/10", iconSuggestions.length > 0 || suggestIconMutation.isPending ? "" : "border-b border-border/50")}>
-                      <td className="py-1.5 px-3 pl-10" colSpan={4}>
-                        <form
-                          className="flex items-center gap-2"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            if (newCategoryName.trim()) {
-                              createCategoryMutation.mutate({
-                                name: newCategoryName.trim(),
-                                parentId: group.id,
-                                visibility,
-                                icon: newCategoryIcon.trim() || undefined,
-                              });
-                              setIconSuggestions([]);
-                            }
-                          }}
+              {/* Unbudgeted spending — expenses only */}
+              {!isIncome && (unbudgetedCategories.length > 0 || (uncategorizedEntry && uncategorizedEntry.spent > 0)) && (
+                <tbody>
+                  <tr className="border-t-2 border-dashed border-amber-500/50">
+                    <td colSpan={4} className="py-1.5 px-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                          {t(lang, "tracker.unbudgeted")}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {uncategorizedEntry && uncategorizedEntry.spent > 0 && (
+                    <tr className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
+                      <td className="py-1.5 px-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">📄</span>
+                          <span className="text-sm text-muted-foreground">Uncategorized</span>
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-3 text-right">
+                        <span className="text-sm text-muted-foreground/40">—</span>
+                      </td>
+                      <td className="py-1.5 px-3 text-right">
+                        <Link
+                          href={(() => {
+                            const mm = String(period.month).padStart(2, "0");
+                            const ld = new Date(period.year, period.month, 0).getDate();
+                            return `/transactions?accrualDateFrom=${period.year}-${mm}-01&accrualDateTo=${period.year}-${mm}-${String(ld).padStart(2, "0")}&liquidOnly=true`;
+                          })()}
+                          className="hover:underline transition-colors"
+                          title="View uncategorized transactions"
                         >
-                          <EmojiPickerButton
-                            value={newCategoryIcon}
-                            onChange={(emoji) => setNewCategoryIcon(emoji)}
+                          <MoneyDisplay
+                            amount={-uncategorizedEntry.spent}
+                            colorize={false}
+                            className="text-sm text-red-600 dark:text-red-400"
                           />
-                          {suggestIconMutation.isPending && addingCategoryToGroup === group.id && (
-                            <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
-                          )}
-                          <input
-                            autoFocus
-                            placeholder="New category name..."
-                            value={newCategoryName}
-                            onChange={(e) => { setNewCategoryName(e.target.value); triggerIconSuggestion(e.target.value); }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") {
-                                setAddingCategoryToGroup(null);
-                                setNewCategoryName("");
-                                setNewCategoryIcon("");
-                                setIconSuggestions([]);
-                              }
-                            }}
-                            className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 flex-1 max-w-[250px]"
-                          />
-                          <button
-                            type="submit"
-                            disabled={
-                              !newCategoryName.trim() || createCategoryMutation.isPending
-                            }
-                            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddingCategoryToGroup(null);
-                              setNewCategoryName("");
-                              setNewCategoryIcon("");
-                              setIconSuggestions([]);
-                            }}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </form>
+                        </Link>
+                      </td>
+                      <td className="py-1.5 px-3 text-right">
+                        <AvailableCell
+                          amount={-uncategorizedEntry.spent}
+                          allocated={0}
+                          spent={uncategorizedEntry.spent}
+                        />
                       </td>
                     </tr>
-                    {/* Ophelia icon suggestions row for new category */}
-                    {(iconSuggestions.length > 0 || suggestIconMutation.isPending) && addingCategoryToGroup === group.id && (
-                      <tr className="border-b border-border/50 bg-muted/5">
-                        <td className="py-1 px-3 pl-10" colSpan={4}>
-                          <div className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                            {suggestIconMutation.isPending ? (
-                              <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
-                            ) : (
-                              <>
-                                <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
-                                {iconSuggestions.map((emoji) => (
-                                  <button
-                                    key={emoji}
-                                    type="button"
-                                    onClick={() => {
-                                      setNewCategoryIcon(emoji);
-                                      setIconSuggestions([]);
-                                    }}
-                                    className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
-                                    title={`Use ${emoji}`}
-                                  >
-                                    {emoji}
-                                  </button>
-                                ))}
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                    </>
                   )}
-                </GroupRows>
-              );
-            })}
-          </tbody>
-          </SortableContext>
-
-          {/* Unbudgeted spending — categories with actual spend but no allocation */}
-          {(unbudgetedCategories.length > 0 || (uncategorizedEntry && uncategorizedEntry.spent > 0)) && (
-            <tbody>
-              <tr className="border-t-2 border-dashed border-amber-500/50">
-                <td colSpan={4} className="py-1.5 px-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                      {t(lang, "tracker.unbudgeted")}
-                    </span>
-                  </div>
-                </td>
-              </tr>
-              {uncategorizedEntry && uncategorizedEntry.spent > 0 && (
-                <tr className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
-                  <td className="py-1.5 px-3 pl-6">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">📄</span>
-                      <span className="text-sm text-muted-foreground">Uncategorized</span>
-                    </div>
-                  </td>
-                  <td className="py-1.5 px-3 text-right">
-                    <span className="text-sm text-muted-foreground/40">—</span>
-                  </td>
-                  <td className="py-1.5 px-3 text-right">
-                    <Link
-                      href={(() => {
-                        const mm = String(period.month).padStart(2, "0");
-                        const ld = new Date(period.year, period.month, 0).getDate();
-                        return `/transactions?accrualDateFrom=${period.year}-${mm}-01&accrualDateTo=${period.year}-${mm}-${String(ld).padStart(2, "0")}&liquidOnly=true`;
-                      })()}
-                      className="hover:underline transition-colors"
-                      title="View uncategorized transactions"
-                    >
-                      <MoneyDisplay
-                        amount={-uncategorizedEntry.spent}
-                        colorize={false}
-                        className="text-sm text-red-600 dark:text-red-400"
-                      />
-                    </Link>
-                  </td>
-                  <td className="py-1.5 px-3 text-right">
-                    <AvailableCell
-                      amount={-uncategorizedEntry.spent}
-                      allocated={0}
-                      spent={uncategorizedEntry.spent}
-                    />
-                  </td>
-                </tr>
+                  {unbudgetedCategories.map((cat) => (
+                    <tr key={cat.id} className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
+                      <td className="py-1.5 px-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{cat.icon}</span>
+                          <span className="text-sm text-muted-foreground">{cat.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-3 text-right">
+                        <span className="text-sm text-muted-foreground/40">—</span>
+                      </td>
+                      <td className="py-1.5 px-3 text-right">
+                        <Link
+                          href={buildCategoryTransactionsUrl(cat.id, period)}
+                          className="hover:underline transition-colors"
+                          title="View transactions"
+                        >
+                          <MoneyDisplay
+                            amount={-cat.spent}
+                            colorize={false}
+                            className="text-sm text-red-600 dark:text-red-400"
+                          />
+                        </Link>
+                      </td>
+                      <td className="py-1.5 px-3 text-right">
+                        <AvailableCell
+                          amount={-cat.spent}
+                          allocated={0}
+                          spent={cat.spent}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               )}
-              {unbudgetedCategories.map((cat) => (
-                <tr key={cat.id} className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
-                  <td className="py-1.5 px-3 pl-6">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">{cat.icon}</span>
-                      <span className="text-sm text-muted-foreground">{cat.name}</span>
-                    </div>
-                  </td>
-                  <td className="py-1.5 px-3 text-right">
-                    <span className="text-sm text-muted-foreground/40">—</span>
-                  </td>
-                  <td className="py-1.5 px-3 text-right">
-                    <Link
-                      href={buildCategoryTransactionsUrl(cat.id, period)}
-                      className="hover:underline transition-colors"
-                      title="View transactions"
-                    >
-                      <MoneyDisplay
-                        amount={-cat.spent}
-                        colorize={false}
-                        className="text-sm text-red-600 dark:text-red-400"
-                      />
-                    </Link>
-                  </td>
-                  <td className="py-1.5 px-3 text-right">
-                    <AvailableCell
-                      amount={-cat.spent}
-                      allocated={0}
-                      spent={cat.spent}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          )}
 
-          {/* Add Group row */}
-          <tfoot>
-            {showAddGroup ? (
-              <tr className="border-t">
-                <td className="py-2 px-3" colSpan={4}>
-                  <form
-                    className="flex items-center gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (newGroupName.trim()) {
-                        createCategoryMutation.mutate({
-                          name: newGroupName.trim(),
-                          parentId: null,
-                          visibility,
-                          type: newGroupType,
-                          icon: newGroupIcon.trim() || undefined,
-                        });
+              {/* Summary + Add Group */}
+              <tfoot>
+                {/* Total row */}
+                {groups.length > 0 && (
+                  <tr className="border-t bg-muted/30 text-xs font-medium">
+                    <td className="py-2 px-3 text-muted-foreground">
+                      {isIncome ? t(lang, "tracker.totalIncome") : t(lang, "tracker.totalExpenses")}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {tableTotalBudget === 0
+                        ? <span className="text-xs text-muted-foreground/40">—</span>
+                        : <MoneyDisplay amount={tableTotalBudget} colorize={false} className="text-xs font-semibold" />
                       }
-                    }}
-                  >
-                    <input
-                      value={newGroupIcon}
-                      onChange={(e) => setNewGroupIcon(e.target.value)}
-                      placeholder="📁"
-                      maxLength={2}
-                      className="w-8 text-center bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0"
-                    />
-                    <input
-                      autoFocus
-                      placeholder="New group name..."
-                      value={newGroupName}
-                      onChange={(e) => setNewGroupName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          setShowAddGroup(false);
-                          setNewGroupName("");
-                          setNewGroupIcon("");
-                          setNewGroupType("EXPENSE");
-                        }
-                      }}
-                      className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm font-semibold py-0 px-1 flex-1 max-w-[300px]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setNewGroupType((t) => t === "INCOME" ? "EXPENSE" : "INCOME")}
-                      className={cn(
-                        "text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0",
-                        newGroupType === "INCOME"
-                          ? "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
-                          : "border-muted text-muted-foreground hover:text-foreground"
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {(() => {
+                        const hasActual = isIncome
+                          ? (incomeGroups.some(g => g.totalIncomeActual > 0 || g.totalExpenseActual > 0))
+                          : totalSpentExpenses > 0;
+                        return hasActual ? (
+                          <MoneyDisplay
+                            amount={tableTotalActual}
+                            colorize={false}
+                            className={cn(
+                              "text-xs font-semibold",
+                              isIncome
+                                ? tableTotalActual >= 0
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                                : "text-red-600 dark:text-red-400"
+                            )}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground/40">—</span>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {isIncome ? (
+                        <IncomeAvailableCell
+                          amount={tableTotalAvail}
+                          allocated={tableTotalBudget}
+                          incomeActual={totalIncomeActual}
+                        />
+                      ) : (
+                        <AvailableCell
+                          amount={tableTotalAvail}
+                          allocated={tableTotalBudget}
+                          spent={totalSpentExpenses}
+                        />
                       )}
-                    >
-                      {newGroupType === "INCOME" ? "Income" : "Expense"}
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!newGroupName.trim() || createCategoryMutation.isPending}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAddGroup(false);
-                        setNewGroupName("");
-                        setNewGroupIcon("");
-                        setNewGroupType("EXPENSE");
-                      }}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            ) : (
-              <tr className="border-t">
-                <td className="py-2 px-3" colSpan={4}>
-                  <button
-                    onClick={() => setShowAddGroup(true)}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Category Group
-                  </button>
-                </td>
-              </tr>
-            )}
-          </tfoot>
-        </table>
+                    </td>
+                  </tr>
+                )}
 
-        {/* Error display for category mutations */}
-        {(createCategoryMutation.error ||
-          updateCategoryMutation.error ||
-          deleteCategoryMutation.error) && (
-          <div className="px-3 py-2 text-sm text-red-600 border-t">
-            {createCategoryMutation.error?.message ??
-              updateCategoryMutation.error?.message ??
-              deleteCategoryMutation.error?.message}
+                {/* Add group button/form */}
+                {showAddGroup === tableType ? (
+                  <tr className="border-t">
+                    <td className="py-2 px-3" colSpan={4}>
+                      <form
+                        className="flex items-center gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (newGroupName.trim()) {
+                            createCategoryMutation.mutate({
+                              name: newGroupName.trim(),
+                              parentId: null,
+                              visibility,
+                              type: tableType,
+                              icon: newGroupIcon.trim() || undefined,
+                            });
+                          }
+                        }}
+                      >
+                        <input
+                          value={newGroupIcon}
+                          onChange={(e) => setNewGroupIcon(e.target.value)}
+                          placeholder="📁"
+                          maxLength={2}
+                          className="w-8 text-center bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0"
+                        />
+                        <input
+                          autoFocus
+                          placeholder="New group name..."
+                          value={newGroupName}
+                          onChange={(e) => setNewGroupName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              setShowAddGroup(null);
+                              setNewGroupName("");
+                              setNewGroupIcon("");
+                            }
+                          }}
+                          className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm font-semibold py-0 px-1 flex-1 max-w-[300px]"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!newGroupName.trim() || createCategoryMutation.isPending}
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddGroup(null);
+                            setNewGroupName("");
+                            setNewGroupIcon("");
+                          }}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr className="border-t">
+                    <td className="py-2 px-3" colSpan={4}>
+                      <button
+                        onClick={() => setShowAddGroup(tableType)}
+                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {isIncome ? t(lang, "tracker.addIncomeGroup") : t(lang, "tracker.addExpenseGroup")}
+                      </button>
+                    </td>
+                  </tr>
+                )}
+              </tfoot>
+            </table>
+
+            {/* Error display for category mutations */}
+            {(createCategoryMutation.error ||
+              updateCategoryMutation.error) && (
+              <div className="px-3 py-2 text-sm text-red-600 border-t">
+                {createCategoryMutation.error?.message ??
+                  updateCategoryMutation.error?.message}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })}
 
       {/* DnD Overlay */}
       <DragOverlay dropAnimation={null}>
@@ -1675,7 +1896,7 @@ export default function TrackerPage() {
                 </tr>
               ) : (
                 <tr className="bg-card shadow-lg ring-2 ring-primary/30 rounded">
-                  <td className="py-1.5 px-3 pl-10" colSpan={4}>
+                  <td className="py-1.5 px-3 pl-6" colSpan={4}>
                     <div className="flex items-center gap-2">
                       <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-sm">{activeDragItem.data.icon}</span>
@@ -1690,150 +1911,613 @@ export default function TrackerPage() {
       </DragOverlay>
       </DndContext>
 
-      {/* ── Funds Section ─────────────────────────────────────────── */}
+      {/* ── Funds Section (table format matching budget tracker) ──── */}
       {fundsQuery.data && (
-        <div className="rounded-lg border bg-card overflow-hidden">
-          {/* Section header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                💰 {t(lang, "tracker.funds")}
-              </span>
-            </div>
-            {(() => {
-              const linkedAccount = fundsData.find(f => f.linkedAccount)?.linkedAccount;
-              return linkedAccount ? (
-                <span className="text-xs text-muted-foreground">
-                  {t(lang, "tracker.funds.linkedTo")}: {linkedAccount.name} — <MoneyDisplay amount={linkedAccount.balance} colorize={false} className="text-xs inline font-medium" />
-                </span>
-              ) : null;
-            })()}
-          </div>
-
-          {/* Fund cards */}
-          <div className="p-3 space-y-2">
-            {fundsData.length === 0 ? (
-              <p className="text-sm text-muted-foreground/50 text-center py-4">
-                No funds yet. Create one to start envelope budgeting.
-              </p>
-            ) : (
-              <>
-                {fundsData.map((fund) => (
-                  <FundCard
-                    key={fund.id}
-                    fund={fund}
-                    lang={lang}
-                    onEdit={(id) => {
-                      setEditingFundId(id);
-                      setShowFundDialog(true);
-                    }}
-                  />
-                ))}
-
-                {/* Summary footer */}
-                {fundsData.length > 0 && (
-                  <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5 mt-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{t(lang, "tracker.funds.fundTotals")}:</span>
-                      <MoneyDisplay
-                        amount={fundsData.reduce((sum, f) => sum + f.balance, 0)}
-                        colorize={false}
-                        className="text-xs font-semibold"
-                      />
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={(event) => setActiveDragId(event.active.id as string)}
+          onDragEnd={(event) => {
+            setActiveDragId(null);
+            const { active, over } = event;
+            if (!over || active.id === over.id) return;
+            const activeStr = active.id as string;
+            const overStr = over.id as string;
+            if (activeStr.startsWith("fund-") && overStr.startsWith("fund-")) {
+              const activeFundId = activeStr.replace("fund-", "");
+              const overFundId = overStr.replace("fund-", "");
+              const oldIdx = fundsData.findIndex((f) => f.id === activeFundId);
+              const newIdx = fundsData.findIndex((f) => f.id === overFundId);
+              if (oldIdx === -1 || newIdx === -1) return;
+              const reordered = arrayMove(fundsData, oldIdx, newIdx);
+              reorderFundsMutation.mutate({
+                items: reordered.map((f, i) => ({ id: f.id, sortOrder: i })),
+              });
+            }
+          }}
+        >
+        <div className="rounded-lg border bg-card overflow-x-clip">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="border-b bg-card">
+                  <th colSpan={4} className="text-left py-2.5 px-4 bg-card">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">💰 {t(lang, "tracker.funds")}</span>
+                      <button
+                        onClick={() => setShowAddFund(true)}
+                        className="p-0.5 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+                        title={t(lang, "tracker.funds.addFund")}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
                     </div>
+                  </th>
+                </tr>
+                <tr className="border-b bg-card">
+                  <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
+                    {t(lang, "tracker.funds")}
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                    Budget
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                    Actual
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-36 bg-card">
+                    Available
+                  </th>
+                </tr>
+              </thead>
+              <SortableContext
+                items={fundsData.map((f) => `fund-${f.id}`)}
+                strategy={verticalListSortingStrategy}
+              >
+              <tbody>
+
+                {/* Fund rows */}
+                {fundsData.length === 0 && !showAddFund ? (
+                  <tr>
+                    <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground/50">
+                      No funds yet. Create one to start envelope budgeting.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {fundsData.map((fund) => {
+                      const isEditingThisFund = editingFundId === fund.id;
+
+                      return (
+                        <React.Fragment key={fund.id}>
+                        <SortableTr
+                          id={`fund-${fund.id}`}
+                          className={cn(
+                            "border-b border-border/50 hover:bg-muted/20 group/catrow",
+                            isEditingThisFund && (fundIconSuggestions.length > 0 || suggestFundIconMutation.isPending)
+                              ? "border-b-0"
+                              : getRowBorder(fund.available, fund.budget, fund.thisMonthActual)
+                          )}
+                        >
+                          {(fundDragHandleProps) => (<>
+                          <td className="py-1.5 px-3">
+                            {isEditingThisFund ? (
+                              <form
+                                className="flex items-center gap-2"
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  if (editingFundName.trim()) {
+                                    updateFundMutation.mutate({
+                                      id: fund.id,
+                                      name: editingFundName.trim(),
+                                      icon: editingFundIcon.trim() || undefined,
+                                    });
+                                  }
+                                }}
+                              >
+                                <EmojiPickerButton
+                                  value={editingFundIcon}
+                                  onChange={(emoji) => setEditingFundIcon(emoji)}
+                                />
+                                {suggestFundIconMutation.isPending && isEditingThisFund && (
+                                  <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
+                                )}
+                                <input
+                                  autoFocus
+                                  value={editingFundName}
+                                  onChange={(e) => { setEditingFundName(e.target.value); triggerFundIconSuggestion(e.target.value); }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Escape") {
+                                      setEditingFundId(null);
+                                      setEditingFundName("");
+                                      setEditingFundIcon("");
+                                      setFundIconSuggestions([]);
+                                    }
+                                  }}
+                                  className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 w-full max-w-[200px]"
+                                />
+                                <button type="submit" className="text-muted-foreground hover:text-foreground">
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingFundId(null); setEditingFundName(""); setEditingFundIcon(""); setFundIconSuggestions([]); }}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </form>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover/catrow:opacity-100 transition-opacity">
+                                  <DragHandle
+                                    listeners={fundDragHandleProps}
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      setEditingFundId(fund.id);
+                                      setEditingFundName(fund.name);
+                                      setEditingFundIcon(fund.icon ?? "");
+                                      setFundIconSuggestions([]);
+                                      if (fund.name.trim().length >= 2) {
+                                        suggestFundIconMutation.mutate({ name: fund.name.trim() });
+                                      }
+                                    }}
+                                    className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+                                    title="Rename"
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteFundMutation.mutate({ id: fund.id })}
+                                    className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600"
+                                    title="Delete fund"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                                {fund.icon && <span className="text-sm">{fund.icon}</span>}
+                                <span className={cn("text-sm", fund.budget === 0 && fund.thisMonthActual === 0 && "text-muted-foreground")}>
+                                  {fund.name}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-3 text-right">
+                            <InlineMoneyEdit
+                              key={`fund-alloc-${tracker.id}-${fund.id}`}
+                              value={fund.budget}
+                              onSave={(cents) => {
+                                setFundAllocationMutation.mutate({
+                                  trackerId: tracker.id,
+                                  fundId: fund.id,
+                                  amount: cents,
+                                });
+                              }}
+                              editingPrefix={
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault(); // prevent blur on the input
+                                    setCalculatorFundId(fund.id);
+                                  }}
+                                  className={cn(
+                                    "p-0.5 rounded shrink-0",
+                                    fund.lineItems.length > 0
+                                      ? "text-primary hover:text-primary/80"
+                                      : "text-muted-foreground/40 hover:text-foreground"
+                                  )}
+                                  title={t(lang, "tracker.funds.calculator")}
+                                >
+                                  <Calculator className="h-3.5 w-3.5" />
+                                </button>
+                              }
+                            />
+                          </td>
+                          <td className="py-1.5 px-3 text-right">
+                            {fund.thisMonthActual > 0 ? (
+                              <Link href={buildFundTransactionsUrl(fund.id, period)}>
+                                <MoneyDisplay amount={-fund.thisMonthActual} className="text-sm font-mono tabular-nums" />
+                              </Link>
+                            ) : (
+                              <span className="text-sm text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                          <td
+                            className="py-1.5 px-3 text-right cursor-pointer"
+                            onClick={() => setExpandedFundId(expandedFundId === fund.id ? null : fund.id)}
+                            title="Click to see breakdown"
+                          >
+                            <AvailableCell
+                              amount={fund.available}
+                              allocated={fund.budget}
+                              spent={fund.thisMonthActual}
+                            />
+                          </td>
+                          </>)}
+                        </SortableTr>
+                        {/* Ophelia icon suggestions row for fund edit */}
+                        {isEditingThisFund && (fundIconSuggestions.length > 0 || suggestFundIconMutation.isPending) && (
+                          <tr className="border-b border-border/50 bg-muted/5">
+                            <td className="py-1 px-3 pl-6" colSpan={4}>
+                              <div className="flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                                {suggestFundIconMutation.isPending ? (
+                                  <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
+                                    {fundIconSuggestions.map((emoji) => (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingFundIcon(emoji);
+                                          setFundIconSuggestions([]);
+                                        }}
+                                        className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                        title={`Use ${emoji}`}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {/* Expanded detail: balance breakdown + adjustment history */}
+                        {expandedFundId === fund.id && (
+                          <tr className="border-b border-border/50 bg-muted/5">
+                            <td colSpan={4} className="py-2 px-6">
+                              <div className="space-y-2 max-w-lg">
+                                {/* Balance breakdown */}
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                                  <span className="text-muted-foreground">Total budgeted (all months)</span>
+                                  <span className="text-right font-mono tabular-nums"><MoneyDisplay amount={fund.totalBudgeted} colorize={false} className="text-xs inline" /></span>
+                                  <span className="text-muted-foreground">Total spending</span>
+                                  <span className="text-right font-mono tabular-nums text-red-600 dark:text-red-400"><MoneyDisplay amount={-fund.totalSpending} colorize={false} className="text-xs inline" /></span>
+                                  {fund.adjustments !== 0 && (
+                                    <>
+                                      <span className="text-muted-foreground">Adjustments total</span>
+                                      <span className="text-right font-mono tabular-nums"><MoneyDisplay amount={fund.adjustments} colorize={false} className="text-xs inline" /></span>
+                                    </>
+                                  )}
+                                  <span className="text-muted-foreground font-medium border-t pt-0.5 mt-0.5">Available</span>
+                                  <span className="text-right font-mono tabular-nums font-medium border-t pt-0.5 mt-0.5"><MoneyDisplay amount={fund.available} colorize={false} className="text-xs inline" /></span>
+                                </div>
+
+                                {/* Adjustment entries list */}
+                                {fund.entries.length > 0 && (
+                                  <div className="space-y-0.5 pt-1 border-t">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t(lang, "tracker.funds.adjustment")}s</span>
+                                    </div>
+                                    <div className="max-h-32 overflow-y-auto space-y-0.5">
+                                      {fund.entries.map((entry) => (
+                                        <div
+                                          key={entry.id}
+                                          className="flex items-center justify-between py-0.5 px-1 rounded text-xs hover:bg-muted/30 group/entry"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <span className={cn("font-mono tabular-nums font-medium", entry.amount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>
+                                              {entry.amount >= 0 ? "+" : ""}
+                                              <MoneyDisplay amount={entry.amount} colorize={false} className="text-xs inline" />
+                                            </span>
+                                            {entry.note && (
+                                              <span className="text-muted-foreground/60 truncate max-w-[150px]">— {entry.note}</span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground/50 text-[10px]">
+                                              {String(entry.month).padStart(2, "0")}/{entry.year}
+                                            </span>
+                                            <button
+                                              onClick={() => deleteFundEntryMutation.mutate({ entryId: entry.id })}
+                                              className="opacity-0 group-hover/entry:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600 transition-opacity"
+                                              title="Delete adjustment"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Quick adjust button inside expanded view */}
+                                {adjustingFundId !== fund.id && (
+                                  <button
+                                    onClick={() => {
+                                      setAdjustingFundId(fund.id);
+                                      setAdjustAmount("");
+                                      setAdjustNote("");
+                                    }}
+                                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    {t(lang, "tracker.funds.adjust")}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {/* Inline adjustment row */}
+                        {adjustingFundId === fund.id && (
+                          <tr className="border-b bg-muted/10">
+                            <td colSpan={4} className="py-2 px-6">
+                              <div className="flex items-center gap-2 max-w-md">
+                                <span className="text-xs text-muted-foreground shrink-0">{t(lang, "tracker.funds.adjust")}:</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="e.g., 50.00 or -10.00"
+                                  value={adjustAmount}
+                                  onChange={(e) => setAdjustAmount(e.target.value)}
+                                  className="h-7 w-28 rounded border bg-background px-2 text-xs"
+                                  autoFocus
+                                />
+                                <input
+                                  placeholder="Note (optional)"
+                                  value={adjustNote}
+                                  onChange={(e) => setAdjustNote(e.target.value)}
+                                  className="h-7 flex-1 rounded border bg-background px-2 text-xs"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const cents = toCents(parseFloat(adjustAmount) || 0);
+                                      if (cents !== 0) {
+                                        addFundEntryMutation.mutate({
+                                          fundId: fund.id,
+                                          amount: cents,
+                                          note: adjustNote.trim() || undefined,
+                                        });
+                                      }
+                                    }
+                                    if (e.key === "Escape") setAdjustingFundId(null);
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
+                                    const cents = toCents(parseFloat(adjustAmount) || 0);
+                                    if (cents !== 0) {
+                                      addFundEntryMutation.mutate({
+                                        fundId: fund.id,
+                                        amount: cents,
+                                        note: adjustNote.trim() || undefined,
+                                      });
+                                    }
+                                  }}
+                                  className="text-xs text-primary hover:underline"
+                                  disabled={addFundEntryMutation.isPending}
+                                >
+                                  {t(lang, "tracker.funds.apply")}
+                                </button>
+                                <button
+                                  onClick={() => setAdjustingFundId(null)}
+                                  className="text-xs text-muted-foreground"
+                                >
+                                  {t(lang, "common.cancel")}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </>
+                )}
+
+                {/* Inline add fund row */}
+                {showAddFund && (
+                  <>
+                  <tr className={cn("border-b border-border/50", fundIconSuggestions.length > 0 || suggestFundIconMutation.isPending ? "border-b-0" : "")}>
+                    <td className="py-1.5 px-3" colSpan={4}>
+                      <form
+                        className="flex items-center gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (newFundName.trim()) {
+                            createFundMutation.mutate({
+                              name: newFundName.trim(),
+                              icon: newFundIcon.trim() || undefined,
+                              visibility,
+                            });
+                            setFundIconSuggestions([]);
+                          }
+                        }}
+                      >
+                        <EmojiPickerButton
+                          value={newFundIcon}
+                          onChange={(emoji) => setNewFundIcon(emoji)}
+                        />
+                        {suggestFundIconMutation.isPending && showAddFund && (
+                          <Sparkles className="h-3 w-3 text-muted-foreground/50 animate-pulse shrink-0" />
+                        )}
+                        <input
+                          autoFocus
+                          value={newFundName}
+                          onChange={(e) => { setNewFundName(e.target.value); triggerFundIconSuggestion(e.target.value); }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              setShowAddFund(false);
+                              setNewFundName("");
+                              setNewFundIcon("");
+                              setFundIconSuggestions([]);
+                            }
+                          }}
+                          placeholder="Fund name..."
+                          className="bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 w-full max-w-[200px]"
+                        />
+                        <button type="submit" className="text-muted-foreground hover:text-foreground">
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowAddFund(false); setNewFundName(""); setNewFundIcon(""); setFundIconSuggestions([]); }}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {/* Ophelia icon suggestions for new fund */}
+                  {(fundIconSuggestions.length > 0 || suggestFundIconMutation.isPending) && showAddFund && (
+                    <tr className="border-b border-border/50 bg-muted/5">
+                      <td className="py-1 px-3 pl-6" colSpan={4}>
+                        <div className="flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                          {suggestFundIconMutation.isPending ? (
+                            <span className="text-xs text-muted-foreground/50 animate-pulse">Suggesting icons…</span>
+                          ) : (
+                            <>
+                              <span className="text-xs text-muted-foreground/50 mr-1">Ophelia suggests:</span>
+                              {fundIconSuggestions.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => {
+                                    setNewFundIcon(emoji);
+                                    setFundIconSuggestions([]);
+                                  }}
+                                  className="text-lg leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                  title={`Use ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </>
+                )}
+              </tbody>
+              </SortableContext>
+
+              {/* Summary footer */}
+              <tfoot>
+                {fundsData.length > 0 && (
+                  <>
+                    <tr className="border-t bg-muted/30 text-xs font-medium">
+                      <td className="py-2 px-3 text-muted-foreground">{t(lang, "tracker.funds.fundTotals")}</td>
+                      <td className="py-2 px-3 text-right">
+                        <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.budget, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {(() => {
+                          const totalActual = fundsData.reduce((s, f) => s + f.thisMonthActual, 0);
+                          return totalActual > 0 ? (
+                            <MoneyDisplay amount={-totalActual} className="text-xs font-semibold font-mono tabular-nums" />
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40">—</span>
+                          );
+                        })()}
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.available, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
+                      </td>
+                    </tr>
                     {(() => {
                       const linkedAccount = fundsData.find(f => f.linkedAccount)?.linkedAccount;
                       if (!linkedAccount) return null;
-                      const fundTotal = fundsData.reduce((sum, f) => sum + f.balance, 0);
-                      const diff = Math.abs(linkedAccount.balance - fundTotal);
-                      const inSync = diff < 100; // < €1
+                      const fundTotal = fundsData.reduce((sum, f) => sum + f.available, 0);
+                      const diff = historicalAccountBalance !== null ? Math.abs(historicalAccountBalance - fundTotal) : null;
+                      const inSync = diff !== null && diff < 100;
                       return (
                         <>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">{t(lang, "tracker.funds.accountBalance")}:</span>
-                            <MoneyDisplay amount={linkedAccount.balance} colorize={false} className="text-xs font-semibold" />
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">{t(lang, "tracker.funds.difference")}:</span>
-                            <span className={cn("text-xs font-medium", inSync ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>
-                              <MoneyDisplay amount={diff} colorize={false} className="text-xs inline" />
-                              {" "}{inSync ? `✅ ${t(lang, "tracker.funds.inSync")}` : `⚠️ ${t(lang, "tracker.funds.difference")}`}
-                            </span>
-                          </div>
+                          <tr className="text-xs">
+                            <td className="py-1 px-3 text-muted-foreground">
+                              <div className="flex items-center gap-2">
+                                <span>Funds {t(lang, "tracker.funds.linkedTo")}:</span>
+                                <select
+                                  value={linkedAccount.id}
+                                  onChange={(e) => {
+                                    const accountId = e.target.value || null;
+                                    updateLinkedAccountMutation.mutate({
+                                      visibility,
+                                      linkedAccountId: accountId,
+                                    });
+                                  }}
+                                  className="h-5 rounded border bg-transparent px-1 text-xs"
+                                >
+                                  <option value="">None</option>
+                                  {(accountsQuery.data ?? []).map((a: { id: string; name: string }) => (
+                                    <option key={a.id} value={a.id}>{a.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </td>
+                            <td colSpan={2} />
+                            <td className="py-1 px-3">
+                              <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 justify-end whitespace-nowrap">
+                                {historicalAccountBalance !== null && (
+                                  <>
+                                    <span className="text-muted-foreground text-right">{t(lang, "tracker.funds.accountBalance")}</span>
+                                    <MoneyDisplay amount={historicalAccountBalance} colorize={false} className="text-xs font-semibold font-mono tabular-nums text-right" />
+                                  </>
+                                )}
+                                {diff !== null && (
+                                  <>
+                                    <span className="text-muted-foreground text-right">{t(lang, "tracker.funds.difference")}</span>
+                                    <span className={cn("text-right text-xs font-medium", inSync ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>
+                                      {inSync ? `✅ ${t(lang, "tracker.funds.inSync")}` : (
+                                        <>
+                                          ⚠️ <MoneyDisplay amount={diff} colorize={false} className="text-xs inline" />
+                                        </>
+                                      )}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         </>
                       );
                     })()}
-                    {/* This month totals */}
-                    {fundsData.some(f => f.thisMonthContribution > 0 || f.thisMonthWithdrawal > 0) && (
-                      <div className="text-xs text-muted-foreground pt-1 border-t">
-                        {t(lang, "tracker.funds.thisMonth")}:{" "}
-                        <span className="text-green-600 dark:text-green-400">
-                          +<MoneyDisplay amount={fundsData.reduce((s, f) => s + f.thisMonthContribution, 0)} colorize={false} className="text-xs inline" /> {t(lang, "tracker.funds.contributed")}
-                        </span>
-                        {fundsData.some(f => f.thisMonthWithdrawal > 0) && (
-                          <>
-                            {"  "}
-                            <span className="text-red-600 dark:text-red-400">
-                              -<MoneyDisplay amount={fundsData.reduce((s, f) => s + f.thisMonthWithdrawal, 0)} colorize={false} className="text-xs inline" /> {t(lang, "tracker.funds.spent")}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  </>
                 )}
-              </>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center justify-center gap-3 px-4 py-3 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5"
-              onClick={() => {
-                setEditingFundId(null);
-                setShowFundDialog(true);
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t(lang, "tracker.funds.addFund")}
-            </Button>
-            {fundsData.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5"
-                onClick={() => {
-                  const now = new Date();
-                  contributeAllMutation.mutate({
-                    year: now.getFullYear(),
-                    month: now.getMonth() + 1,
-                    visibility,
-                  });
-                }}
-                disabled={contributeAllMutation.isPending}
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-                {contributeAllMutation.isPending ? t(lang, "common.loading") : t(lang, "tracker.funds.contributeAll")}
-              </Button>
-            )}
-          </div>
+              </tfoot>
+            </table>
         </div>
+        </DndContext>
       )}
 
-      {/* Fund Edit/Create Dialog */}
-      <FundEditDialog
-        fundId={editingFundId}
-        open={showFundDialog}
-        onClose={() => {
-          setShowFundDialog(false);
-          setEditingFundId(null);
-        }}
-        visibility={visibility}
+      {/* Delete Category Dialog */}
+      <DeleteCategoryDialog
+        category={deleteCategoryTarget}
+        open={!!deleteCategoryTarget}
+        onClose={() => setDeleteCategoryTarget(null)}
+        categories={flatCategoriesForDelete}
+        funds={fundsData.map((f) => ({ id: f.id, name: f.name, icon: f.icon }))}
         lang={lang}
       />
+
+      {/* Fund Calculator Dialog */}
+      {(() => {
+        const calcFund = calculatorFundId ? fundsData.find(f => f.id === calculatorFundId) : null;
+        return calcFund ? (
+          <FundCalculator
+            fundId={calcFund.id}
+            fundName={calcFund.name}
+            initialItems={calcFund.lineItems}
+            open={!!calculatorFundId}
+            onClose={() => setCalculatorFundId(null)}
+            lang={lang}
+            onApplyBudget={(computedMonthly) => {
+              setFundAllocationMutation.mutate({
+                trackerId: tracker.id,
+                fundId: calcFund.id,
+                amount: computedMonthly,
+              });
+            }}
+          />
+        ) : null;
+      })()}
 
     </div>
   );
