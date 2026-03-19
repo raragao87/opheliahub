@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
@@ -56,7 +55,6 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Copy,
   AlertTriangle,
   Plus,
@@ -67,6 +65,7 @@ import {
   GripVertical,
   Sparkles,
   Calculator,
+  MoreVertical,
 } from "lucide-react";
 
 // ── Color coding helpers ──────────────────────────────────────────
@@ -512,10 +511,6 @@ export default function TrackerPage() {
 
   const tracker = trackerQuery.data;
   const summary = summaryQuery.data;
-  const monthName = new Date(period.year, period.month - 1).toLocaleString("default", {
-    month: "long",
-    year: "numeric",
-  });
 
   const toggleGroup = (groupId: string) => {
     setCollapsedGroups((prev) => {
@@ -776,50 +771,283 @@ export default function TrackerPage() {
 
   const uncategorizedEntry = summaryCategories.find((c) => !c.categoryId);
 
-  // Budget summary computations
   const totalIncome = incomeAssigned;
-  const totalAllocatedAll = expenseAssigned + totalFundContributions;
-  const allocationPct = totalIncome > 0 ? Math.round((totalAllocatedAll / totalIncome) * 100) : 0;
 
   const totalSpentExpenses = groupsWithData
     .filter((g) => g.type === "EXPENSE")
     .reduce((sum, g) => sum + g.totalSpent, 0)
     + (uncategorizedEntry?.spent ?? 0);
 
+  // Actual spending on funds this month
+  const totalFundActual = fundsData.reduce((sum, f) => sum + f.thisMonthActual, 0);
+
+  // Spending percentage (expenses + funds actual vs budgeted)
+  const totalBudgetedSpending = expenseAssigned + totalFundContributions;
+  const spendingPct = totalBudgetedSpending > 0
+    ? Math.round(((totalSpentExpenses + totalFundActual) / totalBudgetedSpending) * 100)
+    : 0;
+
+  // Days left in month
+  const now = new Date();
+  const daysInMonth = new Date(period.year, period.month, 0).getDate();
+  const { month: curMonth, year: curYear } = getCurrentYearMonth();
+  const isCurrentMonth = period.year === curYear && period.month === curMonth;
+  const daysLeftInMonth = isCurrentMonth
+    ? Math.max(0, daysInMonth - now.getDate())
+    : period.year < curYear || (period.year === curYear && period.month < curMonth)
+      ? 0
+      : daysInMonth;
+
   return (
     <div className="space-y-4">
-      {/* ── Sticky Tracker Header ──────────────────────────────── */}
+      {/* ── Sticky Tracker Header — Stacked Bar Visualization ── */}
       <div
         ref={trackerHeaderRef}
-        className="sticky top-16 z-30 rounded-lg border bg-card p-3 space-y-2 shadow-sm"
+        className="sticky top-16 z-30 rounded-lg border bg-card p-2.5 px-3.5 shadow-sm"
       >
-        {/* Row 1: Month nav + Copy */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPeriod(getPreviousMonth(period.year, period.month))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+        <div className="flex gap-3.5 items-stretch">
+          {/* ── LEFT: Bars + Legend ── */}
+          <div className="flex-1 min-w-0 flex flex-col gap-1">
 
-            {/* Month picker */}
-            <div className="relative" ref={monthPickerRef}>
+            {/* Budget bar */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Budget</span>
+              <div className="flex-1 relative h-7" style={{ marginRight: '50px' }}>
+                {/* Green border = income budget (full width) */}
+                {totalIncome > 0 && (
+                  <div className="absolute -inset-px rounded-md border-2 border-green-600 dark:border-green-500" />
+                )}
+                {/* Filled segments */}
+                <div className="absolute inset-0 rounded-[5px] overflow-hidden flex">
+                  {/* Expenses segment */}
+                  {expenseAssigned > 0 && (
+                    <div
+                      style={{ flex: `${expenseAssigned} 0 0` }}
+                      className="bg-red-500/75 flex items-center px-2 min-w-0"
+                    >
+                      <span className="text-[10px] font-medium text-white truncate">
+                        <MoneyDisplay amount={expenseAssigned} colorize={false} className="text-[10px] inline" />
+                      </span>
+                    </div>
+                  )}
+                  {/* Funds segment */}
+                  {totalFundContributions > 0 && (
+                    <div
+                      style={{ flex: `${totalFundContributions} 0 0` }}
+                      className="bg-amber-500/75 flex items-center justify-center min-w-0"
+                    >
+                      {totalIncome > 0 && totalFundContributions / totalIncome > 0.06 && (
+                        <span className="text-[10px] font-medium text-white truncate">
+                          <MoneyDisplay amount={totalFundContributions} colorize={false} className="text-[10px] inline" />
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {/* Unassigned gap */}
+                  {readyToAssign > 0 && (
+                    <div style={{ flex: `${readyToAssign} 0 0` }} />
+                  )}
+                </div>
+                {/* Income total label — right of the bar */}
+                {totalIncome > 0 && (
+                  <div className="absolute -right-[50px] top-1/2 -translate-y-1/2">
+                    <span className="text-[9px] text-green-600 dark:text-green-400 font-medium">
+                      <MoneyDisplay amount={totalIncome} colorize={false} className="text-[9px] inline" />
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actual bar */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
+              <div className="flex-1 relative h-7" style={{ marginRight: '50px' }}>
+                {(() => {
+                  const incomeReceivedPct = totalIncome > 0
+                    ? Math.min(100, (totalIncomeActual / totalIncome) * 100)
+                    : 0;
+                  return (
+                    <>
+                      {/* Green border = income received (proportional width) */}
+                      {totalIncomeActual > 0 && (
+                        <div
+                          className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
+                          style={{
+                            width: `calc(${incomeReceivedPct}% + 2px)`,
+                            height: 'calc(100% + 2px)',
+                          }}
+                        />
+                      )}
+                      {/* Spending fills inside the green frame */}
+                      {totalIncomeActual > 0 && (
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-[5px] overflow-hidden flex"
+                          style={{ width: `${incomeReceivedPct}%` }}
+                        >
+                          {/* Expense spending */}
+                          {totalSpentExpenses > 0 && (
+                            <div
+                              style={{ flex: `${totalSpentExpenses} 0 0` }}
+                              className="bg-red-500/45 flex items-center px-2 min-w-0"
+                            >
+                              <span className="text-[10px] font-medium text-foreground/70 truncate">
+                                <MoneyDisplay amount={-totalSpentExpenses} colorize={false} className="text-[10px] inline" />
+                              </span>
+                            </div>
+                          )}
+                          {/* Fund spending */}
+                          {totalFundActual > 0 && (
+                            <div
+                              style={{ flex: `${totalFundActual} 0 0` }}
+                              className="bg-amber-500/40"
+                            />
+                          )}
+                        </div>
+                      )}
+                      {/* Income received label at edge of green border */}
+                      {totalIncomeActual > 0 && (
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2"
+                          style={{ left: `${incomeReceivedPct}%`, paddingLeft: '6px' }}
+                        >
+                          <span className="text-[9px] font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+                            <MoneyDisplay amount={totalIncomeActual} colorize={false} className="text-[9px] inline" />
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="flex gap-3 text-[9px] text-muted-foreground items-center">
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-sm bg-red-500/75 inline-block" />
+                {t(lang, "tracker.expenses")}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-sm bg-amber-500/75 inline-block" />
+                {t(lang, "tracker.funds")}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-sm border-[1.5px] border-green-600 dark:border-green-500 inline-block" />
+                {t(lang, "tracker.income")}
+              </span>
+              {(totalSpentExpenses > 0 || totalFundActual > 0) && (
+                <span className="ml-auto">
+                  {spendingPct}% {t(lang, "tracker.spent")}
+                  {isCurrentMonth && <> · {daysLeftInMonth} {t(lang, "tracker.daysLeft")}</>}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* ── RIGHT: Left to assign + Actions + Month nav ── */}
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            {/* Left to assign + action button */}
+            <div className="flex items-center gap-1.5">
+              <div className="text-right">
+                <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{t(lang, "tracker.leftToAssign")}</span>
+                <div className={cn(
+                  "text-base font-medium leading-tight",
+                  readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
+                  readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
+                  readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
+                  "text-muted-foreground"
+                )}>
+                  <MoneyDisplay amount={readyToAssign} colorize={false} className="text-base inline font-medium" />
+                  {readyToAssign === 0 && incomeAssigned > 0 && <span className="text-xs ml-0.5">✓</span>}
+                </div>
+              </div>
+              {/* Actions ⋮ */}
+              <div className="relative" ref={actionsMenuRef}>
+                <button
+                  onClick={() => setShowActionsMenu((prev) => !prev)}
+                  className="w-7 h-7 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+
+                {showActionsMenu && (
+                  <div className="absolute right-0 top-full mt-1 w-64 rounded-lg border bg-card shadow-lg py-1 z-50">
+                    <button
+                      onClick={() => {
+                        copyPreviousMonthMutation.mutate({
+                          month: period.month,
+                          year: period.year,
+                          visibility,
+                        });
+                        setShowActionsMenu(false);
+                      }}
+                      disabled={copyPreviousMonthMutation.isPending}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <div>
+                        <span className="font-medium">
+                          {t(lang, "tracker.copyFrom")} {new Date(period.year, period.month - 2).toLocaleString("default", { month: "long" })}
+                        </span>
+                        <p className="text-[10px] text-muted-foreground">{t(lang, "tracker.copyFromDesc")}</p>
+                      </div>
+                    </button>
+                    <div className="border-t my-1" />
+                    <button
+                      onClick={() => {
+                        if (confirm(t(lang, "tracker.resetConfirm"))) {
+                          resetAllocationsMutation.mutate({
+                            month: period.month,
+                            year: period.year,
+                            visibility,
+                          });
+                          setShowActionsMenu(false);
+                        }
+                      }}
+                      disabled={resetAllocationsMutation.isPending}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center gap-2 text-red-600 dark:text-red-400 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                      <div>
+                        <span className="font-medium">{t(lang, "tracker.resetAll")}</span>
+                        <p className="text-[10px] text-muted-foreground">{t(lang, "tracker.resetAllDesc")}</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1" />
+
+            {/* Month navigation — compact segmented control */}
+            <div className="relative flex items-center rounded-md border border-border overflow-visible" ref={monthPickerRef}>
+              <button
+                onClick={() => setPeriod(getPreviousMonth(period.year, period.month))}
+                className="px-1.5 py-1 flex items-center border-r border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <ChevronLeft className="h-3 w-3" />
+              </button>
               <button
                 onClick={() => {
                   setPickerYear(period.year);
                   setShowMonthPicker((v) => !v);
                 }}
-                className="flex items-center gap-1.5 text-sm font-semibold min-w-[130px] justify-center rounded-md px-2 py-1 hover:bg-muted transition-colors"
+                className="px-2 py-1 text-[10px] font-medium hover:bg-muted transition-colors"
               >
-                {monthName}
-                <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", showMonthPicker && "rotate-180")} />
+                {new Date(period.year, period.month - 1).toLocaleString("default", { month: "short", year: "numeric" })}
+              </button>
+              <button
+                onClick={() => setPeriod(getNextMonth(period.year, period.month))}
+                className="px-1.5 py-1 flex items-center border-l border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <ChevronRight className="h-3 w-3" />
               </button>
 
+              {/* Month picker dropdown */}
               {showMonthPicker && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 w-[260px]">
+                <div className="absolute right-0 top-full mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 w-[260px]">
                   <div className="flex items-center justify-between mb-2">
                     <button
                       onClick={() => setPickerYear((y) => y - 1)}
@@ -840,8 +1068,7 @@ export default function TrackerPage() {
                       const m = i + 1;
                       const label = new Date(pickerYear, i).toLocaleString("default", { month: "short" });
                       const isSelected = pickerYear === period.year && m === period.month;
-                      const { month: curMonth, year: curYear } = getCurrentYearMonth();
-                      const isCurrent = pickerYear === curYear && m === curMonth;
+                      const isCurMonth = pickerYear === curYear && m === curMonth;
                       return (
                         <button
                           key={m}
@@ -853,7 +1080,7 @@ export default function TrackerPage() {
                             "text-xs py-1.5 px-2 rounded-md transition-colors font-medium",
                             isSelected
                               ? "bg-primary text-primary-foreground"
-                              : isCurrent
+                              : isCurMonth
                                 ? "bg-muted font-semibold ring-1 ring-primary/30"
                                 : "hover:bg-muted text-muted-foreground hover:text-foreground"
                           )}
@@ -875,127 +1102,6 @@ export default function TrackerPage() {
                   </button>
                 </div>
               )}
-            </div>
-
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPeriod(getNextMonth(period.year, period.month))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Actions dropdown */}
-          <div className="relative" ref={actionsMenuRef}>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
-              onClick={() => setShowActionsMenu((prev) => !prev)}
-            >
-              <Copy className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Actions</span>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </Button>
-
-            {showActionsMenu && (
-              <div className="absolute right-0 top-full mt-1 w-64 rounded-lg border bg-card shadow-lg py-1 z-50">
-                <button
-                  onClick={() => {
-                    copyPreviousMonthMutation.mutate({
-                      month: period.month,
-                      year: period.year,
-                      visibility,
-                    });
-                    setShowActionsMenu(false);
-                  }}
-                  disabled={copyPreviousMonthMutation.isPending}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Copy className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <div>
-                    <span className="font-medium">
-                      {t(lang, "tracker.copyFrom")} {new Date(period.year, period.month - 2).toLocaleString("default", { month: "long" })}
-                    </span>
-                    <p className="text-[10px] text-muted-foreground">{t(lang, "tracker.copyFromDesc")}</p>
-                  </div>
-                </button>
-
-                <div className="border-t my-1" />
-
-                <button
-                  onClick={() => {
-                    if (confirm(t(lang, "tracker.resetConfirm"))) {
-                      resetAllocationsMutation.mutate({
-                        month: period.month,
-                        year: period.year,
-                        visibility,
-                      });
-                      setShowActionsMenu(false);
-                    }
-                  }}
-                  disabled={resetAllocationsMutation.isPending}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center gap-2 text-red-600 dark:text-red-400 disabled:opacity-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5 shrink-0" />
-                  <div>
-                    <span className="font-medium">{t(lang, "tracker.resetAll")}</span>
-                    <p className="text-[10px] text-muted-foreground">{t(lang, "tracker.resetAllDesc")}</p>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Row 2: Budget summary as 4 columns */}
-        <div className="grid grid-cols-4 gap-2">
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.income")}</span>
-            <div>
-              <MoneyDisplay amount={totalIncome} colorize={false} className="text-sm font-semibold" />
-            </div>
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.expenses")}</span>
-            <div>
-              <MoneyDisplay amount={expenseAssigned} colorize={false} className="text-sm font-semibold" />
-            </div>
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.funds")}</span>
-            <div>
-              <MoneyDisplay amount={totalFundContributions} colorize={false} className="text-sm font-semibold" />
-            </div>
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.leftToAssign")}</span>
-            <div>
-              <span className={cn(
-                "text-sm font-semibold",
-                readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
-                readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
-                readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
-                "text-muted-foreground"
-              )}>
-                <MoneyDisplay amount={readyToAssign} colorize={false} className="text-sm inline font-semibold" />
-                {readyToAssign === 0 && incomeAssigned > 0 && " ✓"}
-              </span>
-            </div>
-            <div className="h-1 rounded-full bg-muted overflow-hidden mt-1 max-w-[120px]">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all",
-                  readyToAssign === 0 && incomeAssigned > 0
-                    ? "bg-green-500"
-                    : readyToAssign < 0
-                      ? "bg-red-500"
-                      : "bg-amber-500"
-                )}
-                style={{ width: `${Math.min(allocationPct, 100)}%` }}
-              />
             </div>
           </div>
         </div>
