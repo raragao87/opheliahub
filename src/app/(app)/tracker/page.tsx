@@ -67,8 +67,6 @@ import {
   GripVertical,
   Sparkles,
   Calculator,
-  Users,
-  User,
 } from "lucide-react";
 
 // ── Color coding helpers ──────────────────────────────────────────
@@ -220,7 +218,7 @@ function buildFundTransactionsUrl(
 export default function TrackerPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { visibilityParam, setVisibility } = useOwnership();
+  const { visibilityParam } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
@@ -751,46 +749,27 @@ export default function TrackerPage() {
   const readyToAssign = incomeAssigned - expenseAssigned - totalFundContributions;
   const totalIncomeActual = incomeGroups.reduce((s, g) => s + g.totalIncomeActual - g.totalExpenseActual, 0);
 
-  // Actual Balance: real income received − real expenses paid (from transactions)
-  const actualBalance = (summary?.actualIncome ?? 0) - (summary?.totalActualExpenses ?? 0);
-
   const uncategorizedEntry = summaryCategories.find((c) => !c.categoryId);
 
-  // Budget Health scorecard computations
+  // Budget summary computations
   const totalIncome = incomeAssigned;
-  const totalAllocatedExpenses = expenseAssigned;
-  const totalAllocatedAll = totalAllocatedExpenses + totalFundContributions;
+  const totalAllocatedAll = expenseAssigned + totalFundContributions;
   const allocationPct = totalIncome > 0 ? Math.round((totalAllocatedAll / totalIncome) * 100) : 0;
 
   const totalSpentExpenses = groupsWithData
     .filter((g) => g.type === "EXPENSE")
     .reduce((sum, g) => sum + g.totalSpent, 0)
     + (uncategorizedEntry?.spent ?? 0);
-  const spendingPct = totalAllocatedExpenses > 0
-    ? Math.round((totalSpentExpenses / totalAllocatedExpenses) * 100)
-    : 0;
-
-  // Days left in month
-  const today = new Date();
-  const lastDayOfMonth = new Date(period.year, period.month, 0).getDate();
-  const { month: curMonth, year: curYear } = getCurrentYearMonth();
-  const isCurrentMonth = period.year === curYear && period.month === curMonth;
-  const daysLeft = isCurrentMonth
-    ? Math.max(0, lastDayOfMonth - today.getDate())
-    : period.year < curYear || (period.year === curYear && period.month < curMonth)
-      ? 0
-      : lastDayOfMonth;
 
   return (
     <div className="space-y-4">
       {/* ── Sticky Tracker Header ──────────────────────────────── */}
       <div
         ref={trackerHeaderRef}
-        className="sticky top-16 z-30 bg-card border rounded-lg p-3 -mx-4 md:-mx-6 lg:-mx-8 md:px-6 lg:px-8 px-4 space-y-2 shadow-sm"
+        className="sticky top-16 z-30 rounded-lg border bg-card p-3 space-y-2 shadow-sm"
       >
-        {/* Row 1: Month nav + visibility toggle + copy button */}
+        {/* Row 1: Month nav + Copy */}
         <div className="flex items-center justify-between gap-3">
-          {/* Left: Month navigation */}
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -816,7 +795,6 @@ export default function TrackerPage() {
 
               {showMonthPicker && (
                 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 w-[260px]">
-                  {/* Year nav */}
                   <div className="flex items-center justify-between mb-2">
                     <button
                       onClick={() => setPickerYear((y) => y - 1)}
@@ -832,8 +810,6 @@ export default function TrackerPage() {
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
-
-                  {/* Month grid */}
                   <div className="grid grid-cols-3 gap-1">
                     {Array.from({ length: 12 }, (_, i) => {
                       const m = i + 1;
@@ -841,7 +817,6 @@ export default function TrackerPage() {
                       const isSelected = pickerYear === period.year && m === period.month;
                       const { month: curMonth, year: curYear } = getCurrentYearMonth();
                       const isCurrent = pickerYear === curYear && m === curMonth;
-
                       return (
                         <button
                           key={m}
@@ -863,8 +838,6 @@ export default function TrackerPage() {
                       );
                     })}
                   </div>
-
-                  {/* Today shortcut */}
                   <button
                     onClick={() => {
                       const { month, year } = getCurrentYearMonth();
@@ -887,37 +860,8 @@ export default function TrackerPage() {
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
-
-            {/* Shared / Personal toggle */}
-            <div className="flex gap-0.5 p-0.5 bg-muted rounded-lg ml-2">
-              <button
-                onClick={() => setVisibility("SHARED")}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5",
-                  visibility === "SHARED"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Users className="h-3 w-3" />
-                {t(lang, "common.shared")}
-              </button>
-              <button
-                onClick={() => setVisibility("PERSONAL")}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5",
-                  visibility === "PERSONAL"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <User className="h-3 w-3" />
-                {t(lang, "common.personal")}
-              </button>
-            </div>
           </div>
 
-          {/* Right: Copy from previous month */}
           <Button
             variant="outline"
             size="sm"
@@ -941,39 +885,41 @@ export default function TrackerPage() {
           </Button>
         </div>
 
-        {/* Row 2: Budget summary + progress bar */}
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Summary chips */}
-          <div className="flex items-center gap-3 text-xs flex-wrap">
-            <span className="text-muted-foreground">
-              {t(lang, "tracker.income")}{" "}
-              <MoneyDisplay amount={totalIncome} colorize={false} className="text-xs font-semibold text-foreground inline" />
-            </span>
-            <span className="text-muted-foreground">
-              {t(lang, "tracker.expenses")}{" "}
-              <MoneyDisplay amount={expenseAssigned} colorize={false} className="text-xs font-semibold text-foreground inline" />
-            </span>
-            {totalFundContributions > 0 && (
-              <span className="text-muted-foreground">
-                {t(lang, "tracker.funds")}{" "}
-                <MoneyDisplay amount={totalFundContributions} colorize={false} className="text-xs font-semibold text-foreground inline" />
-              </span>
-            )}
-            <span className={cn(
-              "font-semibold",
-              readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
-              readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
-              readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
-              "text-muted-foreground"
-            )}>
-              {t(lang, "tracker.leftToAssign")}: <MoneyDisplay amount={readyToAssign} colorize={false} className="text-xs inline" />
-              {readyToAssign === 0 && incomeAssigned > 0 && " ✓"}
-            </span>
+        {/* Row 2: Budget summary as 4 columns */}
+        <div className="grid grid-cols-4 gap-2">
+          <div>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.income")}</span>
+            <div>
+              <MoneyDisplay amount={totalIncome} colorize={false} className="text-sm font-semibold" />
+            </div>
           </div>
-
-          {/* Allocation progress bar */}
-          <div className="flex-1 min-w-[100px] max-w-[300px]">
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+          <div>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.expenses")}</span>
+            <div>
+              <MoneyDisplay amount={expenseAssigned} colorize={false} className="text-sm font-semibold" />
+            </div>
+          </div>
+          <div>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.funds")}</span>
+            <div>
+              <MoneyDisplay amount={totalFundContributions} colorize={false} className="text-sm font-semibold" />
+            </div>
+          </div>
+          <div>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(lang, "tracker.leftToAssign")}</span>
+            <div>
+              <span className={cn(
+                "text-sm font-semibold",
+                readyToAssign === 0 && incomeAssigned > 0 ? "text-green-600 dark:text-green-400" :
+                readyToAssign > 0 ? "text-amber-600 dark:text-amber-400" :
+                readyToAssign < 0 ? "text-red-600 dark:text-red-400" :
+                "text-muted-foreground"
+              )}>
+                <MoneyDisplay amount={readyToAssign} colorize={false} className="text-sm inline font-semibold" />
+                {readyToAssign === 0 && incomeAssigned > 0 && " ✓"}
+              </span>
+            </div>
+            <div className="h-1 rounded-full bg-muted overflow-hidden mt-1 max-w-[120px]">
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
@@ -986,17 +932,7 @@ export default function TrackerPage() {
                 style={{ width: `${Math.min(allocationPct, 100)}%` }}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground">{allocationPct}% {t(lang, "tracker.assigned")}</span>
           </div>
-
-          {/* Spending summary */}
-          {totalSpentExpenses > 0 && (
-            <div className="text-[10px] text-muted-foreground">
-              {t(lang, "tracker.spent")}: <MoneyDisplay amount={totalSpentExpenses} colorize={false} className="text-[10px] font-medium inline" />
-              {totalAllocatedExpenses > 0 && <> ({spendingPct}%)</>}
-              {isCurrentMonth && <> · {daysLeft} {t(lang, "tracker.daysLeft")}</>}
-            </div>
-          )}
         </div>
       </div>
 
