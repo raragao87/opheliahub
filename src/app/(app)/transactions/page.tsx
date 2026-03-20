@@ -344,7 +344,19 @@ function TransactionsContent() {
                           if (txn.opheliaCategory?.id === variables.categoryId) {
                             return { id: txn.opheliaCategory.id, name: txn.opheliaCategory.name, icon: null, color: null };
                           }
-                          return txn.category;
+                          // Category not found in local data — still set a stub so the
+                          // Ophelia branch doesn't re-render (category !== null)
+                          return { id: variables.categoryId, name: "…", icon: null, color: null };
+                        })(),
+                      }),
+                      // Fund: clear when setting a category, set when assigning a fund
+                      ...("fundId" in variables && {
+                        fundId: variables.fundId ?? null,
+                        fund: (() => {
+                          if (!variables.fundId) return null;
+                          const f = (fundsQuery.data ?? []).find((fd: { id: string }) => fd.id === variables.fundId);
+                          if (f) return { id: f.id, name: f.name, icon: f.icon ?? null };
+                          return { id: variables.fundId as string, name: "…", icon: null };
                         })(),
                       }),
                       ...(variables.tagIds !== undefined && {
