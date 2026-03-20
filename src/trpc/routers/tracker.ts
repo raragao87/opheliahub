@@ -161,11 +161,11 @@ export const trackerRouter = router({
       });
       const incomeCategoryIds = leafCategories.filter((c) => c.type === "INCOME").map((c) => c.id);
       const expenseCategoryIds = leafCategories.filter((c) => c.type === "EXPENSE").map((c) => c.id);
+      const validCategoryIds = new Set(leafCategories.map((c) => c.id));
 
-      // Get ALL transactions per category for this month (regardless of type)
-      // This ensures e.g. a negative tx on an income category counts toward that category's actual
-      const allByCategory = await ctx.prisma.transaction.groupBy({
-        by: ["categoryId"],
+      // Get ALL transactions for this month with both categoryId and opheliaCategoryId
+      // so we can use Ophelia's suggestion as fallback for uncategorized transactions
+      const allMonthTxs = await ctx.prisma.transaction.findMany({
         where: {
           AND: [
             visibilityFilter,
@@ -175,23 +175,34 @@ export const trackerRouter = router({
             { isInitialBalance: false },
           ],
         },
-        _sum: { amount: true },
+        select: {
+          id: true,
+          amount: true,
+          categoryId: true,
+          opheliaCategoryId: true,
+          fundId: true,
+        },
       });
 
       const incomeCategoryIdSet = new Set(incomeCategoryIds);
       const expenseCategoryIdSet = new Set(expenseCategoryIds);
 
-      // Build unified actual map and compute totals by category type
+      // Build unified actual map using effective category (categoryId ?? opheliaCategoryId)
+      // Fund transactions are excluded (tracked separately in fund table)
       const categoryActualMap = new Map<string | null, number>();
       let actualIncome = 0;
 
-      for (const row of allByCategory) {
-        const catId = row.categoryId;
-        const amount = row._sum.amount ?? 0;
-        categoryActualMap.set(catId, amount);
+      for (const tx of allMonthTxs) {
+        if (tx.fundId) continue; // fund transactions tracked separately
 
-        if (catId && incomeCategoryIdSet.has(catId)) {
-          actualIncome += amount; // net income (positive income - deductions)
+        // Effective category: confirmed > ophelia suggestion (if still valid) > null
+        const effectiveCatId = tx.categoryId
+          ?? (tx.opheliaCategoryId && validCategoryIds.has(tx.opheliaCategoryId) ? tx.opheliaCategoryId : null);
+
+        categoryActualMap.set(effectiveCatId, (categoryActualMap.get(effectiveCatId) ?? 0) + tx.amount);
+
+        if (effectiveCatId && incomeCategoryIdSet.has(effectiveCatId)) {
+          actualIncome += tx.amount; // net income (positive income - deductions)
         }
       }
 
@@ -234,6 +245,7 @@ export const trackerRouter = router({
           date: true,
           description: true,
           categoryId: true,
+          opheliaCategoryId: true,
         },
       });
 
@@ -355,6 +367,12 @@ export const trackerRouter = router({
         categoryAdj.set(catId, (categoryAdj.get(catId) ?? 0) + amount);
       }
 
+      // Helper: effective category for a boundary transaction
+      function effectiveCat(tx: { categoryId: string | null; opheliaCategoryId?: string | null }) {
+        return tx.categoryId
+          ?? (tx.opheliaCategoryId && validCategoryIds.has(tx.opheliaCategoryId) ? tx.opheliaCategoryId : null);
+      }
+
       // 1. ADDITIONS: boundary txs outside strict month that belong here
       for (const tx of [...beforeMonthTxs, ...afterMonthTxs]) {
         for (const rule of thisMonthRules) {
@@ -365,7 +383,7 @@ export const trackerRouter = router({
             bestDueDayByRule.get(rule.id)
           );
           if (txMatchesRule(tx, rule, due)) {
-            adj(tx.categoryId ?? rule.categoryId, Math.abs(tx.amount));
+            adj(effectiveCat(tx) ?? rule.categoryId, Math.abs(tx.amount));
             break;
           }
         }
@@ -381,7 +399,7 @@ export const trackerRouter = router({
             bestDueDayByRule.get(rule.id)
           );
           if (txMatchesRule(tx, rule, due)) {
-            adj(tx.categoryId ?? rule.categoryId, -Math.abs(tx.amount));
+            adj(effectiveCat(tx) ?? rule.categoryId, -Math.abs(tx.amount));
             break;
           }
         }
@@ -397,7 +415,7 @@ export const trackerRouter = router({
             bestDueDayByRule.get(rule.id)
           );
           if (txMatchesRule(tx, rule, due)) {
-            adj(tx.categoryId ?? rule.categoryId, -Math.abs(tx.amount));
+            adj(effectiveCat(tx) ?? rule.categoryId, -Math.abs(tx.amount));
             break;
           }
         }

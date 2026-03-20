@@ -22,6 +22,7 @@ export const transactionRouter = router({
         fundId: z.string().optional(),
         fundIds: z.array(z.string()).optional(),
         uncategorized: z.boolean().optional(),
+        opheliaUnconfirmed: z.boolean().optional(),
         noTags: z.boolean().optional(),
         // Parse as local (Amsterdam) start/end of day so that transactions
         // stored at local midnight are included correctly (e.g. Jan 1 00:00 Amsterdam
@@ -65,18 +66,20 @@ export const transactionRouter = router({
               : input.accountId
                 ? { accountId: input.accountId }
                 : {}),
-            // Category filter: array takes precedence, uncategorized overrides both
-            ...(input.uncategorized
-              ? { categoryId: null, fundId: null }
-              : input.categoryIds?.length && input.fundIds?.length
-                ? { OR: [{ categoryId: { in: input.categoryIds } }, { fundId: { in: input.fundIds } }] }
-                : input.categoryIds?.length
-                  ? { categoryId: { in: input.categoryIds } }
-                  : input.fundIds?.length
-                    ? { fundId: { in: input.fundIds } }
-                    : input.categoryId
-                      ? { categoryId: input.categoryId }
-                      : {}),
+            // Category filter: special modes override all, then array takes precedence
+            ...(input.opheliaUnconfirmed
+              ? { categoryId: null, fundId: null, opheliaCategoryId: { not: null } }
+              : input.uncategorized
+                ? { categoryId: null, fundId: null, opheliaCategoryId: null }
+                : input.categoryIds?.length && input.fundIds?.length
+                  ? { OR: [{ categoryId: { in: input.categoryIds } }, { fundId: { in: input.fundIds } }] }
+                  : input.categoryIds?.length
+                    ? { categoryId: { in: input.categoryIds } }
+                    : input.fundIds?.length
+                      ? { fundId: { in: input.fundIds } }
+                      : input.categoryId
+                        ? { categoryId: input.categoryId }
+                        : {}),
             // transferType takes precedence over type (forces TRANSFER)
             ...(input.transferType
               ? { type: "TRANSFER" as const }
@@ -917,6 +920,47 @@ export const transactionRouter = router({
       ]);
 
       return { fixed: toFix.length };
+    }),
+
+  confirmOpheliaSuggestions: householdProcedure
+    .input(
+      z.object({
+        transactionIds: z.array(z.string()).optional(),
+        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const baseWhere = visibleTransactionsWhere(ctx.userId, ctx.householdId);
+      const where: Prisma.TransactionWhereInput = {
+        AND: [
+          baseWhere,
+          {
+            visibility: input.visibility,
+            categoryId: null,
+            fundId: null,
+            opheliaCategoryId: { not: null },
+            ...(input.transactionIds?.length && { id: { in: input.transactionIds } }),
+          },
+        ],
+      };
+
+      const txns = await ctx.prisma.transaction.findMany({
+        where,
+        select: { id: true, opheliaCategoryId: true },
+      });
+
+      if (txns.length === 0) return { confirmed: 0 };
+
+      await ctx.prisma.$transaction(
+        txns.map((tx) =>
+          ctx.prisma.transaction.update({
+            where: { id: tx.id },
+            data: { categoryId: tx.opheliaCategoryId },
+          })
+        )
+      );
+
+      return { confirmed: txns.length };
     }),
 
   bulkDelete: householdProcedure

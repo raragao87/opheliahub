@@ -57,6 +57,7 @@ interface Filters {
   liquidOnly: string;
   fundId: string;
   uncategorized: boolean;
+  opheliaUnconfirmed: boolean;
   noTags: boolean;
 }
 
@@ -79,6 +80,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     liquidOnly: sp.get("liquidOnly") ?? "",
     fundId: sp.get("fundId") ?? "",
     uncategorized: sp.get("uncategorized") === "true",
+    opheliaUnconfirmed: sp.get("opheliaUnconfirmed") === "true",
     noTags: sp.get("noTags") === "true",
   };
 }
@@ -102,6 +104,7 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.liquidOnly) sp.set("liquidOnly", f.liquidOnly);
   if (f.fundId) sp.set("fundId", f.fundId);
   if (f.uncategorized) sp.set("uncategorized", "true");
+  if (f.opheliaUnconfirmed) sp.set("opheliaUnconfirmed", "true");
   if (f.noTags) sp.set("noTags", "true");
   return sp;
 }
@@ -125,6 +128,7 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.liquidOnly === b.liquidOnly &&
     a.fundId === b.fundId &&
     a.uncategorized === b.uncategorized &&
+    a.opheliaUnconfirmed === b.opheliaUnconfirmed &&
     a.noTags === b.noTags
   );
 }
@@ -147,6 +151,7 @@ const EMPTY_FILTERS: Filters = {
   liquidOnly: "",
   fundId: "",
   uncategorized: false,
+  opheliaUnconfirmed: false,
   noTags: false,
 };
 
@@ -225,8 +230,8 @@ function TransactionsContent() {
       search: filters.search || undefined,
       visibility: (filters.visibility as "SHARED" | "PERSONAL") || visibilityParam,
       accountIds: filters.accountIds.length ? filters.accountIds : undefined,
-      categoryIds: !filters.uncategorized && filters.categoryIds.length ? filters.categoryIds : undefined,
-      fundIds: !filters.uncategorized && filters.fundIds.length ? filters.fundIds : undefined,
+      categoryIds: !filters.uncategorized && !filters.opheliaUnconfirmed && filters.categoryIds.length ? filters.categoryIds : undefined,
+      fundIds: !filters.uncategorized && !filters.opheliaUnconfirmed && filters.fundIds.length ? filters.fundIds : undefined,
       type: (filters.type as "INCOME" | "EXPENSE" | "TRANSFER") || undefined,
       transferType: (filters.transferType as "INTERNAL" | "EXTERNAL") || undefined,
       dateFrom: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
@@ -238,6 +243,7 @@ function TransactionsContent() {
       liquidOnly: filters.liquidOnly === "true" || undefined,
       fundId: filters.fundId || undefined,
       uncategorized: filters.uncategorized || undefined,
+      opheliaUnconfirmed: filters.opheliaUnconfirmed || undefined,
       noTags: filters.noTags || undefined,
       limit: PAGE_SIZE,
     };
@@ -509,6 +515,16 @@ function TransactionsContent() {
     })
   );
 
+  const confirmOpheliaMutation = useMutation(
+    trpc.transaction.confirmOpheliaSuggestions.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(`Confirmed ${data.confirmed} Ophelia suggestion${data.confirmed !== 1 ? "s" : ""}`);
+        queryClient.invalidateQueries();
+      },
+      onError: (err) => toast.error(err.message),
+    })
+  );
+
   const isBulkPending =
     bulkCategoryMutation.isPending ||
     bulkVisibilityMutation.isPending ||
@@ -685,6 +701,7 @@ function TransactionsContent() {
     filters.liquidOnly !== "" ||
     filters.fundId !== "" ||
     filters.uncategorized ||
+    filters.opheliaUnconfirmed ||
     filters.noTags;
 
   const activeFilterCount = [
@@ -698,6 +715,7 @@ function TransactionsContent() {
     filters.visibility !== "",
     filters.amountMin !== "" || filters.amountMax !== "",
     filters.uncategorized,
+    filters.opheliaUnconfirmed,
     filters.noTags,
   ].filter(Boolean).length;
 
@@ -859,6 +877,43 @@ function TransactionsContent() {
                 </button>
               </span>
             )}
+            {filters.opheliaUnconfirmed && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium">
+                <Sparkles className="h-3 w-3" />
+                Needs confirmation
+                <button
+                  onClick={() => setFilters((f) => ({ ...f, opheliaUnconfirmed: false }))}
+                  className="ml-0.5 hover:text-amber-700 dark:hover:text-amber-300"
+                  title="Clear filter"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            {filters.uncategorized && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
+                Uncategorized
+                <button
+                  onClick={() => setFilters((f) => ({ ...f, uncategorized: false }))}
+                  className="ml-0.5 hover:text-foreground"
+                  title="Clear filter"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            {filters.fundId && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 font-medium">
+                Fund
+                <button
+                  onClick={() => setFilters((f) => ({ ...f, fundId: "" }))}
+                  className="ml-0.5 hover:text-violet-700 dark:hover:text-violet-300"
+                  title="Clear fund filter"
+                >
+                  ×
+                </button>
+              </span>
+            )}
             <span>{activeFilterCount} filter{activeFilterCount !== 1 ? "s" : ""} active</span>
             <span className="text-border">·</span>
             <span className="text-muted-foreground/70">
@@ -872,6 +927,16 @@ function TransactionsContent() {
             >
               Clear all
             </button>
+            {filters.opheliaUnconfirmed && transactions.length > 0 && (
+              <button
+                onClick={() => confirmOpheliaMutation.mutate({ visibility: visibilityParam })}
+                disabled={confirmOpheliaMutation.isPending}
+                className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+              >
+                <Sparkles className="h-3 w-3" />
+                {confirmOpheliaMutation.isPending ? "Confirming..." : `Confirm all ${transactions.length}${hasMore ? "+" : ""} suggestions`}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -963,6 +1028,7 @@ function TransactionsContent() {
               fundIds: filters.fundIds,
               tagIds: filters.tagIds,
               uncategorized: filters.uncategorized,
+              opheliaUnconfirmed: filters.opheliaUnconfirmed,
               noTags: filters.noTags,
               amountMin: filters.amountMin,
               amountMax: filters.amountMax,
