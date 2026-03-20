@@ -1927,7 +1927,7 @@ export default function TrackerPage() {
                           href={(() => {
                             const mm = String(period.month).padStart(2, "0");
                             const ld = new Date(period.year, period.month, 0).getDate();
-                            return `/transactions?accrualDateFrom=${period.year}-${mm}-01&accrualDateTo=${period.year}-${mm}-${String(ld).padStart(2, "0")}&liquidOnly=true`;
+                            return `/transactions?uncategorized=true&accrualDateFrom=${period.year}-${mm}-01&accrualDateTo=${period.year}-${mm}-${String(ld).padStart(2, "0")}&liquidOnly=true`;
                           })()}
                           className="hover:underline transition-colors"
                           title="View uncategorized transactions"

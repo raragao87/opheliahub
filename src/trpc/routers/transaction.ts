@@ -20,6 +20,7 @@ export const transactionRouter = router({
         tagId: z.string().optional(),
         tagIds: z.array(z.string()).optional(),
         fundId: z.string().optional(),
+        fundIds: z.array(z.string()).optional(),
         uncategorized: z.boolean().optional(),
         noTags: z.boolean().optional(),
         // Parse as local (Amsterdam) start/end of day so that transactions
@@ -66,12 +67,16 @@ export const transactionRouter = router({
                 : {}),
             // Category filter: array takes precedence, uncategorized overrides both
             ...(input.uncategorized
-              ? { categoryId: null }
-              : input.categoryIds?.length
-                ? { categoryId: { in: input.categoryIds } }
-                : input.categoryId
-                  ? { categoryId: input.categoryId }
-                  : {}),
+              ? { categoryId: null, fundId: null }
+              : input.categoryIds?.length && input.fundIds?.length
+                ? { OR: [{ categoryId: { in: input.categoryIds } }, { fundId: { in: input.fundIds } }] }
+                : input.categoryIds?.length
+                  ? { categoryId: { in: input.categoryIds } }
+                  : input.fundIds?.length
+                    ? { fundId: { in: input.fundIds } }
+                    : input.categoryId
+                      ? { categoryId: input.categoryId }
+                      : {}),
             // transferType takes precedence over type (forces TRANSFER)
             ...(input.transferType
               ? { type: "TRANSFER" as const }
@@ -79,8 +84,8 @@ export const transactionRouter = router({
                 ? { type: input.type }
                 : {}),
             ...(input.visibility && { visibility: input.visibility }),
-            // Fund filter
-            ...(input.fundId && { fundId: input.fundId }),
+            // Fund filter (single — used by tracker drill-down, not when fundIds is already in category block)
+            ...(!input.fundIds?.length && input.fundId && { fundId: input.fundId }),
             // Tag filter: noTags overrides tagIds; array takes precedence over single
             ...(input.noTags
               ? { tags: { none: {} } }

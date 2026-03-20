@@ -84,6 +84,7 @@ export interface ColumnFilters {
   dateTo: string;
   accountIds: string[];
   categoryIds: string[];
+  fundIds: string[];
   tagIds: string[];
   uncategorized: boolean;
   noTags: boolean;
@@ -870,25 +871,50 @@ export function TransactionTable({
               {cf && setCf && onTypeChange ? (
                 <ColumnHeaderFilter
                   label="Category"
-                  active={cf.categoryIds.length > 0 || cf.uncategorized || cf.type === "TRANSFER"}
+                  active={cf.categoryIds.length > 0 || cf.fundIds.length > 0 || cf.uncategorized || cf.type === "TRANSFER"}
                 >
-                  {(close) => (
-                    <ColumnMultiSelect
-                      groups={categoryFilterGroups}
-                      selected={cf.uncategorized ? [] : cf.categoryIds}
-                      onChange={(ids) => { setCf("categoryIds", ids); if (cf.uncategorized) setCf("uncategorized", false); }}
-                      toggleLabel="No category"
-                      toggleActive={cf.uncategorized}
-                      onToggle={() => { setCf("uncategorized", !cf.uncategorized); setCf("categoryIds", []); }}
-                      extraToggles={[{
-                        label: "Transfer",
-                        active: cf.type === "TRANSFER",
-                        onToggle: () => onTypeChange(cf.type === "TRANSFER" ? "" : "TRANSFER", cf.type === "TRANSFER" ? "" : cf.transferType),
-                        icon: <ArrowLeftRight className={cn("h-3.5 w-3.5 shrink-0", cf.type === "TRANSFER" ? "text-primary" : "text-muted-foreground")} />,
-                      }]}
-                      close={close}
-                    />
-                  )}
+                  {(close) => {
+                    // Merge category groups + funds group for the multi-select
+                    const FUND_PREFIX = "fund:";
+                    const combinedGroups = [
+                      ...categoryFilterGroups,
+                      ...(funds.length > 0 ? [{
+                        label: "Funds",
+                        options: funds.map((f) => ({
+                          value: `${FUND_PREFIX}${f.id}`,
+                          label: f.name,
+                          icon: f.icon ?? "💰",
+                        })),
+                      }] : []),
+                    ];
+                    const combinedSelected = [
+                      ...cf.categoryIds,
+                      ...cf.fundIds.map((id) => `${FUND_PREFIX}${id}`),
+                    ];
+                    return (
+                      <ColumnMultiSelect
+                        groups={combinedGroups}
+                        selected={cf.uncategorized ? [] : combinedSelected}
+                        onChange={(ids) => {
+                          const catIds = ids.filter((id) => !id.startsWith(FUND_PREFIX));
+                          const fIds = ids.filter((id) => id.startsWith(FUND_PREFIX)).map((id) => id.slice(FUND_PREFIX.length));
+                          setCf("categoryIds", catIds);
+                          setCf("fundIds", fIds);
+                          if (cf.uncategorized) setCf("uncategorized", false);
+                        }}
+                        toggleLabel="No category"
+                        toggleActive={cf.uncategorized}
+                        onToggle={() => { setCf("uncategorized", !cf.uncategorized); setCf("categoryIds", []); setCf("fundIds", []); }}
+                        extraToggles={[{
+                          label: "Transfer",
+                          active: cf.type === "TRANSFER",
+                          onToggle: () => onTypeChange(cf.type === "TRANSFER" ? "" : "TRANSFER", cf.type === "TRANSFER" ? "" : cf.transferType),
+                          icon: <ArrowLeftRight className={cn("h-3.5 w-3.5 shrink-0", cf.type === "TRANSFER" ? "text-primary" : "text-muted-foreground")} />,
+                        }]}
+                        close={close}
+                      />
+                    );
+                  }}
                 </ColumnHeaderFilter>
               ) : (
                 <span className="text-left font-medium text-xs text-muted-foreground">Category</span>

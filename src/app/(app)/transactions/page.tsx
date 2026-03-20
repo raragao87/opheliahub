@@ -43,6 +43,7 @@ interface Filters {
   search: string;
   accountIds: string[];
   categoryIds: string[];
+  fundIds: string[];
   tagIds: string[];
   type: string;
   transferType: string;
@@ -64,6 +65,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     search: sp.get("search") ?? "",
     accountIds: parseCSV(sp.get("accountIds") ?? sp.get("accountId")),
     categoryIds: parseCSV(sp.get("categoryIds") ?? sp.get("categoryId")),
+    fundIds: parseCSV(sp.get("fundIds")),
     tagIds: parseCSV(sp.get("tagIds")),
     type: sp.get("type") ?? "",
     transferType: sp.get("transferType") ?? "",
@@ -86,6 +88,7 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.search) sp.set("search", f.search);
   if (f.accountIds.length) sp.set("accountIds", toCSV(f.accountIds));
   if (f.categoryIds.length) sp.set("categoryIds", toCSV(f.categoryIds));
+  if (f.fundIds.length) sp.set("fundIds", toCSV(f.fundIds));
   if (f.tagIds.length) sp.set("tagIds", toCSV(f.tagIds));
   if (f.type) sp.set("type", f.type);
   if (f.transferType) sp.set("transferType", f.transferType);
@@ -108,6 +111,7 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.search === b.search &&
     a.accountIds.join(",") === b.accountIds.join(",") &&
     a.categoryIds.join(",") === b.categoryIds.join(",") &&
+    a.fundIds.join(",") === b.fundIds.join(",") &&
     a.tagIds.join(",") === b.tagIds.join(",") &&
     a.type === b.type &&
     a.transferType === b.transferType &&
@@ -129,6 +133,7 @@ const EMPTY_FILTERS: Filters = {
   search: "",
   accountIds: [],
   categoryIds: [],
+  fundIds: [],
   tagIds: [],
   type: "",
   transferType: "",
@@ -221,6 +226,7 @@ function TransactionsContent() {
       visibility: (filters.visibility as "SHARED" | "PERSONAL") || visibilityParam,
       accountIds: filters.accountIds.length ? filters.accountIds : undefined,
       categoryIds: !filters.uncategorized && filters.categoryIds.length ? filters.categoryIds : undefined,
+      fundIds: !filters.uncategorized && filters.fundIds.length ? filters.fundIds : undefined,
       type: (filters.type as "INCOME" | "EXPENSE" | "TRANSFER") || undefined,
       transferType: (filters.transferType as "INTERNAL" | "EXTERNAL") || undefined,
       dateFrom: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
@@ -665,6 +671,7 @@ function TransactionsContent() {
     filters.search !== "" ||
     filters.accountIds.length > 0 ||
     filters.categoryIds.length > 0 ||
+    filters.fundIds.length > 0 ||
     filters.tagIds.length > 0 ||
     filters.type !== "" ||
     filters.transferType !== "" ||
@@ -676,13 +683,14 @@ function TransactionsContent() {
     filters.amountMin !== "" ||
     filters.amountMax !== "" ||
     filters.liquidOnly !== "" ||
+    filters.fundId !== "" ||
     filters.uncategorized ||
     filters.noTags;
 
   const activeFilterCount = [
     filters.search !== "",
     filters.accountIds.length > 0,
-    filters.categoryIds.length > 0,
+    filters.categoryIds.length > 0 || filters.fundIds.length > 0,
     filters.tagIds.length > 0,
     filters.type !== "" || filters.transferType !== "",
     filters.dateFrom !== "" || filters.dateTo !== "",
@@ -952,6 +960,7 @@ function TransactionsContent() {
               dateTo: filters.dateTo,
               accountIds: filters.accountIds,
               categoryIds: filters.categoryIds,
+              fundIds: filters.fundIds,
               tagIds: filters.tagIds,
               uncategorized: filters.uncategorized,
               noTags: filters.noTags,
