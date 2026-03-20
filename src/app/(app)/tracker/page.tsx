@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { t } from "@/lib/translations";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { EmojiPickerButton } from "@/components/ui/emoji-picker";
-import { FundCalculator } from "@/components/tracker/fund-calculator";
+import { FundCalculator, BudgetCalculator } from "@/components/tracker/fund-calculator";
 import { toCents } from "@/lib/money";
 
 // FundData type — matches the shape returned by fund.list
@@ -155,11 +155,11 @@ function IncomeAvailableCell({
     return <span className="text-sm text-muted-foreground/40">—</span>;
   }
 
-  // Income available: 0 = all received (green), >0 = pending (amber), <0 = bonus (green)
-  const colorClass = amount <= 0
+  // Income available = actual - budget: >=0 means received enough (green), <0 means still pending (amber)
+  const colorClass = amount >= 0
     ? "text-green-600 dark:text-green-400"
     : "text-amber-600 dark:text-amber-400";
-  const bgClass = amount <= 0
+  const bgClass = amount >= 0
     ? "bg-green-100 dark:bg-green-950/40"
     : "bg-amber-100 dark:bg-amber-950/40";
 
@@ -320,6 +320,10 @@ export default function TrackerPage() {
   const [fundIconSuggestions, setFundIconSuggestions] = useState<string[]>([]);
   const fundSuggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [calculatorFundId, setCalculatorFundId] = useState<string | null>(null);
+  const [calculatorCategoryTarget, setCalculatorCategoryTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [showAddFund, setShowAddFund] = useState(false);
   const [newFundName, setNewFundName] = useState("");
   const [newFundIcon, setNewFundIcon] = useState("");
@@ -395,6 +399,12 @@ export default function TrackerPage() {
 
   // Accounts query for linked account dropdown
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
+
+  // Category line items query — fires when calculator is opened for a category
+  const categoryLineItemsQuery = useQuery({
+    ...trpc.category.getLineItems.queryOptions({ categoryId: calculatorCategoryTarget?.id! }),
+    enabled: !!calculatorCategoryTarget,
+  });
 
   const suggestFundIconMutation = useMutation(
     trpc.category.suggestIcon.mutationOptions({
@@ -540,6 +550,7 @@ export default function TrackerPage() {
           spent: sc?.spent ?? 0,
           remaining: (sc?.allocated ?? 0) - (sc?.spent ?? 0),
           transactionCount: cat._count.transactions,
+          lineItemCount: cat._count.lineItems,
           incomeActual: sc?.incomeActual ?? 0,
           expenseActual: sc?.expenseActual ?? 0,
         };
@@ -1193,12 +1204,18 @@ export default function TrackerPage() {
         const tableTotalBudget = isIncome ? incomeAssigned : expenseAssigned;
         const tableTotalActual = isIncome ? totalIncomeActual : -totalSpentExpenses;
         const tableTotalAvail = isIncome
-          ? incomeAssigned - totalIncomeActual
+          ? totalIncomeActual - incomeAssigned
           : expenseAssigned - totalSpentExpenses;
 
         return (
           <div key={tableType} className="rounded-lg border bg-card overflow-x-clip">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm min-w-[600px]" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col /> {/* Name column — takes remaining space */}
+                <col style={{ width: '130px' }} /> {/* Budget */}
+                <col style={{ width: '130px' }} /> {/* Actual */}
+                <col style={{ width: '150px' }} /> {/* Available */}
+              </colgroup>
               <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
@@ -1229,26 +1246,26 @@ export default function TrackerPage() {
                       </button>
                     </div>
                   </th>
-                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
                     Budget
                   </th>
-                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
                     Actual
                   </th>
-                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-36 bg-card">
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
                     Available
                   </th>
                 </tr>
                 {/* Row 2: Totals */}
                 {groups.length > 0 && (
                   <tr className="border-b bg-card">
-                    <td className="py-2 px-3 text-xs font-semibold text-muted-foreground bg-card">
+                    <td className="py-2 px-3 text-sm font-semibold text-muted-foreground bg-card">
                       {isIncome ? t(lang, "tracker.totalIncome") : t(lang, "tracker.totalExpenses")}
                     </td>
                     <td className="py-2 px-3 text-right bg-card">
                       {tableTotalBudget === 0
-                        ? <span className="text-xs text-muted-foreground/40">—</span>
-                        : <MoneyDisplay amount={tableTotalBudget} colorize={false} className="text-xs font-semibold" />
+                        ? <span className="text-sm text-muted-foreground/40">—</span>
+                        : <MoneyDisplay amount={tableTotalBudget} colorize={false} className="text-sm font-semibold" />
                       }
                     </td>
                     <td className="py-2 px-3 text-right bg-card">
@@ -1261,7 +1278,7 @@ export default function TrackerPage() {
                             amount={tableTotalActual}
                             colorize={false}
                             className={cn(
-                              "text-xs font-semibold",
+                              "text-sm font-semibold",
                               isIncome
                                 ? tableTotalActual >= 0
                                   ? "text-green-600 dark:text-green-400"
@@ -1270,7 +1287,7 @@ export default function TrackerPage() {
                             )}
                           />
                         ) : (
-                          <span className="text-xs text-muted-foreground/40">—</span>
+                          <span className="text-sm text-muted-foreground/40">—</span>
                         );
                       })()}
                     </td>
@@ -1672,6 +1689,24 @@ export default function TrackerPage() {
                                       amount: cents,
                                     });
                                   }}
+                                  editingPrefix={
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setCalculatorCategoryTarget({ id: cat.id, name: cat.name });
+                                      }}
+                                      className={cn(
+                                        "p-0.5 rounded shrink-0",
+                                        cat.lineItemCount > 0
+                                          ? "text-primary hover:text-primary/80"
+                                          : "text-muted-foreground/40 hover:text-foreground"
+                                      )}
+                                      title={t(lang, "tracker.funds.calculator")}
+                                    >
+                                      <Calculator className="h-3.5 w-3.5" />
+                                    </button>
+                                  }
                                 />
                               </td>
                               <td className="py-1.5 px-3 text-right">
@@ -1709,7 +1744,7 @@ export default function TrackerPage() {
                               <td className="py-1.5 px-3 text-right">
                                 {isIncomeGroup ? (
                                   <IncomeAvailableCell
-                                    amount={cat.allocated - cat.incomeActual}
+                                    amount={cat.incomeActual - cat.allocated}
                                     allocated={cat.allocated}
                                     incomeActual={cat.incomeActual}
                                   />
@@ -2085,7 +2120,13 @@ export default function TrackerPage() {
           }}
         >
         <div className="rounded-lg border bg-card overflow-x-clip">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm min-w-[600px]" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col /> {/* Name column — takes remaining space */}
+                <col style={{ width: '130px' }} /> {/* Budget */}
+                <col style={{ width: '130px' }} /> {/* Actual */}
+                <col style={{ width: '150px' }} /> {/* Available */}
+              </colgroup>
               <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
@@ -2101,35 +2142,35 @@ export default function TrackerPage() {
                       </button>
                     </div>
                   </th>
-                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
                     Budget
                   </th>
-                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-32 bg-card">
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
                     Actual
                   </th>
-                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider w-36 bg-card">
+                  <th className="text-right py-2.5 px-3 font-medium text-muted-foreground text-xs uppercase tracking-wider bg-card">
                     Available
                   </th>
                 </tr>
                 {/* Row 2: Fund totals */}
                 {fundsData.length > 0 && (
                   <tr className="border-b bg-card">
-                    <td className="py-2 px-3 text-xs font-semibold text-muted-foreground bg-card">{t(lang, "tracker.funds.fundTotals")}</td>
+                    <td className="py-2 px-3 text-sm font-semibold text-muted-foreground bg-card">{t(lang, "tracker.funds.fundTotals")}</td>
                     <td className="py-2 px-3 text-right bg-card">
-                      <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.budget, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
+                      <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.budget, 0)} colorize={false} className="text-sm font-semibold font-mono tabular-nums" />
                     </td>
                     <td className="py-2 px-3 text-right bg-card">
                       {(() => {
                         const totalActual = fundsData.reduce((s, f) => s + f.thisMonthActual, 0);
                         return totalActual > 0 ? (
-                          <MoneyDisplay amount={-totalActual} className="text-xs font-semibold font-mono tabular-nums" />
+                          <MoneyDisplay amount={-totalActual} className="text-sm font-semibold font-mono tabular-nums" />
                         ) : (
-                          <span className="text-xs text-muted-foreground/40">—</span>
+                          <span className="text-sm text-muted-foreground/40">—</span>
                         );
                       })()}
                     </td>
                     <td className="py-2 px-3 text-right bg-card">
-                      <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.available, 0)} colorize={false} className="text-xs font-semibold font-mono tabular-nums" />
+                      <MoneyDisplay amount={fundsData.reduce((s, f) => s + f.available, 0)} colorize={false} className="text-sm font-semibold font-mono tabular-nums" />
                     </td>
                   </tr>
                 )}
@@ -2665,6 +2706,24 @@ export default function TrackerPage() {
           />
         ) : null;
       })()}
+
+      {/* Category Calculator Dialog */}
+      {calculatorCategoryTarget && categoryLineItemsQuery.data && (
+        <BudgetCalculator
+          entityId={calculatorCategoryTarget.id}
+          entityName={calculatorCategoryTarget.name}
+          entityType="category"
+          trackerId={tracker.id}
+          initialItems={categoryLineItemsQuery.data}
+          open={true}
+          onClose={() => setCalculatorCategoryTarget(null)}
+          lang={lang}
+          onApplyBudget={() => {
+            queryClient.invalidateQueries();
+            setCalculatorCategoryTarget(null);
+          }}
+        />
+      )}
 
     </div>
   );
