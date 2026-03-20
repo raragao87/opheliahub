@@ -284,7 +284,11 @@ export async function categorizeTransactionBatch(
       // IMPORTANT: never touch categoryId — that's the user's domain.
       // When enrichTransactions returns partial results (some batches failed), transactions
       // without a matching result still get stamped so they don't loop endlessly.
-      const validCategoryIds = new Set(categories.map((c) => c.id));
+      // Validation is per-visibility so a hallucinated cross-visibility ID is rejected.
+      const validSharedCategoryIds = new Set(sharedCategories.map((c) => c.id));
+      const validPersonalCategoryIds = new Set(personalCategories.map((c) => c.id));
+      const validCategoryIdsFor = (vis: string) =>
+        vis === "SHARED" ? validSharedCategoryIds : validPersonalCategoryIds;
 
       // Track transactions where AI returned an invalid category ID — these get a retry pass.
       const retryNeeded: Array<{ tx: (typeof transactions)[number]; localIndex: number }> = [];
@@ -294,9 +298,10 @@ export async function categorizeTransactionBatch(
         const result = resultMap.get(i);
 
         // Validate the suggested category ID — AI sometimes returns hallucinated IDs.
-        // Write null for now; invalid ones are collected for a focused retry.
+        // Check against the visibility-scoped set so cross-visibility IDs are rejected.
+        const validIds = validCategoryIdsFor(tx.visibility);
         const hasInvalidCategory =
-          !!result?.suggestedCategoryId && !validCategoryIds.has(result.suggestedCategoryId);
+          !!result?.suggestedCategoryId && !validIds.has(result.suggestedCategoryId);
         const safeCategoryId = hasInvalidCategory ? null : (result?.suggestedCategoryId ?? null);
 
         if (hasInvalidCategory) {
@@ -380,7 +385,7 @@ export async function categorizeTransactionBatch(
           for (const { tx, localIndex } of retryNeeded) {
             const retryResult = retryResults.get(localIndex);
             const retryId = retryResult?.suggestedCategoryId;
-            if (retryId && validCategoryIds.has(retryId)) {
+            if (retryId && validCategoryIdsFor(tx.visibility).has(retryId)) {
               try {
                 await prisma.transaction.update({
                   where: { id: tx.id },
