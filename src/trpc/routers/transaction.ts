@@ -663,6 +663,7 @@ export const transactionRouter = router({
       z.object({
         ids: z.array(z.string()).min(1).max(500),
         categoryId: z.string().nullable(),
+        fundId: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -682,9 +683,19 @@ export const transactionRouter = router({
         });
       }
 
+      // Category and fund are mutually exclusive
+      const data: { categoryId: string | null; fundId?: string | null } = {
+        categoryId: input.categoryId,
+      };
+      if (input.fundId !== undefined) {
+        data.fundId = input.fundId;
+        if (input.fundId) data.categoryId = null; // fund clears category
+      }
+      if (input.categoryId) data.fundId = null; // category clears fund
+
       await ctx.prisma.transaction.updateMany({
         where: { id: { in: accessibleIds } },
-        data: { categoryId: input.categoryId },
+        data,
       });
 
       await ctx.prisma.auditLog.create({
@@ -693,7 +704,7 @@ export const transactionRouter = router({
           entityType: "Transaction",
           entityId: accessibleIds.join(","),
           userId: ctx.userId,
-          metadata: { categoryId: input.categoryId, count: accessibleIds.length },
+          metadata: { categoryId: input.categoryId, fundId: input.fundId ?? null, count: accessibleIds.length },
         },
       });
 

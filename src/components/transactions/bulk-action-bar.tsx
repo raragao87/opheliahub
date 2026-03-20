@@ -31,12 +31,19 @@ interface SelectedTransactionInfo {
   importBatchId?: string | null;
 }
 
+interface FundOption {
+  id: string;
+  name: string;
+  icon?: string | null;
+}
+
 interface BulkActionBarProps {
   selectedCount: number;
   selectedTransactions: SelectedTransactionInfo[];
   onDeselectAll: () => void;
   // Category action
   categoryGroups: FilterOptionGroup[];
+  funds?: FundOption[];
   onBulkChangeCategory: (categoryId: string | null) => void;
   // Visibility action
   onBulkChangeVisibility: (visibility: "SHARED" | "PERSONAL") => void;
@@ -57,6 +64,7 @@ export function BulkActionBar({
   selectedTransactions,
   onDeselectAll,
   categoryGroups,
+  funds = [],
   onBulkChangeCategory,
   onBulkChangeVisibility,
   allTags,
@@ -168,6 +176,7 @@ export function BulkActionBar({
         {activeAction === "category" && (
           <CategoryPicker
             groups={categoryGroups}
+            funds={funds}
             onSelect={(id) => {
               onBulkChangeCategory(id);
               closeAction();
@@ -266,10 +275,12 @@ function ActionButton({
 
 function CategoryPicker({
   groups,
+  funds = [],
   onSelect,
   onClose,
 }: {
   groups: FilterOptionGroup[];
+  funds?: FundOption[];
   onSelect: (categoryId: string | null) => void;
   onClose: () => void;
 }) {
@@ -283,16 +294,21 @@ function CategoryPicker({
 
   useClickOutside(ref, onClose);
 
+  const lc = search.toLowerCase();
   const filteredGroups = search
     ? groups
         .map((g) => ({
           ...g,
           options: g.options.filter((o) =>
-            o.label.toLowerCase().includes(search.toLowerCase())
+            o.label.toLowerCase().includes(lc)
           ),
         }))
         .filter((g) => g.options.length > 0)
     : groups;
+
+  const filteredFunds = search
+    ? funds.filter((f) => f.name.toLowerCase().includes(lc))
+    : funds;
 
   return (
     <div ref={ref} className="absolute bottom-full left-0 mb-2 rounded-lg border bg-popover shadow-lg w-[280px] max-h-[320px] flex flex-col">
@@ -335,7 +351,27 @@ function CategoryPicker({
             ))}
           </div>
         ))}
-        {filteredGroups.length === 0 && (
+
+        {/* Funds section */}
+        {filteredFunds.length > 0 && (
+          <div>
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 mt-1 border-t border-border/40 pt-2">
+              Funds
+            </div>
+            {filteredFunds.map((fund) => (
+              <button
+                key={fund.id}
+                onClick={() => onSelect(`__FUND__${fund.id}`)}
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm hover:bg-muted text-foreground transition-colors"
+              >
+                <span className="text-xs">{fund.icon ?? "💰"}</span>
+                <span className="truncate">{fund.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filteredGroups.length === 0 && filteredFunds.length === 0 && (
           <p className="text-xs text-muted-foreground/50 text-center py-3">No categories found</p>
         )}
       </div>

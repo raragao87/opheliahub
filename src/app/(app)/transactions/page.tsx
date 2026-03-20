@@ -1064,9 +1064,15 @@ function TransactionsContent() {
             selectedTransactions={selectedTransactions}
             onDeselectAll={() => setSelectedIds(new Set())}
             categoryGroups={categoryFilterGroups}
-            onBulkChangeCategory={(categoryId) =>
-              bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId })
-            }
+            funds={fundsQuery.data ?? []}
+            onBulkChangeCategory={(value) => {
+              if (value?.startsWith("__FUND__")) {
+                const fundId = value.replace("__FUND__", "");
+                bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId: null, fundId });
+              } else {
+                bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId: value, fundId: null });
+              }
+            }}
             onBulkChangeVisibility={(visibility) =>
               bulkVisibilityMutation.mutate({ ids: selectedIdsArray, visibility })
             }
