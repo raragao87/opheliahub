@@ -141,6 +141,7 @@ export const fundRouter = router({
           }
 
           // Total spending from transactions assigned to this fund (up to end of selected month)
+          // Excludes transfers; uses net sum so refunds reduce spending
           const spendingAgg = await ctx.prisma.transaction.aggregate({
             where: {
               AND: [
@@ -148,12 +149,14 @@ export const fundRouter = router({
                 liquidFilter,
                 { fundId: fund.id },
                 { isInitialBalance: false },
+                { type: { not: "TRANSFER" } },
                 effectiveDateFilterUpTo(monthEnd),
               ],
             },
             _sum: { amount: true },
           });
-          const totalSpending = Math.abs(spendingAgg._sum.amount ?? 0);
+          // Expenses are negative, negate to get positive spending; refunds reduce the total
+          const totalSpending = -(spendingAgg._sum.amount ?? 0);
 
           // This month's spending only
           const thisMonthAgg = await ctx.prisma.transaction.aggregate({
@@ -163,12 +166,13 @@ export const fundRouter = router({
                 liquidFilter,
                 { fundId: fund.id },
                 { isInitialBalance: false },
+                { type: { not: "TRANSFER" } },
                 effectiveDateFilterRange(monthStart, monthEnd),
               ],
             },
             _sum: { amount: true },
           });
-          const thisMonthActual = Math.abs(thisMonthAgg._sum.amount ?? 0);
+          const thisMonthActual = -(thisMonthAgg._sum.amount ?? 0);
 
           // Adjustments from FundEntry (ADJUSTMENT type only)
           const adjustments = fund.entries.reduce(

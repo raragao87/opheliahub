@@ -162,57 +162,52 @@ export const trackerRouter = router({
       const incomeCategoryIds = leafCategories.filter((c) => c.type === "INCOME").map((c) => c.id);
       const expenseCategoryIds = leafCategories.filter((c) => c.type === "EXPENSE").map((c) => c.id);
 
-      // Get actual income received this month — only from INCOME-type categories
-      const incomeAgg = await ctx.prisma.transaction.aggregate({
-        where: {
-          AND: [
-            visibilityFilter,
-            liquidFilter,
-            effectiveDateFilter(start, end),
-            { type: "INCOME" },
-            { categoryId: { in: incomeCategoryIds } },
-          ],
-        },
-        _sum: { amount: true },
-      });
-      const actualIncome = incomeAgg._sum.amount ?? 0;
-
-      // Get actual spending per category for this month — only EXPENSE-type categories
-      const spending = await ctx.prisma.transaction.groupBy({
+      // Get ALL transactions per category for this month (regardless of type)
+      // This ensures e.g. a negative tx on an income category counts toward that category's actual
+      const allByCategory = await ctx.prisma.transaction.groupBy({
         by: ["categoryId"],
         where: {
           AND: [
             visibilityFilter,
             liquidFilter,
             effectiveDateFilter(start, end),
-            { type: "EXPENSE" },
-            { OR: [{ categoryId: { in: expenseCategoryIds } }, { categoryId: null }] },
+            { type: { not: "TRANSFER" } },
+            { isInitialBalance: false },
           ],
         },
         _sum: { amount: true },
       });
 
-      const spendingMap = new Map(
-        spending.map((s) => [s.categoryId, Math.abs(s._sum.amount ?? 0)])
-      );
+      const incomeCategoryIdSet = new Set(incomeCategoryIds);
+      const expenseCategoryIdSet = new Set(expenseCategoryIds);
 
-      // Get actual income per category for this month (only INCOME-type categories)
-      const incomeByCategory = await ctx.prisma.transaction.groupBy({
-        by: ["categoryId"],
-        where: {
-          AND: [
-            visibilityFilter,
-            liquidFilter,
-            effectiveDateFilter(start, end),
-            { type: "INCOME" },
-            { categoryId: { in: incomeCategoryIds } },
-          ],
-        },
-        _sum: { amount: true },
-      });
-      const incomeMap = new Map(
-        incomeByCategory.map((s) => [s.categoryId, Math.abs(s._sum.amount ?? 0)])
-      );
+      // Build unified actual map and compute totals by category type
+      const categoryActualMap = new Map<string | null, number>();
+      let actualIncome = 0;
+
+      for (const row of allByCategory) {
+        const catId = row.categoryId;
+        const amount = row._sum.amount ?? 0;
+        categoryActualMap.set(catId, amount);
+
+        if (catId && incomeCategoryIdSet.has(catId)) {
+          actualIncome += amount; // net income (positive income - deductions)
+        }
+      }
+
+      // spendingMap: for expense categories, store absolute spending; for income categories, store raw amount
+      // This preserves backward compatibility with the boundary adjustment logic and category building
+      const spendingMap = new Map<string | null, number>();
+      const incomeMap = new Map<string | null, number>();
+
+      for (const [catId, amount] of categoryActualMap) {
+        if (catId && incomeCategoryIdSet.has(catId)) {
+          incomeMap.set(catId, Math.abs(amount));
+        } else {
+          // Expense categories and uncategorized — store as positive (abs)
+          spendingMap.set(catId, Math.abs(amount));
+        }
+      }
 
       // ── Recurring-aware boundary adjustments ──────────────────────────
       // Transactions near month boundaries (e.g., a Feb payment on Jan 30)
