@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { formatMoney, fromCents, toCents } from "@/lib/money";
+import { evaluateExpression } from "@/lib/math-expression";
 import { cn } from "@/lib/utils";
 
 interface InlineMoneyEditProps {
@@ -23,6 +24,7 @@ export function InlineMoneyEdit({
   editingPrefix,
 }: InlineMoneyEditProps) {
   const [editing, setEditing] = useState(false);
+  const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,11 +34,19 @@ export function InlineMoneyEdit({
     }
   }, [editing]);
 
+  const isDelta = inputValue.length > 0 && /^[+\-*/]/.test(inputValue.trim());
+
+  const preview = useMemo(() => {
+    if (!isDelta) return null;
+    const result = evaluateExpression(inputValue, value);
+    return result;
+  }, [inputValue, isDelta, value]);
+
   const handleSave = () => {
     if (!inputRef.current) return;
-    const parsed = parseFloat(inputRef.current.value);
-    const cents = isNaN(parsed) ? 0 : toCents(parsed);
+    const cents = evaluateExpression(inputRef.current.value, value);
     setEditing(false);
+    setInputValue("");
     onSave(cents);
   };
 
@@ -51,18 +61,26 @@ export function InlineMoneyEdit({
 
   if (editing) {
     const input = (
-      <input
-        ref={inputRef}
-        type="number"
-        step="0.01"
-        defaultValue={value ? fromCents(value).toFixed(2) : ""}
-        onBlur={handleSave}
-        onKeyDown={handleKeyDown}
-        className={cn(
-          "w-full bg-transparent border-0 border-b border-primary/50 outline-none text-right font-mono tabular-nums text-sm py-0 px-1 rounded-none",
-          className
+      <div className="flex flex-col items-end">
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          defaultValue={value ? fromCents(value).toFixed(2) : ""}
+          onChange={(e) => setInputValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          className={cn(
+            "w-full bg-transparent border-0 border-b border-primary/50 outline-none text-right font-mono tabular-nums text-sm py-0 px-1 rounded-none",
+            className
+          )}
+        />
+        {isDelta && preview !== null && (
+          <span className="text-xs text-muted-foreground mt-0.5 px-1">
+            = {formatMoney(preview, currency)}
+          </span>
         )}
-      />
+      </div>
     );
     if (editingPrefix) {
       return (

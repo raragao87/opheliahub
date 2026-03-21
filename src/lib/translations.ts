@@ -265,6 +265,7 @@ const translations = {
     "tracker.deleteConfirm": "Delete",
     "tracker.categoryDeleted": "Category deleted.",
     "tracker.reassigned": "transactions reassigned.",
+    "transactions.filter.mentionsMe": "Mentions me",
   },
 
   pt: {
@@ -531,6 +532,7 @@ const translations = {
     "tracker.deleteConfirm": "Excluir",
     "tracker.categoryDeleted": "Categoria excluída.",
     "tracker.reassigned": "transações reatribuídas.",
+    "transactions.filter.mentionsMe": "Me menciona",
   },
 
   ro: {
@@ -797,6 +799,7 @@ const translations = {
     "tracker.deleteConfirm": "Șterge",
     "tracker.categoryDeleted": "Categoria a fost ștearsă.",
     "tracker.reassigned": "tranzacții reatribuite.",
+    "transactions.filter.mentionsMe": "Mă menționează",
   },
 
   nl: {
@@ -1063,6 +1066,7 @@ const translations = {
     "tracker.deleteConfirm": "Verwijderen",
     "tracker.categoryDeleted": "Categorie verwijderd.",
     "tracker.reassigned": "transacties opnieuw toegewezen.",
+    "transactions.filter.mentionsMe": "Vermeldt mij",
   },
 } as const;
 

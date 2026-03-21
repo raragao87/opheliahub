@@ -11,6 +11,9 @@ import { InlineTextEdit } from "@/components/shared/inline-text-edit";
 import { InlineDateEdit } from "@/components/shared/inline-date-edit";
 import { InlineSelectEdit } from "@/components/shared/inline-select-edit";
 import { InlineTagEdit } from "@/components/shared/inline-tag-edit";
+import { MentionText } from "@/components/shared/mention-text";
+import { MentionTextarea } from "@/components/shared/mention-textarea";
+import { hasMentionForUser } from "@/lib/mentions";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { cn } from "@/lib/utils";
 import type { FilterOptionGroup } from "@/components/shared/multi-select-filter";
@@ -124,6 +127,8 @@ interface TransactionTableProps {
   tagFilterGroups?: FilterOptionGroup[];
   /** Pixels from top for the sticky thead (default 64 = app header height) */
   stickyOffset?: number;
+  members?: Array<{ id: string; name: string; image: string | null }>;
+  currentUserId?: string;
 }
 
 // ── Column Header Filter ─────────────────────────────────────────────
@@ -724,6 +729,8 @@ export function TransactionTable({
   categoryFilterGroups = [],
   tagFilterGroups = [],
   stickyOffset = 64,
+  members = [],
+  currentUserId,
 }: TransactionTableProps) {
   const cf  = columnFilters;
   const setCf = onColumnFilterChange;
@@ -1035,6 +1042,8 @@ export function TransactionTable({
               selectable={selectable}
               isSelected={selectedIds?.has(txn.id) ?? false}
               onToggleSelect={() => toggleOne(txn.id)}
+              members={members}
+              currentUserId={currentUserId}
             />
           ))}
         </tbody>
@@ -1058,6 +1067,8 @@ function TransactionRow({
   selectable,
   isSelected,
   onToggleSelect,
+  members,
+  currentUserId,
 }: {
   txn: TransactionItem;
   categoryOptions: { value: string; label: string }[];
@@ -1071,6 +1082,8 @@ function TransactionRow({
   selectable: boolean;
   isSelected: boolean;
   onToggleSelect: () => void;
+  members?: Array<{ id: string; name: string; image: string | null }>;
+  currentUserId?: string;
 }) {
   const isTransfer = txn.type === "TRANSFER";
   const partnerAccount = txn.linkedTransaction?.account ?? txn.linkedBy?.account ?? null;
@@ -1273,7 +1286,13 @@ function TransactionRow({
 
       {/* Notes */}
       <td className="py-1.5 px-2">
-        <NoteCell txnId={txn.id} notes={txn.notes} onUpdate={onUpdate} />
+        <NoteCell
+          txnId={txn.id}
+          notes={txn.notes}
+          onUpdate={onUpdate}
+          members={members}
+          currentUserId={currentUserId}
+        />
       </td>
 
 
@@ -1408,20 +1427,23 @@ function DeleteCell({
 // ── Note Cell ─────────────────────────────────────────────────────────
 
 function NoteCell({
-  txnId, notes, onUpdate,
+  txnId, notes, onUpdate, members, currentUserId,
 }: {
   txnId: string;
   notes?: string | null;
   onUpdate: (id: string, data: Record<string, unknown>) => void;
+  members?: Array<{ id: string; name: string; image: string | null }>;
+  currentUserId?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+
+  const isMentioned = currentUserId ? hasMentionForUser(notes, currentUserId) : false;
 
   const openEdit = () => {
     if (triggerRef.current) {
@@ -1433,14 +1455,6 @@ function NoteCell({
     setDraft(notes ?? "");
     setEditing(true);
   };
-
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      textareaRef.current.focus();
-      const len = textareaRef.current.value.length;
-      textareaRef.current.setSelectionRange(len, len);
-    }
-  }, [editing]);
 
   useEffect(() => {
     if (!editing) return;
@@ -1474,18 +1488,21 @@ function NoteCell({
           onClick={openEdit}
           title={notes ? undefined : "Add note"}
           className={cn(
-            "flex items-center justify-center w-full transition-colors",
+            "relative flex items-center justify-center w-full transition-colors",
             notes
               ? "text-primary/70 hover:text-primary"
               : "text-muted-foreground/0 group-hover:text-muted-foreground/30 hover:!text-muted-foreground/60"
           )}
         >
           <MessageSquare className="h-3.5 w-3.5" />
+          {isMentioned && (
+            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-500" />
+          )}
         </button>
         {notes && !editing && (
           <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 z-50 hidden group-hover/note:block">
             <div className="rounded-md border bg-popover px-2.5 py-1.5 shadow-md max-w-[220px] text-xs text-popover-foreground whitespace-pre-wrap break-words">
-              {notes}
+              <MentionText text={notes} />
             </div>
           </div>
         )}
@@ -1496,15 +1513,15 @@ function NoteCell({
           style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
           className="rounded-lg border bg-popover shadow-lg w-[220px] p-2 space-y-2"
         >
-          <textarea
-            ref={textareaRef}
+          <MentionTextarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={setDraft}
+            members={members}
             onKeyDown={(e) => {
               if (e.key === "Escape") { e.preventDefault(); cancel(); }
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
             }}
-            className="w-full min-h-[80px] text-xs rounded border border-input bg-background px-2 py-1.5 outline-none focus:ring-1 focus:ring-ring resize-none"
+            className="min-h-[80px]"
             placeholder="Add a note…"
             rows={4}
           />

@@ -56,7 +56,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  AlertTriangle,
   Plus,
   Pencil,
   Trash2,
@@ -637,20 +636,6 @@ export default function TrackerPage() {
     return null;
   }, [activeDragId, groupsWithData]);
 
-
-  // Separate budgeted vs unbudgeted expense categories
-  const unbudgetedCategories = useMemo(() => {
-    const result: typeof groupsWithData[0]["children"] = [];
-    for (const group of groupsWithData) {
-      if (group.type !== "EXPENSE") continue;
-      for (const cat of group.children) {
-        if (cat.allocated === 0 && cat.spent > 0) {
-          result.push(cat);
-        }
-      }
-    }
-    return result;
-  }, [groupsWithData]);
 
   // Loading state
   if (trackerQuery.isLoading || !tracker) {
@@ -1896,92 +1881,6 @@ export default function TrackerPage() {
                 })}
               </tbody>
               </SortableContext>
-
-              {/* Unbudgeted spending — expenses only */}
-              {!isIncome && (unbudgetedCategories.length > 0 || (uncategorizedEntry && uncategorizedEntry.spent > 0)) && (
-                <tbody>
-                  <tr className="border-t-2 border-dashed border-amber-500/50">
-                    <td colSpan={4} className="py-1.5 px-3">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                          {t(lang, "tracker.unbudgeted")}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {uncategorizedEntry && uncategorizedEntry.spent > 0 && (
-                    <tr className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
-                      <td className="py-1.5 px-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">📄</span>
-                          <span className="text-sm text-muted-foreground">Uncategorized</span>
-                        </div>
-                      </td>
-                      <td className="py-1.5 px-3 text-right">
-                        <span className="text-sm text-muted-foreground/40">—</span>
-                      </td>
-                      <td className="py-1.5 px-3 text-right">
-                        <Link
-                          href={(() => {
-                            const mm = String(period.month).padStart(2, "0");
-                            const ld = new Date(period.year, period.month, 0).getDate();
-                            return `/transactions?uncategorized=true&accrualDateFrom=${period.year}-${mm}-01&accrualDateTo=${period.year}-${mm}-${String(ld).padStart(2, "0")}&liquidOnly=true`;
-                          })()}
-                          className="hover:underline transition-colors"
-                          title="View uncategorized transactions"
-                        >
-                          <MoneyDisplay
-                            amount={-uncategorizedEntry.spent}
-                            colorize={false}
-                            className="text-sm text-red-600 dark:text-red-400"
-                          />
-                        </Link>
-                      </td>
-                      <td className="py-1.5 px-3 text-right">
-                        <AvailableCell
-                          amount={-uncategorizedEntry.spent}
-                          allocated={0}
-                          spent={uncategorizedEntry.spent}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                  {unbudgetedCategories.map((cat) => (
-                    <tr key={cat.id} className="border-b border-border/50 bg-amber-50/30 dark:bg-amber-950/10">
-                      <td className="py-1.5 px-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{cat.icon}</span>
-                          <span className="text-sm text-muted-foreground">{cat.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-1.5 px-3 text-right">
-                        <span className="text-sm text-muted-foreground/40">—</span>
-                      </td>
-                      <td className="py-1.5 px-3 text-right">
-                        <Link
-                          href={buildCategoryTransactionsUrl(cat.id, period)}
-                          className="hover:underline transition-colors"
-                          title="View transactions"
-                        >
-                          <MoneyDisplay
-                            amount={-cat.spent}
-                            colorize={false}
-                            className="text-sm text-red-600 dark:text-red-400"
-                          />
-                        </Link>
-                      </td>
-                      <td className="py-1.5 px-3 text-right">
-                        <AvailableCell
-                          amount={-cat.spent}
-                          allocated={0}
-                          spent={cat.spent}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              )}
 
               {/* Add group form — expenses, or income fallback when no groups exist */}
               {showAddGroup === tableType && (!isIncome || incomeGroups.length === 0) && (

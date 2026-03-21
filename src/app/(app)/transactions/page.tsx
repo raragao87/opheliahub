@@ -60,6 +60,7 @@ interface Filters {
   opheliaUnconfirmed: boolean;
   noTags: boolean;
   hasNotes: boolean;
+  mentionedMe: boolean;
 }
 
 function filtersFromParams(sp: URLSearchParams): Filters {
@@ -84,6 +85,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     opheliaUnconfirmed: sp.get("opheliaUnconfirmed") === "true",
     noTags: sp.get("noTags") === "true",
     hasNotes: sp.get("hasNotes") === "true",
+    mentionedMe: sp.get("mentionedMe") === "true",
   };
 }
 
@@ -109,6 +111,7 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.opheliaUnconfirmed) sp.set("opheliaUnconfirmed", "true");
   if (f.noTags) sp.set("noTags", "true");
   if (f.hasNotes) sp.set("hasNotes", "true");
+  if (f.mentionedMe) sp.set("mentionedMe", "true");
   return sp;
 }
 
@@ -133,7 +136,8 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.uncategorized === b.uncategorized &&
     a.opheliaUnconfirmed === b.opheliaUnconfirmed &&
     a.noTags === b.noTags &&
-    a.hasNotes === b.hasNotes
+    a.hasNotes === b.hasNotes &&
+    a.mentionedMe === b.mentionedMe
   );
 }
 
@@ -158,6 +162,7 @@ const EMPTY_FILTERS: Filters = {
   opheliaUnconfirmed: false,
   noTags: false,
   hasNotes: false,
+  mentionedMe: false,
 };
 
 // ── Page ─────────────────────────────────────────────────────────────
@@ -213,6 +218,20 @@ function TransactionsContent() {
   }, []);
 
   // ── Data queries ───────────────────────────────────────────────────
+  const sessionQuery = useQuery(trpc.auth.getSession.queryOptions());
+  const currentUserId = sessionQuery.data?.user?.id;
+
+  const householdQuery = useQuery(trpc.household.get.queryOptions());
+  const members = useMemo(
+    () =>
+      (householdQuery.data?.members ?? []).map((m) => ({
+        id: m.userId,
+        name: m.user.name ?? "Unknown",
+        image: m.user.image ?? null,
+      })),
+    [householdQuery.data]
+  );
+
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
   const categoriesQuery = useQuery(
     trpc.category.tree.queryOptions({ visibility: visibilityParam })
@@ -251,6 +270,7 @@ function TransactionsContent() {
       opheliaUnconfirmed: filters.opheliaUnconfirmed || undefined,
       noTags: filters.noTags || undefined,
       hasNotes: filters.hasNotes || undefined,
+      mentionedMe: filters.mentionedMe || undefined,
       limit: PAGE_SIZE,
     };
   }, [filters, visibilityParam]);
@@ -679,7 +699,8 @@ function TransactionsContent() {
     filters.uncategorized ||
     filters.opheliaUnconfirmed ||
     filters.noTags ||
-    filters.hasNotes;
+    filters.hasNotes ||
+    filters.mentionedMe;
 
   const activeFilterCount = [
     filters.search !== "",
@@ -695,6 +716,7 @@ function TransactionsContent() {
     filters.opheliaUnconfirmed,
     filters.noTags,
     filters.hasNotes,
+    filters.mentionedMe,
   ].filter(Boolean).length;
 
   const clearAllFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
@@ -880,6 +902,18 @@ function TransactionsContent() {
                 </button>
               </span>
             )}
+            {filters.mentionedMe && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium">
+                Mentions me
+                <button
+                  onClick={() => setFilters((f) => ({ ...f, mentionedMe: false }))}
+                  className="ml-0.5 hover:text-amber-700 dark:hover:text-amber-300"
+                  title="Clear filter"
+                >
+                  ×
+                </button>
+              </span>
+            )}
             {filters.fundId && (
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 font-medium">
                 Fund
@@ -1018,6 +1052,8 @@ function TransactionsContent() {
             onMarkAsTransfer={setMarkTransferTxn}
             onUnmarkTransfer={setUnmarkTransferTxn}
             stickyOffset={selectedAccount && !headerVisible ? 104 : 64}
+            members={members}
+            currentUserId={currentUserId}
           />
 
           {/* No results with active filters */}
