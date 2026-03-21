@@ -16,12 +16,6 @@ import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-interface TagOption {
-  id: string;
-  name: string;
-  color?: string | null;
-}
-
 interface SelectedTransactionInfo {
   id: string;
   importBatchId?: string | null;
@@ -42,7 +36,7 @@ interface BulkActionBarProps {
   funds?: FundOption[];
   onBulkChangeCategory: (categoryId: string | null) => void;
   // Tag actions
-  allTags: TagOption[];
+  tagGroups: FilterOptionGroup[];
   onBulkAddTags: (tagIds: string[]) => void;
   onBulkRemoveTags: (tagIds: string[]) => void;
   // Delete action
@@ -60,7 +54,7 @@ export function BulkActionBar({
   categoryGroups,
   funds = [],
   onBulkChangeCategory,
-  allTags,
+  tagGroups,
   onBulkAddTags,
   onBulkRemoveTags,
   onBulkDelete,
@@ -172,7 +166,7 @@ export function BulkActionBar({
 
         {activeAction === "addTags" && (
           <TagPicker
-            allTags={allTags}
+            groups={tagGroups}
             mode="add"
             onConfirm={(tagIds) => {
               onBulkAddTags(tagIds);
@@ -184,7 +178,7 @@ export function BulkActionBar({
 
         {activeAction === "removeTags" && (
           <TagPicker
-            allTags={allTags}
+            groups={tagGroups}
             mode="remove"
             onConfirm={(tagIds) => {
               onBulkRemoveTags(tagIds);
@@ -364,18 +358,18 @@ function CategoryPicker({
 // ── Tag Picker ───────────────────────────────────────────────────────
 
 function TagPicker({
-  allTags,
+  groups,
   mode,
   onConfirm,
   onClose,
 }: {
-  allTags: TagOption[];
+  groups: FilterOptionGroup[];
   mode: "add" | "remove";
   onConfirm: (tagIds: string[]) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<string[]>([]);
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -385,63 +379,98 @@ function TagPicker({
 
   useClickOutside(ref, onClose);
 
-  const filtered = search
-    ? allTags.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()))
-    : allTags;
+  const total = groups.reduce((s, g) => s + g.options.length, 0);
 
-  const toggleTag = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const filtered = search
+    ? groups.map((g) => ({
+        ...g,
+        options: g.options.filter((o) =>
+          o.label.toLowerCase().includes(search.toLowerCase())
+        ),
+      })).filter((g) => g.options.length > 0)
+    : groups;
+
+  const toggle = (id: string) =>
+    setSelected((prev) => prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]);
+
+  const toggleGroup = (group: FilterOptionGroup) => {
+    const groupIds = group.options.map((o) => o.value);
+    const allSelected = groupIds.every((id) => selected.includes(id));
+    if (allSelected) {
+      setSelected((prev) => prev.filter((id) => !groupIds.includes(id)));
+    } else {
+      setSelected((prev) => [...new Set([...prev, ...groupIds])]);
+    }
   };
+
+  const showHeaders = groups.length > 1;
 
   return (
     <div ref={ref} className="absolute bottom-full left-0 mb-2 rounded-lg border bg-popover shadow-lg w-[280px] max-h-[320px] flex flex-col">
-      <div className="p-2 border-b border-border shrink-0">
-        <input
-          ref={searchRef}
-          type="text"
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
-        />
-      </div>
+      {total > 8 && (
+        <div className="p-2 border-b border-border shrink-0">
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+          />
+        </div>
+      )}
       <div className="overflow-y-auto p-1.5 flex-1 space-y-0.5">
-        {filtered.map((tag) => (
-          <label
-            key={tag.id}
-            className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm"
-          >
-            <input
-              type="checkbox"
-              checked={selected.has(tag.id)}
-              onChange={() => toggleTag(tag.id)}
-              className="rounded border-border shrink-0"
-            />
-            {tag.color && (
-              <span
-                className="h-2.5 w-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: tag.color }}
-              />
+        {filtered.map((group, gi) => (
+          <div key={gi} className={gi > 0 && showHeaders ? "mt-1 pt-1 border-t border-border/40" : ""}>
+            {showHeaders && (
+              <button
+                type="button"
+                onClick={() => toggleGroup(group)}
+                className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 py-1 hover:text-foreground transition-colors cursor-pointer w-full text-left flex items-center gap-1.5"
+              >
+                <input
+                  type="checkbox"
+                  checked={group.options.length > 0 && group.options.every((o) => selected.includes(o.value))}
+                  ref={(el) => {
+                    if (el) {
+                      const count = group.options.filter((o) => selected.includes(o.value)).length;
+                      el.indeterminate = count > 0 && count < group.options.length;
+                    }
+                  }}
+                  onChange={() => toggleGroup(group)}
+                  className="rounded border-border shrink-0 h-3 w-3"
+                />
+                {group.label}
+              </button>
             )}
-            <span className="truncate">{tag.name}</span>
-          </label>
+            {group.options.map((opt) => (
+              <label key={opt.value} className={cn(
+                "flex items-center gap-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm",
+                showHeaders ? "pl-5 pr-2" : "px-2"
+              )}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt.value)}
+                  onChange={() => toggle(opt.value)}
+                  className="rounded border-border shrink-0"
+                />
+                {opt.icon && <span className="text-xs shrink-0">{opt.icon}</span>}
+                <span className="truncate">{opt.label}</span>
+              </label>
+            ))}
+          </div>
         ))}
         {filtered.length === 0 && (
           <p className="text-xs text-muted-foreground/50 text-center py-3">No matches</p>
         )}
       </div>
-      {selected.size > 0 && (
+      {selected.length > 0 && (
         <div className="border-t border-border p-1.5 shrink-0">
           <button
-            onClick={() => onConfirm(Array.from(selected))}
+            onClick={() => onConfirm(selected)}
             className="w-full text-xs text-center py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors"
           >
-            {mode === "add" ? "Add" : "Remove"} {selected.size} tag{selected.size !== 1 ? "s" : ""}
+            {mode === "add" ? "Add" : "Remove"} {selected.length} tag{selected.length !== 1 ? "s" : ""}
           </button>
         </div>
       )}

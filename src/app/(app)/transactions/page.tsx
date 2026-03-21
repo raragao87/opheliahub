@@ -1054,7 +1054,7 @@ function TransactionsContent() {
                 bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId: value, fundId: null });
               }
             }}
-            allTags={tagsQuery.data ?? []}
+            tagGroups={tagFilterGroups}
             onBulkAddTags={(tagIds) =>
               bulkAddTagsMutation.mutate({ ids: selectedIdsArray, tagIds })
             }
