@@ -227,12 +227,15 @@ export const trackerRouter = router({
       const BUFFER_MS = 5 * 86_400_000; // 5 days
       const DATE_TOLERANCE_MS = 4 * 86_400_000; // ±4 days
 
-      // Fetch boundary-zone expense transactions (uses original date for recurring matching)
+      // Fetch boundary-zone expense transactions (uses original date for recurring matching).
+      // Exclude transactions with accrualDate set — those are already placed in the
+      // correct month by the user/system and must not be shifted again.
       const boundaryTxs = await ctx.prisma.transaction.findMany({
         where: {
           ...visibilityFilter,
           ...liquidFilter,
           type: "EXPENSE",
+          accrualDate: null,
           date: {
             gte: new Date(start.getTime() - BUFFER_MS),
             lte: new Date(end.getTime() + BUFFER_MS),

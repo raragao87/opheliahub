@@ -30,7 +30,9 @@ import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
  */
 async function propagateCategoryToTransactions(
   prisma: PrismaClient,
-  rule: Pick<RecurringRule, "name" | "description" | "accountId" | "type" | "amount" | "categoryId">
+  rule: Pick<RecurringRule, "name" | "description" | "accountId" | "type" | "amount" | "categoryId">,
+  userId: string,
+  householdId: string
 ) {
   if (!rule.categoryId) return 0;
 
@@ -42,13 +44,14 @@ async function propagateCategoryToTransactions(
       : rule.name
   ).toLowerCase();
 
-  // Fetch all transactions for the same account + type.
+  // Fetch all transactions for the same account + type, scoped by visibility.
   // We filter by counterparty name in JS (needed anyway), so also
   // skip the SQL category filter — Prisma's NOT doesn't match NULLs.
   const transactions = await prisma.transaction.findMany({
     where: {
       accountId: rule.accountId,
       type: rule.type,
+      ...visibleTransactionsWhere(userId, householdId),
     },
     select: { id: true, description: true, amount: true, categoryId: true },
   });
@@ -743,7 +746,7 @@ export const recurringRouter = router({
           type: created.type,
           amount: created.amount,
           categoryId: created.categoryId,
-        });
+        }, ctx.userId, ctx.householdId);
       }
 
       return created;
@@ -815,7 +818,7 @@ export const recurringRouter = router({
           type: updated.type,
           amount: updated.amount,
           categoryId: updated.categoryId,
-        });
+        }, ctx.userId, ctx.householdId);
       }
 
       return updated;
@@ -832,7 +835,7 @@ export const recurringRouter = router({
       if (!rule) throw new TRPCError({ code: "NOT_FOUND" });
       if (!rule.categoryId) return { count: 0 };
 
-      const count = await propagateCategoryToTransactions(ctx.prisma as PrismaClient, rule);
+      const count = await propagateCategoryToTransactions(ctx.prisma as PrismaClient, rule, ctx.userId, ctx.householdId);
       return { count };
     }),
 

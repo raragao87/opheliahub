@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
-import { visibleAccountsWhere } from "@/lib/privacy";
+import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
 import { extractDisplayName } from "@/lib/recurring";
 import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
 import { isOpheliaEnabled } from "@/lib/ophelia";
@@ -55,6 +55,7 @@ export const importRouter = router({
         where: {
           accountId: input.accountId,
           date: { gte: minDate, lte: maxDate },
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
         },
         select: { id: true, date: true, amount: true, description: true, displayName: true, externalId: true },
       });

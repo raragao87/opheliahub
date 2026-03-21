@@ -3,6 +3,7 @@ import { householdProcedure, router } from "../init";
 import { analyzeFileStructure, enrichTransactions, isOpheliaEnabled } from "@/lib/ophelia";
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
 import { extractFromUnknown } from "@/lib/ophelia/extractFromUnknown";
+import { visibleTransactionsWhere } from "@/lib/privacy";
 
 export const opheliaRouter = router({
   /**
@@ -144,39 +145,45 @@ export const opheliaRouter = router({
    * (opheliaProcessedAt IS NULL, excluding initial balance rows).
    * Returns { pending: 0, enabled: false } when Ophelia is disabled.
    */
-  pendingCount: householdProcedure.query(async ({ ctx }) => {
-    if (!isOpheliaEnabled()) return { pending: 0, enabled: false };
-    const pending = await ctx.prisma.transaction.count({
-      where: {
-        account: { householdId: ctx.householdId },
-        opheliaProcessedAt: null,
-        isInitialBalance: false,
-      },
-    });
-    return { pending, enabled: true };
-  }),
+  pendingCount: householdProcedure
+    .input(z.object({ visibility: z.enum(["SHARED", "PERSONAL"]) }))
+    .query(async ({ ctx, input }) => {
+      if (!isOpheliaEnabled()) return { pending: 0, enabled: false };
+      const pending = await ctx.prisma.transaction.count({
+        where: {
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          visibility: input.visibility,
+          opheliaProcessedAt: null,
+          isInitialBalance: false,
+        },
+      });
+      return { pending, enabled: true };
+    }),
 
   /**
    * Returns pending Ophelia count grouped by accountId.
    * Used by the sidebar to show per-account uncategorized badges.
    */
-  pendingByAccount: householdProcedure.query(async ({ ctx }) => {
-    if (!isOpheliaEnabled()) return { byAccount: {} as Record<string, number>, enabled: false };
-    const groups = await ctx.prisma.transaction.groupBy({
-      by: ["accountId"],
-      where: {
-        account: { householdId: ctx.householdId },
-        opheliaProcessedAt: null,
-        isInitialBalance: false,
-      },
-      _count: { _all: true },
-    });
-    const byAccount: Record<string, number> = {};
-    for (const g of groups) {
-      byAccount[g.accountId] = g._count._all;
-    }
-    return { byAccount, enabled: true };
-  }),
+  pendingByAccount: householdProcedure
+    .input(z.object({ visibility: z.enum(["SHARED", "PERSONAL"]) }))
+    .query(async ({ ctx, input }) => {
+      if (!isOpheliaEnabled()) return { byAccount: {} as Record<string, number>, enabled: false };
+      const groups = await ctx.prisma.transaction.groupBy({
+        by: ["accountId"],
+        where: {
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          visibility: input.visibility,
+          opheliaProcessedAt: null,
+          isInitialBalance: false,
+        },
+        _count: { _all: true },
+      });
+      const byAccount: Record<string, number> = {};
+      for (const g of groups) {
+        byAccount[g.accountId] = g._count._all;
+      }
+      return { byAccount, enabled: true };
+    }),
 
   /**
    * Acceptance rate and top corrections from OpheliaFeedback.

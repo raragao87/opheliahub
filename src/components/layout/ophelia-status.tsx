@@ -4,6 +4,7 @@ import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOwnership } from "@/lib/ownership-context";
 
 /**
  * Compact Ophelia status pill for the sidebar.
@@ -17,9 +18,10 @@ import { cn } from "@/lib/utils";
 export function OpheliaStatus() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const { visibility } = useOwnership();
 
   const pendingQuery = useQuery({
-    ...trpc.ophelia.pendingCount.queryOptions(),
+    ...trpc.ophelia.pendingCount.queryOptions({ visibility }),
     refetchInterval: 30_000,
   });
 

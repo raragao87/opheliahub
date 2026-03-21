@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
-import { visibleAccountsWhere } from "@/lib/privacy";
+import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
 
 export const accountRouter = router({
   list: householdProcedure.query(async ({ ctx }) => {
@@ -342,7 +342,10 @@ export const accountRouter = router({
       }
 
       const recentTxns = await ctx.prisma.transaction.findMany({
-        where: { accountId: input.id },
+        where: {
+          accountId: input.id,
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+        },
         orderBy: { date: "desc" },
         take: 20,
         select: { description: true, displayName: true, amount: true, type: true, date: true },

@@ -111,6 +111,7 @@ export const fundRouter = router({
             where: {
               accountId: linkedAccount.id,
               date: { gte: endOfSelectedMonth },
+              ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
             },
             _sum: { amount: true },
           });

@@ -47,7 +47,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const searchParams = useSearchParams();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { isVisible } = useOwnership();
+  const { isVisible, visibility } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
@@ -66,7 +66,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
 
   // Fetch per-account pending Ophelia counts (poll every 30s)
   const pendingByAccountQuery = useQuery({
-    ...trpc.ophelia.pendingByAccount.queryOptions(),
+    ...trpc.ophelia.pendingByAccount.queryOptions({ visibility }),
     refetchInterval: 30_000,
   });
   const pendingByAccount = pendingByAccountQuery.data?.byAccount ?? {};
