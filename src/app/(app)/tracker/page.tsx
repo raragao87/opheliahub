@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -216,11 +217,26 @@ function buildFundTransactionsUrl(
 export default function TrackerPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   const { visibilityParam } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
-  const [period, setPeriod] = useState(getCurrentYearMonth());
+  const [period, setPeriodRaw] = useState(() => {
+    const m = parseInt(searchParams.get("month") ?? "");
+    const y = parseInt(searchParams.get("year") ?? "");
+    if (m >= 1 && m <= 12 && y >= 2020 && y <= 2100) return { month: m, year: y };
+    return getCurrentYearMonth();
+  });
+
+  // Sync period to URL without navigation (avoids scroll-to-top)
+  const setPeriod = useCallback((p: { month: number; year: number }) => {
+    setPeriodRaw(p);
+    const qs = new URLSearchParams(window.location.search);
+    qs.set("month", String(p.month));
+    qs.set("year", String(p.year));
+    window.history.replaceState(null, "", `?${qs.toString()}`);
+  }, []);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   // Category management state
