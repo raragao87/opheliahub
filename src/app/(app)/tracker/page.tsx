@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { t } from "@/lib/translations";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { EmojiPickerButton } from "@/components/ui/emoji-picker";
-import { FundCalculator, BudgetCalculator } from "@/components/tracker/fund-calculator";
+import { BudgetCalculator } from "@/components/tracker/fund-calculator";
 import { toCents } from "@/lib/money";
 
 // FundData type — matches the shape returned by fund.list
@@ -2587,9 +2587,10 @@ export default function TrackerPage() {
       {(() => {
         const calcFund = calculatorFundId ? fundsData.find(f => f.id === calculatorFundId) : null;
         return calcFund ? (
-          <FundCalculator
-            fundId={calcFund.id}
-            fundName={calcFund.name}
+          <BudgetCalculator
+            entityId={calcFund.id}
+            entityName={calcFund.name}
+            entityType="fund"
             initialItems={calcFund.lineItems}
             open={!!calculatorFundId}
             onClose={() => setCalculatorFundId(null)}

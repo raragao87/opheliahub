@@ -32,17 +32,6 @@ interface BudgetCalculatorProps {
   onApplyBudget?: (computedMonthly: number) => void;
 }
 
-// Backward-compatible props for fund-only usage
-interface FundCalculatorProps {
-  fundId: string;
-  fundName: string;
-  initialItems: LineItemData[];
-  open: boolean;
-  onClose: () => void;
-  lang: Language;
-  onApplyBudget?: (computedMonthly: number) => void;
-}
-
 interface CalcRow {
   id: string;
   description: string;
@@ -293,26 +282,3 @@ export function BudgetCalculator({
   );
 }
 
-/** Backward-compatible wrapper — fund-only usage */
-export function FundCalculator({
-  fundId,
-  fundName,
-  initialItems,
-  open,
-  onClose,
-  lang,
-  onApplyBudget,
-}: FundCalculatorProps) {
-  return (
-    <BudgetCalculator
-      entityId={fundId}
-      entityName={fundName}
-      entityType="fund"
-      initialItems={initialItems}
-      open={open}
-      onClose={onClose}
-      lang={lang}
-      onApplyBudget={onApplyBudget}
-    />
-  );
-}
