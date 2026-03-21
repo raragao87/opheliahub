@@ -20,6 +20,19 @@ interface LineItemData {
   sortOrder: number;
 }
 
+interface BudgetCalculatorProps {
+  entityId: string;
+  entityName: string;
+  entityType: "fund" | "category";
+  trackerId?: string; // required for category type
+  initialItems: LineItemData[];
+  open: boolean;
+  onClose: () => void;
+  lang: Language;
+  onApplyBudget?: (computedMonthly: number) => void;
+}
+
+// Backward-compatible props for fund-only usage
 interface FundCalculatorProps {
   fundId: string;
   fundName: string;
@@ -47,15 +60,17 @@ const PERIOD_OPTIONS = [
   { value: 52, label: "52x" },
 ];
 
-export function FundCalculator({
-  fundId,
-  fundName,
+export function BudgetCalculator({
+  entityId,
+  entityName,
+  entityType,
+  trackerId,
   initialItems,
   open,
   onClose,
   lang,
   onApplyBudget,
-}: FundCalculatorProps) {
+}: BudgetCalculatorProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
 
@@ -68,10 +83,10 @@ export function FundCalculator({
         amount: li.amount > 0 ? fromCents(li.amount).toFixed(2) : "",
       }));
     }
-    return [{ id: crypto.randomUUID(), description: "", period: 12, amount: "" }];
+    return [{ id: crypto.randomUUID(), description: "", period: 1, amount: "" }];
   });
 
-  const setLineItemsMutation = useMutation(
+  const fundMutation = useMutation(
     trpc.fund.setLineItems.mutationOptions({
       onSuccess: (data) => {
         queryClient.invalidateQueries();
@@ -84,6 +99,21 @@ export function FundCalculator({
     })
   );
 
+  const categoryMutation = useMutation(
+    trpc.category.setLineItems.mutationOptions({
+      onSuccess: (data) => {
+        queryClient.invalidateQueries();
+        toast.success(
+          `${t(lang, "tracker.funds.calculator")}: ${fromCents(data.computedMonthly).toFixed(2)}/${t(lang, "tracker.funds.monthly")}`
+        );
+        onApplyBudget?.(data.computedMonthly);
+        onClose();
+      },
+    })
+  );
+
+  const mutation = entityType === "fund" ? fundMutation : categoryMutation;
+
   const updateRow = (id: string, field: keyof CalcRow, value: string | number) => {
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
@@ -93,7 +123,7 @@ export function FundCalculator({
   const addRow = () => {
     setRows((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), description: "", period: 12, amount: "" },
+      { id: crypto.randomUUID(), description: "", period: 1, amount: "" },
     ]);
   };
 
@@ -113,15 +143,18 @@ export function FundCalculator({
     const validRows = rows.filter(
       (r) => r.description.trim() && parseFloat(r.amount) > 0
     );
-    setLineItemsMutation.mutate({
-      fundId,
-      items: validRows.map((r, i) => ({
-        description: r.description.trim(),
-        period: r.period,
-        amount: toCents(parseFloat(r.amount) || 0),
-        sortOrder: i,
-      })),
-    });
+    const items = validRows.map((r, i) => ({
+      description: r.description.trim(),
+      period: r.period,
+      amount: toCents(parseFloat(r.amount) || 0),
+      sortOrder: i,
+    }));
+
+    if (entityType === "fund") {
+      fundMutation.mutate({ fundId: entityId, items });
+    } else {
+      categoryMutation.mutate({ categoryId: entityId, trackerId: trackerId!, items });
+    }
   };
 
   return (
@@ -130,7 +163,7 @@ export function FundCalculator({
         <DialogTitle>
           <span className="flex items-center gap-2">
             <Calculator className="h-4 w-4" />
-            {t(lang, "tracker.funds.calculator")}: {fundName}
+            {t(lang, "tracker.funds.calculator")}: {entityName}
           </span>
         </DialogTitle>
       </DialogHeader>
@@ -200,7 +233,7 @@ export function FundCalculator({
             </div>
           ))}
 
-          {/* Add line button */}
+          {/* Add row button */}
           <Button
             variant="ghost"
             size="sm"
@@ -208,7 +241,7 @@ export function FundCalculator({
             onClick={addRow}
           >
             <Plus className="h-3 w-3" />
-            {t(lang, "tracker.funds.addLine")}
+            {t(lang, entityType === "fund" ? "tracker.funds.addLine" : "tracker.funds.addItem")}
           </Button>
 
           {/* Totals */}
@@ -243,7 +276,7 @@ export function FundCalculator({
             <Button
               size="sm"
               onClick={handleApply}
-              disabled={setLineItemsMutation.isPending}
+              disabled={mutation.isPending}
               className="gap-1"
             >
               {t(lang, "tracker.funds.apply")}{" "}
@@ -257,5 +290,29 @@ export function FundCalculator({
         </div>
       </DialogBody>
     </Dialog>
+  );
+}
+
+/** Backward-compatible wrapper — fund-only usage */
+export function FundCalculator({
+  fundId,
+  fundName,
+  initialItems,
+  open,
+  onClose,
+  lang,
+  onApplyBudget,
+}: FundCalculatorProps) {
+  return (
+    <BudgetCalculator
+      entityId={fundId}
+      entityName={fundName}
+      entityType="fund"
+      initialItems={initialItems}
+      open={open}
+      onClose={onClose}
+      lang={lang}
+      onApplyBudget={onApplyBudget}
+    />
   );
 }
