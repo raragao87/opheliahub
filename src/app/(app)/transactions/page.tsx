@@ -400,10 +400,11 @@ function TransactionsContent() {
 
         return { previous };
       },
-      onError: (_err, _vars, context) => {
+      onError: (err, _vars, context) => {
         if (context?.previous) {
           queryClient.setQueryData(infiniteQueryKey, context.previous);
         }
+        toast.error(`Failed to update: ${err.message}`);
       },
       onSettled: () => {
         queryClient.invalidateQueries();
