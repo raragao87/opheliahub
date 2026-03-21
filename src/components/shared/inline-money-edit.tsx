@@ -34,13 +34,17 @@ export function InlineMoneyEdit({
     }
   }, [editing]);
 
-  const isDelta = inputValue.length > 0 && /^[+\-*/]/.test(inputValue.trim());
-
   const preview = useMemo(() => {
-    if (!isDelta) return null;
-    const result = evaluateExpression(inputValue, value);
+    const trimmed = inputValue.trim();
+    if (!trimmed) return null;
+    // Show preview for delta expressions (starts with operator) or any expression containing operators
+    const isDelta = /^[+\-*/]/.test(trimmed);
+    const hasOperators = /[+\-*/]/.test(trimmed.slice(1)); // operators after first char
+    if (!isDelta && !hasOperators) return null;
+    const result = evaluateExpression(trimmed, value);
+    if (isNaN(result)) return null;
     return result;
-  }, [inputValue, isDelta, value]);
+  }, [inputValue, value]);
 
   const handleSave = () => {
     if (!inputRef.current) return;
@@ -75,7 +79,7 @@ export function InlineMoneyEdit({
             className
           )}
         />
-        {isDelta && preview !== null && (
+        {preview !== null && (
           <span className="text-xs text-muted-foreground mt-0.5 px-1">
             = {formatMoney(preview, currency)}
           </span>
