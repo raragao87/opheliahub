@@ -59,6 +59,7 @@ interface Filters {
   uncategorized: boolean;
   opheliaUnconfirmed: boolean;
   noTags: boolean;
+  hasNotes: boolean;
 }
 
 function filtersFromParams(sp: URLSearchParams): Filters {
@@ -82,6 +83,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     uncategorized: sp.get("uncategorized") === "true",
     opheliaUnconfirmed: sp.get("opheliaUnconfirmed") === "true",
     noTags: sp.get("noTags") === "true",
+    hasNotes: sp.get("hasNotes") === "true",
   };
 }
 
@@ -106,6 +108,7 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.uncategorized) sp.set("uncategorized", "true");
   if (f.opheliaUnconfirmed) sp.set("opheliaUnconfirmed", "true");
   if (f.noTags) sp.set("noTags", "true");
+  if (f.hasNotes) sp.set("hasNotes", "true");
   return sp;
 }
 
@@ -129,7 +132,8 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.fundId === b.fundId &&
     a.uncategorized === b.uncategorized &&
     a.opheliaUnconfirmed === b.opheliaUnconfirmed &&
-    a.noTags === b.noTags
+    a.noTags === b.noTags &&
+    a.hasNotes === b.hasNotes
   );
 }
 
@@ -153,6 +157,7 @@ const EMPTY_FILTERS: Filters = {
   uncategorized: false,
   opheliaUnconfirmed: false,
   noTags: false,
+  hasNotes: false,
 };
 
 // ── Page ─────────────────────────────────────────────────────────────
@@ -245,6 +250,7 @@ function TransactionsContent() {
       uncategorized: filters.uncategorized || undefined,
       opheliaUnconfirmed: filters.opheliaUnconfirmed || undefined,
       noTags: filters.noTags || undefined,
+      hasNotes: filters.hasNotes || undefined,
       limit: PAGE_SIZE,
     };
   }, [filters, visibilityParam]);
@@ -714,7 +720,8 @@ function TransactionsContent() {
     filters.fundId !== "" ||
     filters.uncategorized ||
     filters.opheliaUnconfirmed ||
-    filters.noTags;
+    filters.noTags ||
+    filters.hasNotes;
 
   const activeFilterCount = [
     filters.search !== "",
@@ -729,6 +736,7 @@ function TransactionsContent() {
     filters.uncategorized,
     filters.opheliaUnconfirmed,
     filters.noTags,
+    filters.hasNotes,
   ].filter(Boolean).length;
 
   const clearAllFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
@@ -1003,21 +1011,13 @@ function TransactionsContent() {
             <div key={i} className="h-10 rounded-md bg-muted/30 animate-pulse" />
           ))}
         </div>
-      ) : transactions.length === 0 ? (
+      ) : transactions.length === 0 && !hasActiveFilters ? (
         <EmptyState
           icon={Receipt}
-          title={hasActiveFilters ? "No matching transactions" : "No transactions yet"}
-          description={
-            hasActiveFilters
-              ? "Try adjusting your filters or search criteria."
-              : "Import transactions from your bank or add one manually."
-          }
-          actionLabel={hasActiveFilters ? "Clear filters" : "Add transaction"}
-          onAction={
-            hasActiveFilters
-              ? clearAllFilters
-              : () => router.push("/transactions/new")
-          }
+          title="No transactions yet"
+          description="Import transactions from your bank or add one manually."
+          actionLabel="Add transaction"
+          onAction={() => router.push("/transactions/new")}
         />
       ) : (
         <>
@@ -1042,6 +1042,7 @@ function TransactionsContent() {
               uncategorized: filters.uncategorized,
               opheliaUnconfirmed: filters.opheliaUnconfirmed,
               noTags: filters.noTags,
+              hasNotes: filters.hasNotes,
               amountMin: filters.amountMin,
               amountMax: filters.amountMax,
               type: filters.type,
@@ -1060,6 +1061,16 @@ function TransactionsContent() {
             onUnmarkTransfer={setUnmarkTransferTxn}
             stickyOffset={selectedAccount && !headerVisible ? 104 : 64}
           />
+
+          {/* No results with active filters */}
+          {transactions.length === 0 && hasActiveFilters && (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              No matching transactions.{" "}
+              <button onClick={clearAllFilters} className="text-primary hover:underline">
+                Clear all filters
+              </button>
+            </div>
+          )}
 
           {/* Infinite scroll sentinel + spinner */}
           {hasMore && (

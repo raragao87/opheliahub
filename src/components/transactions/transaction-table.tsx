@@ -89,6 +89,7 @@ export interface ColumnFilters {
   uncategorized: boolean;
   opheliaUnconfirmed: boolean;
   noTags: boolean;
+  hasNotes: boolean;
   amountMin: string;
   amountMax: string;
   type: string;
@@ -655,7 +656,19 @@ function ColumnAmountRange({
         />
       </div>
 
-      {/* Inline editable min/max inputs */}
+      {/* Exact amount shortcut */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Exact</label>
+        <input
+          type="number" step="0.01" placeholder="e.g. 50.00"
+          onChange={(e) => { const v = e.target.value; setMin(v); setMax(v); }}
+          onBlur={apply}
+          onKeyDown={(e) => { if (e.key === "Enter") apply(); }}
+          className="w-full h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+      </div>
+
+      {/* Min / Max range inputs */}
       <div className="flex items-center gap-2">
         <div className="flex-1 space-y-0.5">
           <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Min</label>
@@ -980,9 +993,24 @@ export function TransactionTable({
               )}
             </th>
 
-            {/* Notes – icon-only column, no filter */}
+            {/* Notes */}
             <th className="py-2 px-2 w-[36px]">
-              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto" />
+              {cf && setCf ? (
+                <button
+                  onClick={() => setCf("hasNotes", !cf.hasNotes)}
+                  title={cf.hasNotes ? "Showing only notes — click to clear" : "Filter: has notes"}
+                  className={cn(
+                    "flex items-center justify-center w-full rounded p-0.5 transition-colors",
+                    cf.hasNotes
+                      ? "text-primary bg-primary/10"
+                      : "text-muted-foreground/40 hover:text-muted-foreground"
+                  )}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto" />
+              )}
             </th>
 
 
@@ -1055,6 +1083,10 @@ function TransactionRow({
 
   const displayDesc = txn.displayName || txn.description;
 
+  const accountName = txn.account.name;
+  const accountPartner = isTransfer && partnerAccount
+    ? isOutflow ? partnerAccount.name : txn.account.name
+    : null;
   const accountDisplay = isTransfer && partnerAccount
     ? isOutflow
       ? `${txn.account.name} → ${partnerAccount.name}`
@@ -1130,10 +1162,17 @@ function TransactionRow({
       </td>
 
       {/* Account */}
-      <td className="py-1.5 px-2 hidden md:table-cell">
-        <span className="text-xs text-muted-foreground truncate block" title={accountDisplay}>
-          {accountDisplay}
-        </span>
+      <td className="py-1.5 px-2 hidden md:table-cell max-w-[140px]">
+        {accountPartner ? (
+          <div className="leading-tight" title={accountDisplay}>
+            <span className="text-xs text-muted-foreground truncate block">{isOutflow ? accountName : accountPartner}</span>
+            <span className="text-[10px] text-muted-foreground/50 truncate block">→ {isOutflow ? accountPartner : accountName}</span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground truncate block" title={accountDisplay}>
+            {accountDisplay}
+          </span>
+        )}
       </td>
 
       {/* Category */}
@@ -1149,8 +1188,9 @@ function TransactionRow({
             title="Click to undo transfer"
           >
             <ArrowLeftRight className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              Transfer{partnerAccount ? ` → ${partnerAccount.name}` : ""}
+            <span className="leading-tight">
+              <span className="block truncate">Transfer</span>
+              {partnerAccount && <span className="block truncate text-[10px] opacity-70">→ {partnerAccount.name}</span>}
             </span>
           </span>
         ) : canEditCategory ? (
@@ -1428,19 +1468,28 @@ function NoteCell({
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        onClick={openEdit}
-        title={notes ?? "Add note"}
-        className={cn(
-          "flex items-center justify-center w-full transition-colors",
-          notes
-            ? "text-primary/70 hover:text-primary"
-            : "text-muted-foreground/0 group-hover:text-muted-foreground/30 hover:!text-muted-foreground/60"
+      <div className="relative group/note flex items-center justify-center">
+        <button
+          ref={triggerRef}
+          onClick={openEdit}
+          title={notes ? undefined : "Add note"}
+          className={cn(
+            "flex items-center justify-center w-full transition-colors",
+            notes
+              ? "text-primary/70 hover:text-primary"
+              : "text-muted-foreground/0 group-hover:text-muted-foreground/30 hover:!text-muted-foreground/60"
+          )}
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+        </button>
+        {notes && !editing && (
+          <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 z-50 hidden group-hover/note:block">
+            <div className="rounded-md border bg-popover px-2.5 py-1.5 shadow-md max-w-[220px] text-xs text-popover-foreground whitespace-pre-wrap break-words">
+              {notes}
+            </div>
+          </div>
         )}
-      >
-        <MessageSquare className="h-3.5 w-3.5" />
-      </button>
+      </div>
       {editing && (
         <div
           ref={popoverRef}

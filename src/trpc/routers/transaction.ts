@@ -24,6 +24,7 @@ export const transactionRouter = router({
         uncategorized: z.boolean().optional(),
         opheliaUnconfirmed: z.boolean().optional(),
         noTags: z.boolean().optional(),
+        hasNotes: z.boolean().optional(),
         // Parse as local (Amsterdam) start/end of day so that transactions
         // stored at local midnight are included correctly (e.g. Jan 1 00:00 Amsterdam
         // is stored as Dec 31 23:00 UTC and must be included in January).
@@ -97,6 +98,8 @@ export const transactionRouter = router({
                 : input.tagId
                   ? { tags: { some: { tagId: input.tagId } } }
                   : {}),
+            // Notes filter
+            ...(input.hasNotes && { notes: { not: null } }),
             // Date filter exempts initial balance transactions so they always appear
             ...(input.dateFrom || input.dateTo
               ? {
