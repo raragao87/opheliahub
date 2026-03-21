@@ -491,7 +491,6 @@ export default function TrackerPage() {
   const suggestIconMutation = useMutation(
     trpc.category.suggestIcon.mutationOptions({
       onSuccess: (data) => {
-        console.log("[suggestIcon] success:", data);
         setIconSuggestions(data.emojis);
       },
       onError: (err) => {

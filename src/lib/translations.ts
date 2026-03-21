@@ -198,7 +198,6 @@ const translations = {
     "planner.reports.noData": "No transactions found for this month.",
 
     // Tracker
-    "tracker.budgetHealth": "Budget health",
     "tracker.income": "Income",
     "tracker.allocated": "Allocated",
     "tracker.leftToAssign": "Left to assign",
@@ -227,8 +226,6 @@ const translations = {
     "tracker.addExpenseGroup": "Add expense group",
     "tracker.funds": "Funds",
     "tracker.funds.balance": "Balance",
-    "tracker.funds.contribution": "Contribution",
-    "tracker.funds.withdrawal": "Withdrawal",
     "tracker.funds.adjustment": "Adjustment",
     "tracker.funds.linkedTo": "linked to",
     "tracker.funds.inSync": "In sync",
@@ -467,7 +464,6 @@ const translations = {
     "planner.reports.noData": "Nenhuma transação encontrada para este mês.",
 
     // Tracker
-    "tracker.budgetHealth": "Saúde do orçamento",
     "tracker.income": "Receita",
     "tracker.allocated": "Alocado",
     "tracker.leftToAssign": "Falta atribuir",
@@ -496,8 +492,6 @@ const translations = {
     "tracker.addExpenseGroup": "Adicionar grupo de despesas",
     "tracker.funds": "Fundos",
     "tracker.funds.balance": "Saldo",
-    "tracker.funds.contribution": "Contribuição",
-    "tracker.funds.withdrawal": "Retirada",
     "tracker.funds.adjustment": "Ajuste",
     "tracker.funds.linkedTo": "vinculado a",
     "tracker.funds.inSync": "Sincronizado",
@@ -736,7 +730,6 @@ const translations = {
     "planner.reports.noData": "Nu s-au găsit tranzacții pentru această lună.",
 
     // Tracker
-    "tracker.budgetHealth": "Sănătatea bugetului",
     "tracker.income": "Venit",
     "tracker.allocated": "Alocat",
     "tracker.leftToAssign": "Rămas de alocat",
@@ -765,8 +758,6 @@ const translations = {
     "tracker.addExpenseGroup": "Adaugă grup de cheltuieli",
     "tracker.funds": "Fonduri",
     "tracker.funds.balance": "Sold",
-    "tracker.funds.contribution": "Contribuție",
-    "tracker.funds.withdrawal": "Retragere",
     "tracker.funds.adjustment": "Ajustare",
     "tracker.funds.linkedTo": "legat de",
     "tracker.funds.inSync": "Sincronizat",
@@ -1005,7 +996,6 @@ const translations = {
     "planner.reports.noData": "Geen transacties gevonden voor deze maand.",
 
     // Tracker
-    "tracker.budgetHealth": "Budgetgezondheid",
     "tracker.income": "Inkomen",
     "tracker.allocated": "Toegewezen",
     "tracker.leftToAssign": "Nog toe te wijzen",
@@ -1034,8 +1024,6 @@ const translations = {
     "tracker.addExpenseGroup": "Uitgavengroep toevoegen",
     "tracker.funds": "Fondsen",
     "tracker.funds.balance": "Saldo",
-    "tracker.funds.contribution": "Bijdrage",
-    "tracker.funds.withdrawal": "Opname",
     "tracker.funds.adjustment": "Aanpassing",
     "tracker.funds.linkedTo": "gekoppeld aan",
     "tracker.funds.inSync": "Gesynchroniseerd",

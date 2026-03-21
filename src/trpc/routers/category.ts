@@ -59,10 +59,10 @@ export const categoryRouter = router({
             where: visibilityFilter,
             orderBy: { sortOrder: "asc" },
             include: {
-              _count: { select: { transactions: true } },
+              _count: { select: { transactions: true, lineItems: true } },
             },
           },
-          _count: { select: { transactions: true, children: true } },
+          _count: { select: { transactions: true, children: true, lineItems: true } },
         },
       });
     }),
@@ -220,7 +220,6 @@ export const categoryRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      console.log(`[Ophelia] suggestIcon called for: "${input.name}"`);
       if (!isOpheliaEnabled()) return { emojis: [] };
 
       const context = input.parentName
@@ -259,7 +258,6 @@ export const categoryRouter = router({
             .filter((e) => e.codePointAt(0)! > 0x00FF) // exclude ASCII-range symbols
         ),
       ];
-      console.log(`[Ophelia] suggestIcon extracted from thinking for "${input.name}":`, emojiMatches);
       return { emojis: emojiMatches.slice(0, 5) };
     }),
 
@@ -409,5 +407,87 @@ export const categoryRouter = router({
         byCategory, byMerchant, byMonth,
         byAccount: Array.from(accMap.values()).sort((a, b) => a.totalAmount - b.totalAmount),
       };
+    }),
+
+  /** Get line items for a category (for the calculator) */
+  getLineItems: householdProcedure
+    .input(z.object({ categoryId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Verify category belongs to household
+      const category = await ctx.prisma.category.findFirst({
+        where: { id: input.categoryId, householdId: ctx.householdId },
+      });
+      if (!category) throw new TRPCError({ code: "NOT_FOUND" });
+
+      return ctx.prisma.categoryLineItem.findMany({
+        where: { categoryId: input.categoryId },
+        orderBy: { sortOrder: "asc" },
+      });
+    }),
+
+  /** Set line items for a category and update tracker allocation */
+  setLineItems: householdProcedure
+    .input(
+      z.object({
+        categoryId: z.string(),
+        trackerId: z.string(),
+        items: z
+          .array(
+            z.object({
+              description: z.string().min(1).max(200),
+              period: z.number().int().min(1).max(365),
+              amount: z.number().int().min(0),
+              sortOrder: z.number().int(),
+            })
+          )
+          .max(20),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const category = await ctx.prisma.category.findFirst({
+        where: { id: input.categoryId, householdId: ctx.householdId },
+      });
+      if (!category) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const yearlyTotal = input.items.reduce(
+        (s, li) => s + li.period * li.amount,
+        0
+      );
+      const computedMonthly = Math.round(yearlyTotal / 12);
+
+      await ctx.prisma.$transaction([
+        ctx.prisma.categoryLineItem.deleteMany({
+          where: { categoryId: input.categoryId },
+        }),
+        ...(input.items.length > 0
+          ? [
+              ctx.prisma.categoryLineItem.createMany({
+                data: input.items.map((li) => ({
+                  categoryId: input.categoryId,
+                  description: li.description,
+                  period: li.period,
+                  amount: li.amount,
+                  sortOrder: li.sortOrder,
+                })),
+              }),
+            ]
+          : []),
+        ctx.prisma.trackerAllocation.upsert({
+          where: {
+            trackerId_categoryId: {
+              trackerId: input.trackerId,
+              categoryId: input.categoryId,
+            },
+          },
+          update: { amount: computedMonthly },
+          create: {
+            trackerId: input.trackerId,
+            categoryId: input.categoryId,
+            amount: computedMonthly,
+          },
+        }),
+      ]);
+
+      return { computedMonthly, yearlyTotal, itemCount: input.items.length };
     }),
 });
