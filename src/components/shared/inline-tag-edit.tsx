@@ -41,28 +41,21 @@ export function InlineTagEdit({
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
-        // Save if changed
-        if (
-          localIds.length !== selectedTagIds.length ||
-          localIds.some((id) => !selectedTagIds.includes(id))
-        ) {
-          onSave(localIds);
-        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open, localIds, selectedTagIds, onSave]);
+  }, [open]);
 
   const toggleTag = (tagId: string) => {
-    setLocalIds((prev) =>
-      prev.includes(tagId)
-        ? prev.filter((id) => id !== tagId)
-        : [...prev, tagId]
-    );
+    const next = localIds.includes(tagId)
+      ? localIds.filter((id) => id !== tagId)
+      : [...localIds, tagId];
+    setLocalIds(next);
+    onSave(next);
   };
 
-  const selectedTags = allTags.filter((t) => selectedTagIds.includes(t.id));
+  const selectedTags = allTags.filter((t) => localIds.includes(t.id));
 
   // Group tags for the dropdown
   const tagGroups = useMemo(() => {
