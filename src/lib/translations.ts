@@ -264,6 +264,23 @@ const translations = {
     "tracker.categoryDeleted": "Category deleted.",
     "tracker.reassigned": "transactions reassigned.",
     "transactions.filter.mentionsMe": "Mentions me",
+
+    // Dashboard
+    "dashboard.income": "Income",
+    "dashboard.expenses": "Expenses",
+    "dashboard.savingsRate": "Savings rate",
+    "dashboard.vsLastMonth": "vs last month",
+    "dashboard.fundProgress": "Fund progress",
+    "dashboard.noFunds": "No funds yet. Create one in the Tracker to start envelope budgeting.",
+    "dashboard.goToTracker": "Go to Tracker",
+    "dashboard.macroOverview": "12-month overview",
+    "dashboard.expenseBreakdown": "Expense evolution",
+    "dashboard.fundEvolution": "Fund balance evolution",
+    "dashboard.thisMonth": "This month",
+    "dashboard.fundAllocations": "Fund allocations",
+    "dashboard.ofTarget": "of {target} target",
+    "dashboard.noTarget": "No target set",
+    "dashboard.completed": "Target reached",
   },
 
   pt: {
@@ -529,6 +546,23 @@ const translations = {
     "tracker.categoryDeleted": "Categoria excluída.",
     "tracker.reassigned": "transações reatribuídas.",
     "transactions.filter.mentionsMe": "Me menciona",
+
+    // Dashboard
+    "dashboard.income": "Receita",
+    "dashboard.expenses": "Despesas",
+    "dashboard.savingsRate": "Taxa de poupan\u00e7a",
+    "dashboard.vsLastMonth": "vs m\u00eas anterior",
+    "dashboard.fundProgress": "Progresso dos fundos",
+    "dashboard.noFunds": "Sem fundos ainda. Crie um no Tracker para come\u00e7ar o or\u00e7amento por envelopes.",
+    "dashboard.goToTracker": "Ir para Tracker",
+    "dashboard.macroOverview": "Vis\u00e3o geral de 12 meses",
+    "dashboard.expenseBreakdown": "Evolu\u00e7\u00e3o das despesas",
+    "dashboard.fundEvolution": "Evolu\u00e7\u00e3o do saldo dos fundos",
+    "dashboard.thisMonth": "Este m\u00eas",
+    "dashboard.fundAllocations": "Aloca\u00e7\u00f5es de fundos",
+    "dashboard.ofTarget": "de {target} meta",
+    "dashboard.noTarget": "Sem meta definida",
+    "dashboard.completed": "Meta atingida",
   },
 
   ro: {
@@ -794,6 +828,23 @@ const translations = {
     "tracker.categoryDeleted": "Categoria a fost ștearsă.",
     "tracker.reassigned": "tranzacții reatribuite.",
     "transactions.filter.mentionsMe": "Mă menționează",
+
+    // Dashboard
+    "dashboard.income": "Venituri",
+    "dashboard.expenses": "Cheltuieli",
+    "dashboard.savingsRate": "Rata de economisire",
+    "dashboard.vsLastMonth": "vs luna trecut\u0103",
+    "dashboard.fundProgress": "Progres fonduri",
+    "dashboard.noFunds": "F\u0103r\u0103 fonduri. Creeaz\u0103 unul \u00een Tracker pentru bugetare pe plicuri.",
+    "dashboard.goToTracker": "Mergi la Tracker",
+    "dashboard.macroOverview": "Prezentare general\u0103 12 luni",
+    "dashboard.expenseBreakdown": "Evolu\u021bia cheltuielilor",
+    "dashboard.fundEvolution": "Evolu\u021bia soldului fondurilor",
+    "dashboard.thisMonth": "Luna aceasta",
+    "dashboard.fundAllocations": "Aloc\u0103ri fonduri",
+    "dashboard.ofTarget": "din {target} \u021bint\u0103",
+    "dashboard.noTarget": "F\u0103r\u0103 \u021bint\u0103 stabilit\u0103",
+    "dashboard.completed": "\u021aint\u0103 atins\u0103",
   },
 
   nl: {
@@ -1059,6 +1110,23 @@ const translations = {
     "tracker.categoryDeleted": "Categorie verwijderd.",
     "tracker.reassigned": "transacties opnieuw toegewezen.",
     "transactions.filter.mentionsMe": "Vermeldt mij",
+
+    // Dashboard
+    "dashboard.income": "Inkomen",
+    "dashboard.expenses": "Uitgaven",
+    "dashboard.savingsRate": "Spaarquote",
+    "dashboard.vsLastMonth": "vs vorige maand",
+    "dashboard.fundProgress": "Fondsen voortgang",
+    "dashboard.noFunds": "Nog geen fondsen. Maak er een in de Tracker om te beginnen met envelopbudgettering.",
+    "dashboard.goToTracker": "Ga naar Tracker",
+    "dashboard.macroOverview": "12-maanden overzicht",
+    "dashboard.expenseBreakdown": "Uitgaven evolutie",
+    "dashboard.fundEvolution": "Fondsen saldo evolutie",
+    "dashboard.thisMonth": "Deze maand",
+    "dashboard.fundAllocations": "Fondstoewijzingen",
+    "dashboard.ofTarget": "van {target} doel",
+    "dashboard.noTarget": "Geen doel ingesteld",
+    "dashboard.completed": "Doel bereikt",
   },
 } as const;
 

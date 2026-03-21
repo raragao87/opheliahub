@@ -3,28 +3,47 @@
 import { useState } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery } from "@tanstack/react-query";
-import { getCurrentYearMonth } from "@/lib/date";
+import { getCurrentYearMonth, getPreviousMonth } from "@/lib/date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight } from "lucide-react";
+import { useUserPreferences } from "@/lib/user-preferences-context";
+import { TrendingUp, TrendingDown, Percent } from "lucide-react";
 import { GettingStartedChecklist } from "@/components/shared/getting-started-checklist";
 import { NetWorthTrendChart, PeriodSelector, PERIOD_OPTIONS, type PeriodKey } from "@/components/charts/net-worth-trend";
+import { DeltaIndicator } from "./delta-indicator";
+import { FundProgressSection } from "./fund-progress";
+import { MacroOverviewChart, ExpenseBreakdownChart, FundEvolutionChart } from "./dashboard-charts";
+import { t } from "@/lib/translations";
 
 export default function DashboardPage() {
   const trpc = useTRPC();
   const { visibilityParam } = useOwnership();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
   const { year, month } = getCurrentYearMonth();
+  const prev = getPreviousMonth(year, month);
 
   const [period, setPeriod] = useState<PeriodKey>("6M");
 
-  const summaryQuery = useQuery(
-    trpc.dashboard.monthlySummary.queryOptions({
+  const reviewQuery = useQuery(
+    trpc.dashboard.monthlyReview.queryOptions({
       year,
       month,
-      visibility: visibilityParam,
+      compareYear: prev.year,
+      compareMonth: prev.month,
+      visibility: visibilityParam ?? "SHARED",
+    })
+  );
+
+  const fundSummaryQuery = useQuery(
+    trpc.dashboard.fundSummary.queryOptions({
+      year,
+      month,
+      visibility: visibilityParam ?? "SHARED",
     })
   );
 
@@ -56,11 +75,7 @@ export default function DashboardPage() {
 
   const monthName = new Date(year, month - 1).toLocaleString("default", { month: "long" });
 
-  if (summaryQuery.isLoading || accountsQuery.isLoading) {
-    return <div className="text-muted-foreground">Loading dashboard...</div>;
-  }
-
-  if (summaryQuery.error) {
+  if (reviewQuery.error && !reviewQuery.data) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -71,7 +86,9 @@ export default function DashboardPage() {
     );
   }
 
-  const summary = summaryQuery.data!;
+  const review = reviewQuery.data;
+  const deltas = review?.deltas;
+  const funds = fundSummaryQuery.data;
   const accounts = accountsQuery.data ?? [];
   const recentTxns = recentTxnsQuery.data ?? [];
   const trend = trendQuery.data;
@@ -86,52 +103,120 @@ export default function DashboardPage() {
         </span>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Summary Cards with MoM Deltas */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+        {/* Income */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Income</CardTitle>
+            <CardTitle className="text-sm font-medium">{t(lang, "dashboard.income")}</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <MoneyDisplay amount={summary.totalIncome} className="text-2xl font-bold" />
+            {reviewQuery.isLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <MoneyDisplay amount={review?.current.totalIncome ?? 0} className="text-2xl font-bold" />
+                {deltas && (
+                  <div className="mt-1">
+                    <DeltaIndicator
+                      value={deltas.incomeChange}
+                      percentage={deltas.incomeChangePercent}
+                      label={t(lang, "dashboard.vsLastMonth")}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
 
+        {/* Expenses */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+            <CardTitle className="text-sm font-medium">{t(lang, "dashboard.expenses")}</CardTitle>
             <TrendingDown className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <MoneyDisplay
-              amount={-summary.totalExpenses}
-              className="text-2xl font-bold"
-            />
+            {reviewQuery.isLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <MoneyDisplay
+                  amount={Math.abs(review?.current.totalExpenses ?? 0)}
+                  className="text-2xl font-bold"
+                  colorize={false}
+                />
+                {deltas && (
+                  <div className="mt-1">
+                    <DeltaIndicator
+                      value={deltas.expensesChange}
+                      percentage={deltas.expensesChangePercent}
+                      invertColor
+                      label={t(lang, "dashboard.vsLastMonth")}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
 
+        {/* Savings Rate */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Flow</CardTitle>
-            <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">{t(lang, "dashboard.savingsRate")}</CardTitle>
+            <Percent className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <MoneyDisplay amount={summary.netFlow} className="text-2xl font-bold" showSign />
+            {reviewQuery.isLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <>
+                <span className="text-2xl font-bold tabular-nums">
+                  {(review?.current.savingsRate ?? 0).toFixed(0)}%
+                </span>
+                {deltas && (
+                  <div className="mt-1">
+                    <DeltaIndicator
+                      value={deltas.savingsRateChange}
+                      percentage={deltas.savingsRateChange}
+                      isPercentagePoints
+                      label={t(lang, "dashboard.vsLastMonth")}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Accounts</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{accounts.length}</div>
-          </CardContent>
-        </Card>
-
       </div>
+
+      {/* Fund Progress */}
+      {fundSummaryQuery.isLoading ? (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-lg" />
+          ))}
+        </div>
+      ) : funds ? (
+        <FundProgressSection funds={funds.funds} lang={lang} />
+      ) : null}
+
+      {/* 12-Month Charts */}
+      {reviewQuery.isLoading ? (
+        <div className="space-y-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-72 rounded-lg" />
+          ))}
+        </div>
+      ) : review ? (
+        <div className="space-y-6">
+          <MacroOverviewChart data={review.trends.months} lang={lang} />
+          <ExpenseBreakdownChart data={review.expensesByGroup} lang={lang} />
+          <FundEvolutionChart data={review.fundHistory} lang={lang} />
+        </div>
+      ) : null}
 
       {/* Net Worth Card */}
       <Card>
@@ -176,65 +261,6 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Two-column layout: Category Breakdown + Accounts */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Spending by Category */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Spending by Category</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summary.byCategory.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No expenses this month.</p>
-            ) : (
-              <div className="space-y-3">
-                {summary.byCategory.slice(0, 8).map((item, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span>{item.category?.icon ?? "?"}</span>
-                      <span className="text-sm font-medium">
-                        {item.category?.name ?? "Uncategorized"}
-                      </span>
-                    </div>
-                    <MoneyDisplay amount={-item.amount} className="text-sm" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Account Balances */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Account Balances</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {accounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No accounts yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {accounts.map((account) => (
-                  <div key={account.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{account.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {account.type.replace("_", " ")}
-                      </Badge>
-                    </div>
-                    <MoneyDisplay
-                      amount={account.balance}
-                      currency={account.currency}
-                      className="text-sm font-medium"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Recent Transactions */}
       <Card>
