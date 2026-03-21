@@ -1120,10 +1120,10 @@ function TransactionRow({
     <AccountIcon className="h-4 w-4 inline-block text-muted-foreground" />
   ) : null;
 
-  // Ophelia suggestion — only relevant when user hasn't set a category.
+  // Ophelia suggestion — only relevant when user hasn't set a category or fund.
   // Use the pre-loaded opheliaCategory relation directly (avoids visibility mismatch
   // where a PERSONAL-category suggestion wouldn't be found in the SHARED categoryOptions).
-  const opheliaCatLabel = !txn.category && txn.opheliaCategory
+  const opheliaCatLabel = !txn.category && !txn.fund && txn.opheliaCategory
     ? txn.opheliaCategory.name
     : null;
   const opheliaConf = txn.opheliaConfidence ?? null;
