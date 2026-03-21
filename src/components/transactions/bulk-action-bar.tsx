@@ -284,32 +284,34 @@ function CategoryPicker({
     ? funds.filter((f) => f.name.toLowerCase().includes(lc))
     : funds;
 
+  const showHeaders = groups.length > 1;
+
   return (
     <div ref={ref} className="absolute bottom-full left-0 mb-2 rounded-lg border bg-popover shadow-lg w-[280px] max-h-[320px] flex flex-col">
-      <div className="p-2 border-b border-border">
+      <div className="p-2 border-b border-border shrink-0">
         <input
           ref={searchRef}
           type="text"
-          placeholder="Search categories..."
+          placeholder="Search..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
         />
       </div>
-      <div className="overflow-y-auto p-1.5 flex-1">
+      <div className="overflow-y-auto p-1.5 flex-1 space-y-0.5">
         {/* Clear category option */}
         <button
           onClick={() => onSelect(null)}
-          className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-2 w-full px-2 py-1 rounded text-sm hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
         >
-          Remove category
+          <X className="h-3.5 w-3.5 shrink-0" />
+          <span>Remove category</span>
         </button>
-        <div className="h-px bg-border my-1" />
 
         {filteredGroups.map((group, gi) => (
-          <div key={gi}>
-            {groups.length > 1 && (
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 mt-1 first:mt-0">
+          <div key={gi} className={gi > 0 && showHeaders ? "mt-1 pt-1 border-t border-border/40" : ""}>
+            {showHeaders && (
+              <div className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 py-1">
                 {group.label}
               </div>
             )}
@@ -317,9 +319,12 @@ function CategoryPicker({
               <button
                 key={option.value}
                 onClick={() => onSelect(option.value)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm hover:bg-muted text-foreground transition-colors"
+                className={cn(
+                  "flex items-center gap-2 w-full py-1 rounded text-sm hover:bg-muted/50 text-foreground transition-colors",
+                  showHeaders ? "pl-5 pr-2" : "px-2"
+                )}
               >
-                {option.icon && <span className="text-xs">{option.icon}</span>}
+                {option.icon && <span className="text-xs shrink-0">{option.icon}</span>}
                 <span className="truncate">{option.label}</span>
               </button>
             ))}
@@ -328,17 +333,20 @@ function CategoryPicker({
 
         {/* Funds section */}
         {filteredFunds.length > 0 && (
-          <div>
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 mt-1 border-t border-border/40 pt-2">
+          <div className="mt-1 pt-1 border-t border-border/40">
+            <div className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 py-1">
               Funds
             </div>
             {filteredFunds.map((fund) => (
               <button
                 key={fund.id}
                 onClick={() => onSelect(`__FUND__${fund.id}`)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm hover:bg-muted text-foreground transition-colors"
+                className={cn(
+                  "flex items-center gap-2 w-full py-1 rounded text-sm hover:bg-muted/50 text-foreground transition-colors",
+                  showHeaders ? "pl-5 pr-2" : "px-2"
+                )}
               >
-                <span className="text-xs">{fund.icon ?? "💰"}</span>
+                <span className="text-xs shrink-0">{fund.icon ?? "💰"}</span>
                 <span className="truncate">{fund.name}</span>
               </button>
             ))}
@@ -346,7 +354,7 @@ function CategoryPicker({
         )}
 
         {filteredGroups.length === 0 && filteredFunds.length === 0 && (
-          <p className="text-xs text-muted-foreground/50 text-center py-3">No categories found</p>
+          <p className="text-xs text-muted-foreground/50 text-center py-3">No matches</p>
         )}
       </div>
     </div>
@@ -391,18 +399,18 @@ function TagPicker({
   };
 
   return (
-    <div ref={ref} className="absolute bottom-full left-0 mb-2 rounded-lg border bg-popover shadow-lg w-[260px] max-h-[320px] flex flex-col">
-      <div className="p-2 border-b border-border">
+    <div ref={ref} className="absolute bottom-full left-0 mb-2 rounded-lg border bg-popover shadow-lg w-[280px] max-h-[320px] flex flex-col">
+      <div className="p-2 border-b border-border shrink-0">
         <input
           ref={searchRef}
           type="text"
-          placeholder={mode === "add" ? "Search tags to add..." : "Search tags to remove..."}
+          placeholder="Search..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
         />
       </div>
-      <div className="overflow-y-auto p-1.5 flex-1">
+      <div className="overflow-y-auto p-1.5 flex-1 space-y-0.5">
         {filtered.map((tag) => (
           <label
             key={tag.id}
@@ -412,7 +420,7 @@ function TagPicker({
               type="checkbox"
               checked={selected.has(tag.id)}
               onChange={() => toggleTag(tag.id)}
-              className="rounded border-border"
+              className="rounded border-border shrink-0"
             />
             {tag.color && (
               <span
@@ -424,18 +432,17 @@ function TagPicker({
           </label>
         ))}
         {filtered.length === 0 && (
-          <p className="text-xs text-muted-foreground/50 text-center py-3">No tags found</p>
+          <p className="text-xs text-muted-foreground/50 text-center py-3">No matches</p>
         )}
       </div>
       {selected.size > 0 && (
-        <div className="border-t border-border p-2">
-          <Button
-            size="sm"
-            className="w-full"
+        <div className="border-t border-border p-1.5 shrink-0">
+          <button
             onClick={() => onConfirm(Array.from(selected))}
+            className="w-full text-xs text-center py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors"
           >
             {mode === "add" ? "Add" : "Remove"} {selected.size} tag{selected.size !== 1 ? "s" : ""}
-          </Button>
+          </button>
         </div>
       )}
     </div>
