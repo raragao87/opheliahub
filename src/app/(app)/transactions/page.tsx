@@ -362,11 +362,6 @@ function TransactionsContent() {
                       ...(variables.amount !== undefined && { amount: variables.amount }),
                       ...(variables.categoryId !== undefined && {
                         categoryId: variables.categoryId,
-                        // Clear Ophelia suggestion when user confirms a category
-                        ...(variables.categoryId && {
-                          opheliaCategoryId: null,
-                          opheliaCategory: null,
-                        }),
                         category: (() => {
                           if (!variables.categoryId) return null;
                           const cat = flatCategories.find((c) => c.id === variables.categoryId);
