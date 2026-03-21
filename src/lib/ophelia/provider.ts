@@ -54,6 +54,40 @@ export async function chatCompletion({
   }
 }
 
+// ── chatConversation (multi-turn) ───────────────────────────────────────────
+
+export async function chatConversation({
+  systemPrompt,
+  messages,
+  temperature = 0.4,
+  maxTokens = 2048,
+}: {
+  systemPrompt: string;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string | null> {
+  try {
+    const client = getClient();
+    const response = await client.chat.completions.create({
+      model: "MiniMax-M2.5",
+      temperature,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages,
+      ],
+    });
+    const raw = response.choices[0]?.message?.content ?? null;
+    if (!raw) return null;
+    // Strip <think> reasoning blocks from MiniMax-M2.5
+    return raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  } catch (err) {
+    console.error("[Ophelia] chatConversation error:", err);
+    return null;
+  }
+}
+
 // ── extractJSON ─────────────────────────────────────────────────────────────
 
 /**

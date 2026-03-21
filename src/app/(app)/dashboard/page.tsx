@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentYearMonth, getPreviousMonth } from "@/lib/date";
@@ -18,6 +18,8 @@ import { DeltaIndicator } from "./delta-indicator";
 import { FundProgressSection } from "./fund-progress";
 import { MacroOverviewChart, ExpenseBreakdownChart, FundEvolutionChart } from "./dashboard-charts";
 import { t } from "@/lib/translations";
+import { useOpheliaChat } from "@/lib/ophelia/chat-context";
+import { fromCents } from "@/lib/money";
 
 export default function DashboardPage() {
   const trpc = useTRPC();
@@ -92,6 +94,22 @@ export default function DashboardPage() {
   const accounts = accountsQuery.data ?? [];
   const recentTxns = recentTxnsQuery.data ?? [];
   const trend = trendQuery.data;
+
+  // Ophelia page context
+  const { setPageSummary } = useOpheliaChat();
+  useEffect(() => {
+    if (!review) return;
+    const parts: string[] = [
+      `Income: €${fromCents(review.current.totalIncome).toFixed(2)}`,
+      `Expenses: €${fromCents(Math.abs(review.current.totalExpenses)).toFixed(2)}`,
+      `Savings rate: ${review.current.savingsRate.toFixed(0)}%`,
+    ];
+    if (review.current.byCategory.length > 0) {
+      const top = review.current.byCategory[0];
+      parts.push(`Top expense category: ${top.categoryName ?? "Uncategorized"}`);
+    }
+    setPageSummary(parts.join(", "));
+  }, [review, setPageSummary]);
 
   return (
     <div className="space-y-6">

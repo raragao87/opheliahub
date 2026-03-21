@@ -1,4 +1,4 @@
-export { chatCompletion, extractJSON, isOpheliaEnabled } from "./provider";
+export { chatCompletion, chatConversation, extractJSON, isOpheliaEnabled } from "./provider";
 export { getOpheliaClient } from "./client";
 export { analyzeFileStructure } from "./analyzeFileStructure";
 export { enrichTransactions } from "./enrichTransactions";

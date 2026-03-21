@@ -10,6 +10,7 @@ import type { AppRouter } from "@/trpc/router";
 import { OwnershipProvider } from "@/lib/ownership-context";
 import { UserPreferencesProvider } from "@/lib/user-preferences-context";
 import { Toaster } from "sonner";
+import { OpheliaChatProvider } from "@/lib/ophelia/chat-context";
 import superjson from "superjson";
 
 function getBaseUrl() {
@@ -36,7 +37,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <TRPCProvider queryClient={queryClient} trpcClient={trpcClient}>
           <OwnershipProvider>
             <UserPreferencesProvider>
-              {children}
+              <OpheliaChatProvider>
+                {children}
+              </OpheliaChatProvider>
               <Toaster position="bottom-right" richColors closeButton />
             </UserPreferencesProvider>
           </OwnershipProvider>
