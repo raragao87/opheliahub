@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
@@ -305,28 +305,31 @@ export default function TrackerPage() {
   // Tracker is per-visibility
   const visibility = visibilityParam ?? "SHARED";
 
-  const trackerQuery = useQuery(
-    trpc.tracker.getOrCreate.queryOptions({
+  const trackerQuery = useQuery({
+    ...trpc.tracker.getOrCreate.queryOptions({
       month: period.month,
       year: period.year,
       visibility,
-    })
-  );
+    }),
+    placeholderData: keepPreviousData,
+  });
 
-  const summaryQuery = useQuery(
-    trpc.tracker.getSummary.queryOptions({
+  const summaryQuery = useQuery({
+    ...trpc.tracker.getSummary.queryOptions({
       month: period.month,
       year: period.year,
       visibility,
-    })
-  );
+    }),
+    placeholderData: keepPreviousData,
+  });
 
   const treeQuery = useQuery(trpc.category.tree.queryOptions({ visibility }));
 
   // Funds query
-  const fundsQuery = useQuery(
-    trpc.fund.list.queryOptions({ visibility, month: period.month, year: period.year })
-  );
+  const fundsQuery = useQuery({
+    ...trpc.fund.list.queryOptions({ visibility, month: period.month, year: period.year }),
+    placeholderData: keepPreviousData,
+  });
 
   // Fund UI state
   const [editingFundId, setEditingFundId] = useState<string | null>(null);
@@ -653,8 +656,8 @@ export default function TrackerPage() {
   }, [activeDragId, groupsWithData]);
 
 
-  // Loading state
-  if (trackerQuery.isLoading || !tracker) {
+  // Loading state — only show skeleton on initial load (not when switching months)
+  if (!tracker) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-16 w-full rounded-lg" />
