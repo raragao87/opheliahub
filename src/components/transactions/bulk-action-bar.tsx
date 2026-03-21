@@ -6,11 +6,8 @@ import {
   Tag,
   Tags,
   FolderEdit,
-  Eye,
   Trash2,
   AlertTriangle,
-  Users,
-  Lock,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +24,6 @@ interface TagOption {
 
 interface SelectedTransactionInfo {
   id: string;
-  visibility: string;
   importBatchId?: string | null;
 }
 
@@ -45,8 +41,6 @@ interface BulkActionBarProps {
   categoryGroups: FilterOptionGroup[];
   funds?: FundOption[];
   onBulkChangeCategory: (categoryId: string | null) => void;
-  // Visibility action
-  onBulkChangeVisibility: (visibility: "SHARED" | "PERSONAL") => void;
   // Tag actions
   allTags: TagOption[];
   onBulkAddTags: (tagIds: string[]) => void;
@@ -66,7 +60,6 @@ export function BulkActionBar({
   categoryGroups,
   funds = [],
   onBulkChangeCategory,
-  onBulkChangeVisibility,
   allTags,
   onBulkAddTags,
   onBulkRemoveTags,
@@ -135,14 +128,6 @@ export function BulkActionBar({
               onClick={() => setActiveAction(activeAction === "category" ? null : "category")}
             />
 
-            {/* Visibility */}
-            <ActionButton
-              icon={Eye}
-              label="Visibility"
-              isActive={activeAction === "visibility"}
-              onClick={() => setActiveAction(activeAction === "visibility" ? null : "visibility")}
-            />
-
             {/* Add Tags */}
             <ActionButton
               icon={Tag}
@@ -179,17 +164,6 @@ export function BulkActionBar({
             funds={funds}
             onSelect={(id) => {
               onBulkChangeCategory(id);
-              closeAction();
-            }}
-            onClose={closeAction}
-          />
-        )}
-
-        {activeAction === "visibility" && (
-          <VisibilityPicker
-            selectedTransactions={selectedTransactions}
-            onSelect={(vis) => {
-              onBulkChangeVisibility(vis);
               closeAction();
             }}
             onClose={closeAction}
@@ -375,63 +349,6 @@ function CategoryPicker({
           <p className="text-xs text-muted-foreground/50 text-center py-3">No categories found</p>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Visibility Picker ────────────────────────────────────────────────
-
-function VisibilityPicker({
-  selectedTransactions,
-  onSelect,
-  onClose,
-}: {
-  selectedTransactions: { id: string; visibility: string }[];
-  onSelect: (visibility: "SHARED" | "PERSONAL") => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, onClose);
-
-  const sharedCount = selectedTransactions.filter((t) => t.visibility === "SHARED").length;
-  const personalCount = selectedTransactions.filter((t) => t.visibility === "PERSONAL").length;
-  const isMixed = sharedCount > 0 && personalCount > 0;
-
-  return (
-    <div ref={ref} className="absolute bottom-full left-0 mb-2 rounded-lg border bg-popover shadow-lg w-[300px] p-3 space-y-3">
-      {isMixed && (
-        <div className="flex items-start gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-          <p className="text-xs text-amber-800 dark:text-amber-200">
-            Selection contains {sharedCount} shared and {personalCount} personal transaction{personalCount !== 1 ? "s" : ""}. Changing visibility will affect all selected.
-          </p>
-        </div>
-      )}
-
-      <p className="text-xs text-muted-foreground">
-        Change visibility for {selectedTransactions.length} transaction{selectedTransactions.length !== 1 ? "s" : ""}:
-      </p>
-
-      <div className="flex gap-2">
-        <button
-          onClick={() => onSelect("SHARED")}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-input hover:bg-muted transition-colors text-sm"
-        >
-          <Users className="h-4 w-4 text-blue-500" />
-          Shared
-        </button>
-        <button
-          onClick={() => onSelect("PERSONAL")}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-input hover:bg-muted transition-colors text-sm"
-        >
-          <Lock className="h-4 w-4 text-gray-500" />
-          Personal
-        </button>
-      </div>
-
-      <p className="text-[11px] text-muted-foreground/60">
-        Shared transactions are visible to all household members. Personal transactions are only visible to you.
-      </p>
     </div>
   );
 }

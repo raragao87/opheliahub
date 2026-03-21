@@ -435,35 +435,6 @@ function TransactionsContent() {
     deleteMutation.mutate({ id });
   }
 
-  // ── Fix visibility mutation ────────────────────────────────────────
-  const fixVisibilityMutation = useMutation(
-    trpc.transaction.fixVisibility.mutationOptions({
-      onError: (err) => toast.error(err.message),
-      onSettled: () => queryClient.invalidateQueries(),
-    })
-  );
-
-  const handleFixVisibility = useCallback((silent = false) => {
-    fixVisibilityMutation.mutate(undefined, {
-      onSuccess: (data) => {
-        if (silent && data.fixed === 0) return;
-        toast.success(
-          data.fixed === 0
-            ? "All transaction visibilities are already correct"
-            : `Fixed visibility on ${data.fixed} transaction${data.fixed !== 1 ? "s" : ""}`
-        );
-      },
-    });
-  }, [fixVisibilityMutation]);
-
-  // Auto-fix on mount: silently sync visibility once per page visit
-  const fixedOnMount = useRef(false);
-  useEffect(() => {
-    if (fixedOnMount.current) return;
-    fixedOnMount.current = true;
-    handleFixVisibility(true);
-  }, [handleFixVisibility]);
-
   // ── Selection state ────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -472,7 +443,6 @@ function TransactionsContent() {
       .filter((t) => selectedIds.has(t.id))
       .map((t) => ({
         id: t.id,
-        visibility: t.visibility,
         importBatchId: (t as Record<string, unknown>).importBatchId as string | null | undefined,
       }));
   }, [selectedIds, transactions]);
@@ -482,17 +452,6 @@ function TransactionsContent() {
     trpc.transaction.bulkUpdateCategory.mutationOptions({
       onSuccess: (data) => {
         toast.success(`Updated category on ${data.updated} transaction${data.updated !== 1 ? "s" : ""}`);
-        setSelectedIds(new Set());
-        queryClient.invalidateQueries();
-      },
-      onError: (err) => toast.error(err.message),
-    })
-  );
-
-  const bulkVisibilityMutation = useMutation(
-    trpc.transaction.bulkUpdateVisibility.mutationOptions({
-      onSuccess: (data) => {
-        toast.success(`Updated visibility on ${data.updated} transaction${data.updated !== 1 ? "s" : ""}`);
         setSelectedIds(new Set());
         queryClient.invalidateQueries();
       },
@@ -545,7 +504,6 @@ function TransactionsContent() {
 
   const isBulkPending =
     bulkCategoryMutation.isPending ||
-    bulkVisibilityMutation.isPending ||
     bulkAddTagsMutation.isPending ||
     bulkRemoveTagsMutation.isPending ||
     bulkDeleteMutation.isPending;
@@ -1096,9 +1054,6 @@ function TransactionsContent() {
                 bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId: value, fundId: null });
               }
             }}
-            onBulkChangeVisibility={(visibility) =>
-              bulkVisibilityMutation.mutate({ ids: selectedIdsArray, visibility })
-            }
             allTags={tagsQuery.data ?? []}
             onBulkAddTags={(tagIds) =>
               bulkAddTagsMutation.mutate({ ids: selectedIdsArray, tagIds })

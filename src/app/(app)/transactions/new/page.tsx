@@ -29,7 +29,6 @@ export default function NewTransactionPage() {
     accountId: "",
     toAccountId: "",
     categoryId: "",
-    visibility: "SHARED" as "SHARED" | "PERSONAL",
     notes: "",
     tagIds: [] as string[],
   });
@@ -65,7 +64,6 @@ export default function NewTransactionPage() {
       accountId: form.accountId,
       toAccountId: form.type === "TRANSFER" ? form.toAccountId || undefined : undefined,
       categoryId: form.type === "TRANSFER" ? undefined : form.categoryId || undefined,
-      visibility: form.visibility,
       notes: form.notes || undefined,
       tagIds: form.tagIds,
     });
@@ -178,34 +176,15 @@ export default function NewTransactionPage() {
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="visibility">Visibility</Label>
-              <Select
-                id="visibility"
-                value={form.visibility}
-                onChange={(e) => {
-                  const newVis = e.target.value as typeof form.visibility;
-                  setForm({
-                    ...form,
-                    visibility: newVis,
-                    categoryId: newVis !== form.visibility ? "" : form.categoryId,
-                  });
-                }}
-              >
-                <option value="SHARED">Shared (visible to both partners)</option>
-                <option value="PERSONAL">Personal (only visible to you)</option>
-              </Select>
-            </div>
-
             {/* Category — hidden for transfers and illiquid accounts */}
-            {form.type !== "TRANSFER" && !isIlliquidAccount && (
+            {form.type !== "TRANSFER" && !isIlliquidAccount && selectedAccount && (
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <CategorySelect
                   id="category"
                   value={form.categoryId}
                   onChange={(val) => setForm({ ...form, categoryId: val })}
-                  visibility={form.visibility}
+                  visibility={selectedAccount.ownership as "SHARED" | "PERSONAL"}
                 />
               </div>
             )}

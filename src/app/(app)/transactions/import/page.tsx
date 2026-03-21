@@ -674,16 +674,12 @@ export default function ImportPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Default Visibility</Label>
-                <Select
-                  value={defaultVisibility}
-                  onChange={(e) => setDefaultVisibility(e.target.value as "SHARED" | "PERSONAL")}
-                >
-                  <option value="SHARED">Shared</option>
-                  <option value="PERSONAL">Personal</option>
-                </Select>
+                <Label>Visibility</Label>
+                <div className="flex items-center h-9 px-3 rounded-md border border-input bg-muted/50 text-sm text-muted-foreground">
+                  {defaultVisibility === "SHARED" ? "Shared" : "Personal"}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Auto-set from the account's ownership type.
+                  Determined by the account's ownership type.
                 </p>
               </div>
             </div>

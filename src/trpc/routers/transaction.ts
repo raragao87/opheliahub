@@ -239,7 +239,6 @@ export const transactionRouter = router({
         toAccountId: z.string().optional(),
         categoryId: z.string().optional(),
         fundId: z.string().optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
         notes: z.string().optional(),
         tagIds: z.array(z.string()).default([]),
       })
@@ -305,7 +304,7 @@ export const transactionRouter = router({
               date: input.date,
               accountId: input.toAccountId!,
               userId: ctx.userId,
-              visibility: input.visibility,
+              visibility: toAccount!.ownership,
               notes: input.notes,
             },
           });
@@ -321,7 +320,7 @@ export const transactionRouter = router({
               date: input.date,
               accountId: input.accountId,
               userId: ctx.userId,
-              visibility: input.visibility,
+              visibility: account.ownership,
               notes: input.notes,
               linkedTransactionId: inflow.id,
             },
@@ -353,6 +352,7 @@ export const transactionRouter = router({
         data: {
           ...data,
           userId: ctx.userId,
+          visibility: account.ownership,
           displayName: extractDisplayName(data.description),
           originalDescription: data.description,
           tags: tagIds.length > 0
@@ -390,7 +390,6 @@ export const transactionRouter = router({
         accrualDate: z.coerce.date().nullable().optional(),
         categoryId: z.string().nullable().optional(),
         fundId: z.string().nullable().optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
         notes: z.string().nullable().optional(),
         tagIds: z.array(z.string()).optional(),
       })
@@ -447,7 +446,6 @@ export const transactionRouter = router({
             if (data.date !== undefined) updateData.date = data.date;
             if (data.accrualDate !== undefined) updateData.accrualDate = data.accrualDate;
             if (data.notes !== undefined) updateData.notes = data.notes;
-            if (data.visibility !== undefined) updateData.visibility = data.visibility;
             if (data.amount !== undefined) {
               updateData.amount = isOutflow ? -newAbs : newAbs;
             }
@@ -459,7 +457,6 @@ export const transactionRouter = router({
             if (data.date !== undefined) partnerData.date = data.date;
             if (data.accrualDate !== undefined) partnerData.accrualDate = data.accrualDate;
             if (data.notes !== undefined) partnerData.notes = data.notes;
-            if (data.visibility !== undefined) partnerData.visibility = data.visibility;
             if (data.amount !== undefined) {
               partnerData.amount = isOutflow ? newAbs : -newAbs;
             }
@@ -714,49 +711,6 @@ export const transactionRouter = router({
       return { updated: accessibleIds.length };
     }),
 
-  bulkUpdateVisibility: householdProcedure
-    .input(
-      z.object({
-        ids: z.array(z.string()).min(1).max(500),
-        visibility: z.enum(["SHARED", "PERSONAL"]),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Only the owner can change visibility
-      const accessible = await ctx.prisma.transaction.findMany({
-        where: {
-          id: { in: input.ids },
-          userId: ctx.userId,
-        },
-        select: { id: true },
-      });
-      const accessibleIds = accessible.map((t) => t.id);
-
-      if (accessibleIds.length !== input.ids.length) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: `${input.ids.length - accessibleIds.length} transaction(s) cannot be modified — you can only change visibility on your own transactions.`,
-        });
-      }
-
-      await ctx.prisma.transaction.updateMany({
-        where: { id: { in: accessibleIds } },
-        data: { visibility: input.visibility },
-      });
-
-      await ctx.prisma.auditLog.create({
-        data: {
-          action: "transaction.bulk_update_visibility",
-          entityType: "Transaction",
-          entityId: accessibleIds.join(","),
-          userId: ctx.userId,
-          metadata: { visibility: input.visibility, count: accessibleIds.length },
-        },
-      });
-
-      return { updated: accessibleIds.length };
-    }),
-
   bulkAddTags: householdProcedure
     .input(
       z.object({
@@ -901,39 +855,6 @@ export const transactionRouter = router({
       }
 
       return { updated, total: transactions.length };
-    }),
-
-  /** Sync every transaction's visibility to match its account's ownership (SHARED account → SHARED tx, PERSONAL account → PERSONAL tx) */
-  fixVisibility: householdProcedure
-    .mutation(async ({ ctx }) => {
-      // Fetch all transactions in the household along with their account ownership
-      const transactions = await ctx.prisma.transaction.findMany({
-        where: {
-          account: { householdId: ctx.householdId },
-        },
-        select: {
-          id: true,
-          visibility: true,
-          account: { select: { ownership: true } },
-        },
-      });
-
-      const toFix = transactions.filter((t) => t.visibility !== t.account.ownership);
-      if (toFix.length === 0) return { fixed: 0 };
-
-      const personalIds = toFix.filter((t) => t.account.ownership === "PERSONAL").map((t) => t.id);
-      const sharedIds   = toFix.filter((t) => t.account.ownership === "SHARED").map((t) => t.id);
-
-      await ctx.prisma.$transaction([
-        ...(sharedIds.length > 0
-          ? [ctx.prisma.transaction.updateMany({ where: { id: { in: sharedIds } },   data: { visibility: "SHARED" } })]
-          : []),
-        ...(personalIds.length > 0
-          ? [ctx.prisma.transaction.updateMany({ where: { id: { in: personalIds } }, data: { visibility: "PERSONAL" } })]
-          : []),
-      ]);
-
-      return { fixed: toFix.length };
     }),
 
   confirmOpheliaSuggestions: householdProcedure

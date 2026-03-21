@@ -151,7 +151,6 @@ export function AccountEditDialog({ accountId, open, onClose }: AccountEditDialo
         type: newType as "INCOME" | "EXPENSE",
         description: "Initial Balance",
         date: new Date(),
-        visibility: editForm.ownership,
       });
     }
   };

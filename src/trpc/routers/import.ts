@@ -186,7 +186,7 @@ export const importRouter = router({
             displayName: z.string().optional(),
             amount: z.number().int(),
             type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
-            visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+            visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
             categoryId: z.string().optional(),
             tagIds: z.array(z.string()).default([]),
             externalId: z.string().optional(),
@@ -226,11 +226,12 @@ export const importRouter = router({
         let balanceChange = 0;
 
         for (const txData of input.transactions) {
-          const { tagIds, displayName: clientDisplayName, ...transactionData } = txData;
+          const { tagIds, displayName: clientDisplayName, visibility: _vis, ...transactionData } = txData;
 
           const created = await tx.transaction.create({
             data: {
               ...transactionData,
+              visibility: account.ownership,
               displayName: clientDisplayName || extractDisplayName(transactionData.description),
               originalDescription: transactionData.description,
               accountId: input.accountId,

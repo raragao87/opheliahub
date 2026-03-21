@@ -38,7 +38,6 @@ export default function EditTransactionPage({
     date: string;
     accrualDate: string;
     categoryId: string;
-    visibility: "SHARED" | "PERSONAL";
     notes: string;
     tagIds: string[];
   } | null>(null);
@@ -57,7 +56,6 @@ export default function EditTransactionPage({
         date: new Date(txn.date).toISOString().split("T")[0],
         accrualDate: txn.accrualDate ? new Date(txn.accrualDate).toISOString().split("T")[0] : "",
         categoryId: txn.categoryId ?? "",
-        visibility: txn.visibility as "SHARED" | "PERSONAL",
         notes: txn.notes ?? "",
         tagIds: txn.tags.map((t: { tag: { id: string } }) => t.tag.id),
       });
@@ -98,7 +96,6 @@ export default function EditTransactionPage({
       date: new Date(form.date),
       accrualDate: form.accrualDate ? new Date(form.accrualDate + "T12:00:00") : null,
       categoryId: form.categoryId || null,
-      visibility: form.visibility,
       notes: form.notes || null,
       tagIds: form.tagIds,
     });
@@ -261,26 +258,6 @@ export default function EditTransactionPage({
               </p>
             </div>
 
-            {/* Visibility */}
-            <div className="space-y-2">
-              <Label htmlFor="visibility">Visibility</Label>
-              <Select
-                id="visibility"
-                value={form.visibility}
-                onChange={(e) => {
-                  const newVis = e.target.value as "SHARED" | "PERSONAL";
-                  setForm({
-                    ...form,
-                    visibility: newVis,
-                    categoryId: newVis !== form.visibility ? "" : form.categoryId,
-                  });
-                }}
-              >
-                <option value="SHARED">Shared (visible to both partners)</option>
-                <option value="PERSONAL">Personal (only visible to you)</option>
-              </Select>
-            </div>
-
             {/* Category — hidden for transfers and illiquid accounts */}
             {!isTransfer && !isIlliquid && (
               <div className="space-y-2">
@@ -317,7 +294,7 @@ export default function EditTransactionPage({
                   id="category"
                   value={form.categoryId}
                   onChange={(val) => setForm({ ...form, categoryId: val })}
-                  visibility={form.visibility}
+                  visibility={txn.visibility as "SHARED" | "PERSONAL"}
                 />
               </div>
             )}
