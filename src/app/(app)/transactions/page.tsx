@@ -27,6 +27,7 @@ import { MoneyDisplay } from "@/components/shared/money-display";
 import { AccountEditDialog } from "@/components/accounts/account-edit-dialog";
 import { MarkTransferDialog, UnmarkTransferDialog } from "@/components/transactions/mark-transfer-dialog";
 import type { TransactionItem } from "@/components/transactions/transaction-table";
+import { DuplicateReviewPanel } from "@/components/transactions/duplicate-review-panel";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -190,6 +191,9 @@ function TransactionsContent() {
   const [filters, setFilters] = useState<Filters>(() => filtersFromParams(searchParams));
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // Detect duplicates=pending URL param for showing review panel
+  const duplicatesFilter = searchParams.get("duplicates");
 
   // Sync URL params → filter state (when URL changes externally)
   useEffect(() => {
@@ -1021,6 +1025,11 @@ function TransactionsContent() {
         />
       ) : (
         <>
+          {duplicatesFilter === "pending" && (
+            <DuplicateReviewPanel
+              accountId={filters.accountIds.length === 1 ? filters.accountIds[0] : undefined}
+            />
+          )}
           <TransactionTable
             transactions={transactions}
             flatCategories={flatCategories}

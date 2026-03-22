@@ -314,6 +314,15 @@ const translations = {
     "import.dismissAll": "Dismiss all",
     "import.deleteDuplicate": "Delete duplicate",
     "import.notDuplicate": "Not a duplicate",
+    // Duplicate review panel
+    "duplicates.review.title": "possible duplicate(s) to review",
+    "duplicates.review.confidence": "Confidence",
+    "duplicates.review.keep": "Keep",
+    "duplicates.review.delete": "Delete duplicate",
+    "duplicates.review.dismiss": "Not a duplicate — dismiss",
+    "duplicates.review.dismissAll": "Dismiss all",
+    "duplicates.review.resolved": "Duplicate resolved",
+    "duplicates.review.dismissed": "Alert dismissed",
     // Sidebar — Drop to import
     "sidebar.dropToImport": "Drop file on an account to import",
     "sidebar.dropHere": "Drop to import",
@@ -633,6 +642,15 @@ const translations = {
     "import.dismissAll": "Dispensar todos",
     "import.deleteDuplicate": "Apagar duplicado",
     "import.notDuplicate": "Não é duplicado",
+    // Duplicate review panel
+    "duplicates.review.title": "possível(is) duplicata(s) para rever",
+    "duplicates.review.confidence": "Confiança",
+    "duplicates.review.keep": "Manter",
+    "duplicates.review.delete": "Eliminar duplicata",
+    "duplicates.review.dismiss": "Não é duplicata — ignorar",
+    "duplicates.review.dismissAll": "Ignorar todos",
+    "duplicates.review.resolved": "Duplicata resolvida",
+    "duplicates.review.dismissed": "Alerta ignorado",
     // Sidebar — Drop to import
     "sidebar.dropToImport": "Arraste um ficheiro para uma conta para importar",
     "sidebar.dropHere": "Largar para importar",
@@ -952,6 +970,15 @@ const translations = {
     "import.dismissAll": "Respinge toate",
     "import.deleteDuplicate": "Șterge duplicatul",
     "import.notDuplicate": "Nu este duplicat",
+    // Duplicate review panel
+    "duplicates.review.title": "posibil(e) duplicat(e) de revizuit",
+    "duplicates.review.confidence": "Încredere",
+    "duplicates.review.keep": "Păstrează",
+    "duplicates.review.delete": "Șterge duplicatul",
+    "duplicates.review.dismiss": "Nu este duplicat — ignoră",
+    "duplicates.review.dismissAll": "Ignoră toate",
+    "duplicates.review.resolved": "Duplicat rezolvat",
+    "duplicates.review.dismissed": "Alertă ignorată",
     // Sidebar — Drop to import
     "sidebar.dropToImport": "Trage un fișier pe un cont pentru a importa",
     "sidebar.dropHere": "Lasă pentru a importa",
@@ -1271,6 +1298,15 @@ const translations = {
     "import.dismissAll": "Alles negeren",
     "import.deleteDuplicate": "Duplicaat verwijderen",
     "import.notDuplicate": "Geen duplicaat",
+    // Duplicate review panel
+    "duplicates.review.title": "mogelijke duplica(a)t(en) om te beoordelen",
+    "duplicates.review.confidence": "Betrouwbaarheid",
+    "duplicates.review.keep": "Behouden",
+    "duplicates.review.delete": "Duplicaat verwijderen",
+    "duplicates.review.dismiss": "Geen duplicaat — negeren",
+    "duplicates.review.dismissAll": "Alles negeren",
+    "duplicates.review.resolved": "Duplicaat opgelost",
+    "duplicates.review.dismissed": "Melding genegeerd",
     // Sidebar — Drop to import
     "sidebar.dropToImport": "Sleep een bestand naar een rekening om te importeren",
     "sidebar.dropHere": "Laat los om te importeren",
