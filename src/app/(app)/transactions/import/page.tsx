@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,8 @@ import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertTriangle, ChevronR
 import { cn } from "@/lib/utils";
 import { extractDisplayName } from "@/lib/recurring";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
+import { useImportDrop } from "@/lib/import-drop-context";
+import { toast } from "sonner";
 
 type Step = "upload" | "mapping" | "filter" | "preview" | "confirm";
 
@@ -145,6 +147,11 @@ export default function ImportPage() {
   // Drag-and-drop
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Sidebar drop-to-import
+  const { consumePendingImport } = useImportDrop();
+  const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
+  const sidebarDropConsumed = useRef(false);
 
   const commitMutation = useMutation(
     trpc.import.commit.mutationOptions()
@@ -421,6 +428,73 @@ export default function ImportPage() {
     const file = e.dataTransfer.files?.[0];
     if (file) processFile(file);
   }, [processFile]);
+
+  // ── Sidebar drop-to-import: consume pending import on mount ──
+  useEffect(() => {
+    if (sidebarDropConsumed.current) return;
+    const pending = consumePendingImport();
+    if (!pending) return;
+    sidebarDropConsumed.current = true;
+
+    // Process the file
+    processFile(pending.file);
+
+    // Set account (will trigger profile auto-load via handleAccountChange)
+    handleAccountChange(pending.accountId);
+
+    // Show toast
+    toast.info(`Importing to ${pending.accountName}`, { duration: 2000 });
+
+    // Skip to mapping step (auto-advance to filter/preview will happen
+    // via the effect below once file + profile are ready)
+    setStep("mapping");
+    setPendingAutoAdvance(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-advance when sidebar drop + profile are both ready
+  useEffect(() => {
+    if (!pendingAutoAdvance) return;
+    if (!fileContent || !accountId) return;
+
+    // For MT940, go straight to preview
+    if (format === "MT940") {
+      const result = parseMT940(fileContent);
+      handleGoToPreview(
+        result.transactions,
+        result.errors.map((msg, i) => ({ row: i, message: msg }))
+      );
+      setPendingAutoAdvance(false);
+      return;
+    }
+
+    // For CSV: if we have a saved profile AND parsed CSV data, auto-advance
+    if (format === "CSV" && savedProfileLoaded && csvHeaders.length > 0) {
+      // Trigger Ophelia-free filter step (profile already loaded mapping)
+      handleGoToFilter();
+      setPendingAutoAdvance(false);
+      return;
+    }
+
+    // CSV without saved profile: stay on mapping (Ophelia will trigger)
+    if (format === "CSV" && csvHeaders.length > 0 && !savedProfileLoaded) {
+      // Trigger Ophelia analysis for first-time import
+      const sampleLines = fileContent
+        .split("\n")
+        .filter((l) => l.trim().length > 0)
+        .slice(0, 30)
+        .join("\n");
+      setOpheliaLoading(true);
+      setOpheliaAnalysis(null);
+      analyzeFileMutation.mutate({
+        rawContent: sampleLines,
+        filename: fileName,
+        delimiter,
+      });
+      setPendingAutoAdvance(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAutoAdvance, fileContent, accountId, format, savedProfileLoaded, csvHeaders.length]);
 
   // Derive filterable columns (low cardinality only)
   const filterableColumns = useMemo(() => {

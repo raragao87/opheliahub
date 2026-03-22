@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
@@ -14,6 +14,7 @@ import { fromCents, parseToCents } from "@/lib/money";
 import { ChevronDown, ChevronRight, Plus, Upload } from "lucide-react";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
+import { useImportDrop } from "@/lib/import-drop-context";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -175,6 +176,72 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const isEditable = (groupKey: SidebarGroupKey) =>
     groupKey === "ILLIQUID";
 
+  // ── Drag-and-drop import ──────────────────────────────────
+  const { setPendingImport } = useImportDrop();
+  const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  // Global file-drag detection
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) {
+        dragCounterRef.current++;
+        setIsFileDragActive(true);
+      }
+    };
+    const handleDragLeave = () => {
+      dragCounterRef.current--;
+      if (dragCounterRef.current === 0) {
+        setIsFileDragActive(false);
+      }
+    };
+    const handleDrop = () => {
+      dragCounterRef.current = 0;
+      setIsFileDragActive(false);
+      setDragOverAccountId(null);
+    };
+    // Prevent browser default file-open behavior
+    const prevent = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("dragenter", handleDragEnter);
+    document.addEventListener("dragleave", handleDragLeave);
+    document.addEventListener("drop", handleDrop);
+    document.addEventListener("dragover", prevent);
+    document.addEventListener("drop", prevent);
+    return () => {
+      document.removeEventListener("dragenter", handleDragEnter);
+      document.removeEventListener("dragleave", handleDragLeave);
+      document.removeEventListener("drop", handleDrop);
+      document.removeEventListener("dragover", prevent);
+      document.removeEventListener("drop", prevent);
+    };
+  }, []);
+
+  const handleAccountDrop = useCallback((e: React.DragEvent, item: SidebarItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverAccountId(null);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    setPendingImport({
+      accountId: item.id,
+      accountName: item.name,
+      file,
+    });
+    router.push("/transactions/import");
+    onNavigate?.();
+  }, [setPendingImport, router, onNavigate]);
+
+  /** Only LIQUID accounts (checking, savings, credit card, cash) are drop targets */
+  const isDroppable = (groupKey: SidebarGroupKey) => groupKey === "LIQUID";
+
   const isLoading = accountsQuery.isLoading;
   const totalPending = Object.values(pendingByAccount).reduce((sum, n) => sum + n, 0);
 
@@ -222,6 +289,15 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-4 bg-muted rounded animate-pulse" />
           ))}
+        </div>
+      )}
+
+      {/* Global drag hint */}
+      {isFileDragActive && (
+        <div className="mx-3 mb-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-1.5 text-center">
+          <p className="text-[11px] text-primary/70 font-medium">
+            {t(lang, "sidebar.dropToImport")}
+          </p>
         </div>
       )}
 
@@ -276,17 +352,19 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                   const isActive = activeAccountId === item.id;
                   const canEdit = isEditable(group.key);
                   const isEditingThis = editingItemId === item.id;
+                  const canDrop = isDroppable(group.key);
+                  const isDragTarget = dragOverAccountId === item.id;
 
-                  return (
+                  const linkContent = (
                     <Link
-                      key={item.id}
                       href={item.href}
                       onClick={onNavigate}
                       className={cn(
                         "group/account flex items-center justify-between rounded-md px-3 py-1.5 text-sm transition-colors ml-5",
                         isActive
                           ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                        isDragTarget && "ring-2 ring-primary ring-inset"
                       )}
                     >
                       <span className="min-w-0 flex-1 flex items-center gap-1">
@@ -301,48 +379,84 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                             {pendingByAccount[item.id]}
                           </span>
                         )}
+                        {isDragTarget && (
+                          <Upload className="h-3 w-3 text-primary shrink-0 ml-auto" />
+                        )}
                       </span>
 
-                      {isEditingThis ? (
-                        <input
-                          ref={editInputRef}
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={(e) => handleEditKeyDown(e, item)}
-                          onBlur={handleEditBlur}
-                          onClick={(e) => e.preventDefault()}
-                          className="w-20 text-xs text-right bg-background border border-border rounded px-1.5 py-0.5 font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                      ) : canEdit ? (
-                        <button
-                          type="button"
-                          onClick={(e) => startEditing(item, e)}
-                          className="cursor-pointer hover:opacity-70"
-                          title="Click to update balance"
-                        >
-                          <MoneyDisplay
-                            amount={item.balance}
-                            currency={item.currency}
-                            className={cn(
-                              "text-xs shrink-0 ml-2",
-                              isActive && "text-primary-foreground"
-                            )}
-                            colorize={!isActive}
-                          />
-                        </button>
-                      ) : (
-                        <MoneyDisplay
-                          amount={item.balance}
-                          currency={item.currency}
-                          className={cn(
-                            "text-xs shrink-0 ml-2",
-                            isActive && "text-primary-foreground"
+                      {!isDragTarget && (
+                        <>
+                          {isEditingThis ? (
+                            <input
+                              ref={editInputRef}
+                              type="text"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => handleEditKeyDown(e, item)}
+                              onBlur={handleEditBlur}
+                              onClick={(e) => e.preventDefault()}
+                              className="w-20 text-xs text-right bg-background border border-border rounded px-1.5 py-0.5 font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          ) : canEdit ? (
+                            <button
+                              type="button"
+                              onClick={(e) => startEditing(item, e)}
+                              className="cursor-pointer hover:opacity-70"
+                              title="Click to update balance"
+                            >
+                              <MoneyDisplay
+                                amount={item.balance}
+                                currency={item.currency}
+                                className={cn(
+                                  "text-xs shrink-0 ml-2",
+                                  isActive && "text-primary-foreground"
+                                )}
+                                colorize={!isActive}
+                              />
+                            </button>
+                          ) : (
+                            <MoneyDisplay
+                              amount={item.balance}
+                              currency={item.currency}
+                              className={cn(
+                                "text-xs shrink-0 ml-2",
+                                isActive && "text-primary-foreground"
+                              )}
+                              colorize={!isActive}
+                            />
                           )}
-                          colorize={!isActive}
-                        />
+                        </>
                       )}
                     </Link>
+                  );
+
+                  if (!canDrop) {
+                    return <div key={item.id}>{linkContent}</div>;
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="relative"
+                      onDragOver={(e) => {
+                        if (!e.dataTransfer.types.includes("Files")) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDragOverAccountId(item.id);
+                      }}
+                      onDragEnter={(e) => {
+                        if (!e.dataTransfer.types.includes("Files")) return;
+                        e.preventDefault();
+                        setDragOverAccountId(item.id);
+                      }}
+                      onDragLeave={(e) => {
+                        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                        setDragOverAccountId(null);
+                      }}
+                      onDrop={(e) => handleAccountDrop(e, item)}
+                    >
+                      {linkContent}
+                    </div>
                   );
                 })}
               </div>

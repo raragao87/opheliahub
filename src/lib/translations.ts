@@ -314,6 +314,10 @@ const translations = {
     "import.dismissAll": "Dismiss all",
     "import.deleteDuplicate": "Delete duplicate",
     "import.notDuplicate": "Not a duplicate",
+    // Sidebar — Drop to import
+    "sidebar.dropToImport": "Drop file on an account to import",
+    "sidebar.dropHere": "Drop to import",
+    "import.loadedFromSidebar": "Importing to {account}",
   },
 
   pt: {
@@ -629,6 +633,10 @@ const translations = {
     "import.dismissAll": "Dispensar todos",
     "import.deleteDuplicate": "Apagar duplicado",
     "import.notDuplicate": "Não é duplicado",
+    // Sidebar — Drop to import
+    "sidebar.dropToImport": "Arraste um ficheiro para uma conta para importar",
+    "sidebar.dropHere": "Largar para importar",
+    "import.loadedFromSidebar": "A importar para {account}",
   },
 
   ro: {
@@ -944,6 +952,10 @@ const translations = {
     "import.dismissAll": "Respinge toate",
     "import.deleteDuplicate": "Șterge duplicatul",
     "import.notDuplicate": "Nu este duplicat",
+    // Sidebar — Drop to import
+    "sidebar.dropToImport": "Trage un fișier pe un cont pentru a importa",
+    "sidebar.dropHere": "Lasă pentru a importa",
+    "import.loadedFromSidebar": "Se importă în {account}",
   },
 
   nl: {
@@ -1259,6 +1271,10 @@ const translations = {
     "import.dismissAll": "Alles negeren",
     "import.deleteDuplicate": "Duplicaat verwijderen",
     "import.notDuplicate": "Geen duplicaat",
+    // Sidebar — Drop to import
+    "sidebar.dropToImport": "Sleep een bestand naar een rekening om te importeren",
+    "sidebar.dropHere": "Laat los om te importeren",
+    "import.loadedFromSidebar": "Importeren naar {account}",
   },
 } as const;
 

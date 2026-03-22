@@ -11,6 +11,7 @@ import { OwnershipProvider } from "@/lib/ownership-context";
 import { UserPreferencesProvider } from "@/lib/user-preferences-context";
 import { Toaster } from "sonner";
 import { OpheliaChatProvider } from "@/lib/ophelia/chat-context";
+import { ImportDropProvider } from "@/lib/import-drop-context";
 import superjson from "superjson";
 
 function getBaseUrl() {
@@ -37,9 +38,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <TRPCProvider queryClient={queryClient} trpcClient={trpcClient}>
           <OwnershipProvider>
             <UserPreferencesProvider>
-              <OpheliaChatProvider>
-                {children}
-              </OpheliaChatProvider>
+              <ImportDropProvider>
+                <OpheliaChatProvider>
+                  {children}
+                </OpheliaChatProvider>
+              </ImportDropProvider>
               <Toaster position="bottom-right" richColors closeButton />
             </UserPreferencesProvider>
           </OwnershipProvider>
