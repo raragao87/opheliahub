@@ -4,6 +4,7 @@ import { analyzeFileStructure, enrichTransactions, isOpheliaEnabled } from "@/li
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
 import { extractFromUnknown } from "@/lib/ophelia/extractFromUnknown";
 import { visibleTransactionsWhere } from "@/lib/privacy";
+import { extractDisplayName } from "@/lib/recurring";
 
 export const opheliaRouter = router({
   /**
@@ -237,5 +238,44 @@ export const opheliaRouter = router({
     .mutation(async ({ input }) => {
       if (!isOpheliaEnabled()) return null;
       return extractFromUnknown(input.rawContent, input.filename);
+    }),
+
+  /**
+   * Backfill: apply Ophelia display names to existing transactions that still
+   * show the raw bank text. Only updates when the user hasn't manually renamed.
+   * Safe to run multiple times (idempotent).
+   */
+  applyOpheliaDisplayNames: householdProcedure
+    .mutation(async ({ ctx }) => {
+      const transactions = await ctx.prisma.transaction.findMany({
+        where: {
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          opheliaDisplayName: { not: null },
+        },
+        select: {
+          id: true,
+          description: true,
+          displayName: true,
+          opheliaDisplayName: true,
+        },
+      });
+
+      let updated = 0;
+      for (const tx of transactions) {
+        const autoExtractedName = extractDisplayName(tx.description);
+        const userHasCustomName = tx.displayName !== null
+          && tx.displayName !== autoExtractedName
+          && tx.displayName !== tx.description;
+
+        if (!userHasCustomName && tx.opheliaDisplayName && tx.displayName !== tx.opheliaDisplayName) {
+          await ctx.prisma.transaction.update({
+            where: { id: tx.id },
+            data: { displayName: tx.opheliaDisplayName },
+          });
+          updated++;
+        }
+      }
+
+      return { updated, scanned: transactions.length };
     }),
 });

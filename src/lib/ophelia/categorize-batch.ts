@@ -1,5 +1,6 @@
 import "server-only";
 import type { PrismaClient } from "@prisma/client";
+import { extractDisplayName } from "@/lib/recurring";
 import { enrichTransactions } from "./enrichTransactions";
 import { isOpheliaEnabled } from "./provider";
 
@@ -96,6 +97,7 @@ export async function categorizeTransactionBatch(
         select: {
           id: true,
           description: true,
+          displayName: true,
           amount: true,
           date: true,
           visibility: true,
@@ -312,6 +314,17 @@ export async function categorizeTransactionBatch(
           retryNeeded.push({ tx, localIndex: retryNeeded.length });
         }
 
+        // Determine if we should auto-apply the Ophelia display name.
+        // Auto-apply when the user hasn't manually set a custom name.
+        const autoExtractedName = extractDisplayName(tx.description);
+        const userHasCustomName = tx.displayName !== null
+          && tx.displayName !== autoExtractedName
+          && tx.displayName !== tx.description;
+        const shouldAutoApplyDisplayName =
+          result?.suggestedDisplayName
+          && !userHasCustomName
+          && result.suggestedDisplayName.length > 0;
+
         try {
           await prisma.transaction.update({
             where: { id: tx.id },
@@ -320,6 +333,7 @@ export async function categorizeTransactionBatch(
               opheliaConfidence: safeCategoryId ? (result?.categoryConfidence ?? null) : null,
               opheliaDisplayName: result?.suggestedDisplayName ?? null,
               opheliaProcessedAt: now,
+              ...(shouldAutoApplyDisplayName ? { displayName: result!.suggestedDisplayName } : {}),
             },
           });
           if (result) {

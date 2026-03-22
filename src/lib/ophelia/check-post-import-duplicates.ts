@@ -16,7 +16,7 @@ export async function checkPostImportDuplicates(
   // Fetch all transactions from the newly imported batch
   const imported = await prisma.transaction.findMany({
     where: { importBatchId: batchId },
-    select: { id: true, date: true, amount: true, description: true, displayName: true },
+    select: { id: true, date: true, amount: true, description: true, displayName: true, opheliaDisplayName: true },
   });
 
   if (imported.length === 0) return;
@@ -41,7 +41,7 @@ export async function checkPostImportDuplicates(
         { userId },
       ],
     },
-    select: { id: true, date: true, amount: true, description: true, displayName: true },
+    select: { id: true, date: true, amount: true, description: true, displayName: true, opheliaDisplayName: true },
   });
 
   if (existing.length === 0) return;
@@ -58,10 +58,12 @@ export async function checkPostImportDuplicates(
       const dayDiff = Math.abs(imp.date.getTime() - ex.date.getTime());
       if (dayDiff > 86400000) continue; // more than 1 day apart
 
-      // Skip if descriptions are obviously the same (these were caught by fast check)
-      const descA = imp.description.toLowerCase().slice(0, 20);
-      const descB = ex.description.toLowerCase().slice(0, 20);
-      if (descA.includes(descB) || descB.includes(descA)) continue;
+      // Skip if any name variant is obviously the same (these were caught by fast check).
+      // Compare all available names (description, displayName, opheliaDisplayName).
+      const namesA = [imp.description, imp.displayName, imp.opheliaDisplayName].filter(Boolean).map(n => n!.toLowerCase().slice(0, 20));
+      const namesB = [ex.description, ex.displayName, ex.opheliaDisplayName].filter(Boolean).map(n => n!.toLowerCase().slice(0, 20));
+      const obviousDuplicate = namesA.some(a => namesB.some(b => a.includes(b) || b.includes(a)));
+      if (obviousDuplicate) continue;
 
       candidates.push({ importedTx: imp, existingTx: ex });
     }
@@ -76,12 +78,14 @@ export async function checkPostImportDuplicates(
       date: imp.date.toISOString().slice(0, 10),
       description: imp.description,
       amount: imp.amount,
+      ...(imp.opheliaDisplayName ? { opheliaDisplayName: imp.opheliaDisplayName } : {}),
     },
     existingTransaction: {
       date: ex.date.toISOString().slice(0, 10),
       description: ex.description,
       amount: ex.amount,
       displayName: ex.displayName ?? ex.description,
+      ...(ex.opheliaDisplayName ? { opheliaDisplayName: ex.opheliaDisplayName } : {}),
     },
   }));
 
