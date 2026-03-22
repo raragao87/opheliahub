@@ -204,7 +204,8 @@ export const trackerRouter = router({
 
       for (const [catId, amount] of categoryActualMap) {
         if (catId && incomeCategoryIdSet.has(catId)) {
-          incomeMap.set(catId, Math.abs(amount));
+          // Income: keep raw amount (positive = received, negative = deductions/corrections)
+          incomeMap.set(catId, amount);
         } else {
           // Expense categories and uncategorized — store as positive (abs)
           spendingMap.set(catId, Math.abs(amount));
@@ -261,7 +262,7 @@ export const trackerRouter = router({
 
         // Add income categories not already added
         for (const [catId, incomeActual] of incomeMap) {
-          if (incomeActual <= 0) continue;
+          if (incomeActual === 0) continue;
           const id = catId as string | null;
           if (addedIds.has(id)) continue;
           categories.push({

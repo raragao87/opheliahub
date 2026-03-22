@@ -51,6 +51,7 @@ export const transactionRouter = router({
         amountMin: z.number().int().optional(),
         amountMax: z.number().int().optional(),
         liquidOnly: z.boolean().optional(),
+        excludeTransfers: z.boolean().optional(),
         limit: z.number().int().min(1).max(100).default(50),
         cursor: z.string().nullish(),
       })
@@ -149,6 +150,10 @@ export const transactionRouter = router({
           // Liquid-only: separate AND entry to avoid conflicting with privacy account filter
           ...(input.liquidOnly
             ? [{ account: { type: { in: LIQUID_ACCOUNT_TYPES } } }]
+            : []),
+          // Exclude transfers (used by tracker drill-down to match budget calculation)
+          ...(input.excludeTransfers
+            ? [{ type: { not: "TRANSFER" as const } }]
             : []),
           // Accrual date filter: effective budget date (accrualDate ?? date).
           // Used by the tracker drill-down. Initial balance is always exempt.

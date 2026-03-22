@@ -198,7 +198,7 @@ function buildCategoryTransactionsUrl(
   const lastDay = new Date(period.year, period.month, 0).getDate();
   const accrualDateFrom = `${period.year}-${mm}-01`;
   const accrualDateTo = `${period.year}-${mm}-${String(lastDay).padStart(2, "0")}`;
-  return `/transactions?categoryId=${categoryId}&accrualDateFrom=${accrualDateFrom}&accrualDateTo=${accrualDateTo}&liquidOnly=true`;
+  return `/transactions?categoryId=${categoryId}&accrualDateFrom=${accrualDateFrom}&accrualDateTo=${accrualDateTo}&liquidOnly=true&excludeTransfers=true`;
 }
 
 function buildFundTransactionsUrl(
@@ -1718,8 +1718,8 @@ export default function TrackerPage() {
                                     ? cat.incomeActual - cat.expenseActual
                                     : -cat.spent;
                                   const hasActual = isIncomeGroup
-                                    ? cat.incomeActual > 0 || cat.expenseActual > 0
-                                    : cat.spent > 0;
+                                    ? cat.incomeActual !== 0 || cat.expenseActual !== 0
+                                    : cat.spent !== 0;
                                   return hasActual ? (
                                     <Link
                                       href={buildCategoryTransactionsUrl(cat.id, period)}
