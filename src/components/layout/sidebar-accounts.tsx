@@ -182,7 +182,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const [isFileDragActive, setIsFileDragActive] = useState(false);
   const dragCounterRef = useRef(0);
 
-  // Global file-drag detection
+  // Global file-drag detection (visual hint only — does NOT preventDefault)
   useEffect(() => {
     const handleDragEnter = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) {
@@ -196,29 +196,20 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
         setIsFileDragActive(false);
       }
     };
-    const handleDrop = () => {
+    const handleDragEnd = () => {
       dragCounterRef.current = 0;
       setIsFileDragActive(false);
       setDragOverAccountId(null);
     };
-    // Prevent browser default file-open behavior
-    const prevent = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes("Files")) {
-        e.preventDefault();
-      }
-    };
 
     document.addEventListener("dragenter", handleDragEnter);
     document.addEventListener("dragleave", handleDragLeave);
-    document.addEventListener("drop", handleDrop);
-    document.addEventListener("dragover", prevent);
-    document.addEventListener("drop", prevent);
+    // Reset visual state on any drop (whether handled by sidebar or not)
+    document.addEventListener("drop", handleDragEnd);
     return () => {
       document.removeEventListener("dragenter", handleDragEnter);
       document.removeEventListener("dragleave", handleDragLeave);
-      document.removeEventListener("drop", handleDrop);
-      document.removeEventListener("dragover", prevent);
-      document.removeEventListener("drop", prevent);
+      document.removeEventListener("drop", handleDragEnd);
     };
   }, []);
 

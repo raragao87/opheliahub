@@ -152,6 +152,11 @@ export default function ImportPage() {
   const { consumePendingImport } = useImportDrop();
   const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
   const sidebarDropConsumed = useRef(false);
+  const [pendingSidebarDrop, setPendingSidebarDrop] = useState<{
+    accountId: string;
+    accountName: string;
+    file: File;
+  } | null>(null);
 
   const commitMutation = useMutation(
     trpc.import.commit.mutationOptions()
@@ -435,24 +440,30 @@ export default function ImportPage() {
     const pending = consumePendingImport();
     if (!pending) return;
     sidebarDropConsumed.current = true;
-
-    // Process the file
+    setPendingSidebarDrop(pending);
+    // Process the file immediately (FileReader is async, will update state)
     processFile(pending.file);
-
-    // Set account (will trigger profile auto-load via handleAccountChange)
-    handleAccountChange(pending.accountId);
-
-    // Show toast
     toast.info(`Importing to ${pending.accountName}`, { duration: 2000 });
-
-    // Skip to mapping step (auto-advance to filter/preview will happen
-    // via the effect below once file + profile are ready)
     setStep("mapping");
-    setPendingAutoAdvance(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-advance when sidebar drop + profile are both ready
+  // Once accounts data is loaded AND we have a pending sidebar drop, set the account
+  useEffect(() => {
+    if (!pendingSidebarDrop) return;
+    if (!accountsQuery.data) return; // wait for accounts to load
+
+    const drop = pendingSidebarDrop;
+    setPendingSidebarDrop(null);
+
+    // handleAccountChange is async (loads profile) — wait for it before auto-advancing
+    handleAccountChange(drop.accountId).then(() => {
+      setPendingAutoAdvance(true);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSidebarDrop, accountsQuery.data]);
+
+  // Auto-advance when sidebar drop + file + profile are all ready
   useEffect(() => {
     if (!pendingAutoAdvance) return;
     if (!fileContent || !accountId) return;
@@ -468,31 +479,30 @@ export default function ImportPage() {
       return;
     }
 
-    // For CSV: if we have a saved profile AND parsed CSV data, auto-advance
-    if (format === "CSV" && savedProfileLoaded && csvHeaders.length > 0) {
-      // Trigger Ophelia-free filter step (profile already loaded mapping)
+    // For CSV: need headers to be parsed first
+    if (csvHeaders.length === 0) return;
+
+    // CSV with saved profile: auto-advance to filter
+    if (savedProfileLoaded) {
       handleGoToFilter();
       setPendingAutoAdvance(false);
       return;
     }
 
-    // CSV without saved profile: stay on mapping (Ophelia will trigger)
-    if (format === "CSV" && csvHeaders.length > 0 && !savedProfileLoaded) {
-      // Trigger Ophelia analysis for first-time import
-      const sampleLines = fileContent
-        .split("\n")
-        .filter((l) => l.trim().length > 0)
-        .slice(0, 30)
-        .join("\n");
-      setOpheliaLoading(true);
-      setOpheliaAnalysis(null);
-      analyzeFileMutation.mutate({
-        rawContent: sampleLines,
-        filename: fileName,
-        delimiter,
-      });
-      setPendingAutoAdvance(false);
-    }
+    // CSV without saved profile: trigger Ophelia and stay on mapping
+    const sampleLines = fileContent
+      .split("\n")
+      .filter((l) => l.trim().length > 0)
+      .slice(0, 30)
+      .join("\n");
+    setOpheliaLoading(true);
+    setOpheliaAnalysis(null);
+    analyzeFileMutation.mutate({
+      rawContent: sampleLines,
+      filename: fileName,
+      delimiter,
+    });
+    setPendingAutoAdvance(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAutoAdvance, fileContent, accountId, format, savedProfileLoaded, csvHeaders.length]);
 
