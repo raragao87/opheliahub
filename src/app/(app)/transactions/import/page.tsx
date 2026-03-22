@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -124,13 +124,30 @@ export default function ImportPage() {
   const [displayNameOverrides, setDisplayNameOverrides] = useState<Record<number, string>>({});
   const [editingDisplayNameIdx, setEditingDisplayNameIdx] = useState<number | null>(null);
 
+  // Profile persistence
+  const [savedProfileLoaded, setSavedProfileLoaded] = useState(false);
+
+  // Smart duplicate detection state
+  type DuplicateFlag = "duplicate" | "sameAmount" | "similar" | null;
+  const [duplicateFlags, setDuplicateFlags] = useState<DuplicateFlag[]>([]);
+  const [importContextData, setImportContextData] = useState<{
+    lastTransactionDate: string | null;
+    lastImportDate: string | null;
+    lastImportFileName: string | null;
+    lastImportRowCount: number;
+    overlapDays: number;
+    hasGap: boolean;
+    gapStart: string | null;
+    gapEnd: string | null;
+    dateComparison: { date: string; inFile: number; inDb: number }[];
+  } | null>(null);
+
+  // Drag-and-drop
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
   const commitMutation = useMutation(
-    trpc.import.commit.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
-        router.push("/transactions");
-      },
-    })
+    trpc.import.commit.mutationOptions()
   );
 
   const checkDuplicatesMutation = useMutation(
@@ -140,6 +157,10 @@ export default function ImportPage() {
         setFuzzyDuplicates(data.fuzzy ?? []);
       },
     })
+  );
+
+  const saveProfileMutation = useMutation(
+    trpc.import.saveProfile.mutationOptions()
   );
 
   const [unknownFormatError, setUnknownFormatError] = useState<string | null>(null);
@@ -276,10 +297,7 @@ export default function ImportPage() {
     return field?.confidence;
   };
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFile = useCallback((file: File) => {
     const name = file.name.toLowerCase();
     setFileName(file.name);
     // Reset Ophelia state whenever a new file is chosen
@@ -379,6 +397,31 @@ export default function ImportPage() {
     reader.readAsText(file);
   }, []);
 
+  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  }, [processFile]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  }, [processFile]);
+
   // Derive filterable columns (low cardinality only)
   const filterableColumns = useMemo(() => {
     const MAX_CARDINALITY = 50;
@@ -424,29 +467,82 @@ export default function ImportPage() {
     });
   }, [csvRows, columnFilters]);
 
-  const handleGoToFilter = () => {
+  const handleGoToFilter = useCallback(async () => {
     const initialFilters: Record<string, Set<string>> = {};
     for (const { column, values } of filterableColumns) {
       initialFilters[column] = new Set(values);
     }
+
+    // If we have a saved profile with filter settings, restore them
+    if (savedProfileLoaded && accountId) {
+      try {
+        const profile = await queryClient.fetchQuery(
+          trpc.import.getProfile.queryOptions({ accountId, format })
+        );
+        if (profile?.columnFilters) {
+          const savedFilters = profile.columnFilters as Record<string, string[]>;
+          // Saved filters store EXCLUDED values. Reconstruct selected values.
+          for (const [column, excludedValues] of Object.entries(savedFilters)) {
+            const allValues = initialFilters[column];
+            if (allValues) {
+              const excluded = new Set(excludedValues);
+              const selected = new Set<string>();
+              for (const v of allValues) {
+                if (!excluded.has(v)) selected.add(v);
+              }
+              initialFilters[column] = selected;
+            }
+          }
+        }
+      } catch {
+        // Ignore — use default all-selected
+      }
+    }
+
     setColumnFilters(initialFilters);
     setCollapsedFilterColumns(new Set());
     setStep("filter");
-  };
+  }, [filterableColumns, savedProfileLoaded, accountId, format, queryClient, trpc.import.getProfile]);
 
-  /** When the user picks an account, auto-set visibility and amount inversion from the account type. */
-  const handleAccountChange = (newAccountId: string) => {
+  /** When the user picks an account, auto-set visibility, load saved profile. */
+  const handleAccountChange = useCallback(async (newAccountId: string) => {
     setAccountId(newAccountId);
+    setSavedProfileLoaded(false);
     const account = (accountsQuery.data ?? []).find((a) => a.id === newAccountId);
     if (account) {
       setDefaultVisibility(account.ownership as "SHARED" | "PERSONAL");
       const meta = ACCOUNT_TYPE_META[account.type];
       setInvertAmounts(meta?.isLiability ?? false);
     }
-  };
 
-  /** Transition to the preview step. */
-  const handleGoToPreview = (txs: ParsedTransaction[], errs: { row: number; message: string }[]) => {
+    // Try to load a saved profile for this account+format
+    if (newAccountId) {
+      try {
+        const profile = await queryClient.fetchQuery(
+          trpc.import.getProfile.queryOptions({ accountId: newAccountId, format })
+        );
+        if (profile) {
+          const savedMapping = profile.columnMapping as Record<string, string>;
+          setMapping({
+            date: savedMapping.date ?? "",
+            description: savedMapping.description ?? "",
+            amount: savedMapping.amount ?? "",
+            debit: savedMapping.debit,
+            credit: savedMapping.credit,
+          });
+          setAmountMode(profile.amountMode as "single" | "split");
+          setInvertAmounts(profile.invertAmounts);
+          setDelimiter(profile.delimiter);
+          setSavedProfileLoaded(true);
+        }
+      } catch {
+        // No profile found — first import for this account
+      }
+    }
+  }, [accountsQuery.data, format, queryClient, trpc.import.getProfile]);
+
+  /** Transition to the preview step with smart duplicate detection. */
+  const handleGoToPreview = useCallback(async (txs: ParsedTransaction[], errs: { row: number; message: string }[]) => {
     setTransactions(txs);
     setErrors(errs);
     setCategoryOverrides({});
@@ -455,12 +551,125 @@ export default function ImportPage() {
     setDuplicateIndices([]);
     setFuzzyDuplicates([]);
     setImportAnywayIndices(new Set());
-    // Note: opheliaFallbackWarning is intentionally NOT reset here —
-    // extractUnknownMutation sets it before calling handleGoToPreview.
+    setDuplicateFlags([]);
+    setImportContextData(null);
     setStep("preview");
 
-    // Kick off duplicate check in the background — badges appear once it resolves
-    if (accountId && txs.length > 0) {
+    if (!accountId || txs.length === 0) return;
+
+    // Get date range from imported transactions
+    const dates = txs.map((t) => t.date.getTime());
+    const importMinDate = new Date(Math.min(...dates));
+    const importMaxDate = new Date(Math.max(...dates));
+
+    // Fetch import context for smart duplicate detection
+    try {
+      const context = await queryClient.fetchQuery(
+        trpc.import.getAccountImportContext.queryOptions({
+          accountId,
+          importMinDate,
+          importMaxDate,
+        })
+      );
+
+      // Build date comparison summary
+      const importCountsByDate = new Map<string, number>();
+      for (const tx of txs) {
+        const key = tx.date.toISOString().slice(0, 10);
+        importCountsByDate.set(key, (importCountsByDate.get(key) ?? 0) + 1);
+      }
+
+      const dbCountsByDate = new Map<string, number>();
+      for (const g of context.existingCountsByDate) {
+        const key = new Date(g.date).toISOString().slice(0, 10);
+        dbCountsByDate.set(key, g._count);
+      }
+
+      const allDates = new Set([...importCountsByDate.keys(), ...dbCountsByDate.keys()]);
+      const dateComparison = [...allDates].sort().map((date) => ({
+        date,
+        inFile: importCountsByDate.get(date) ?? 0,
+        inDb: dbCountsByDate.get(date) ?? 0,
+      }));
+
+      const overlapDays = dateComparison.filter((d) => d.inFile > 0 && d.inDb > 0).length;
+
+      // Gap detection
+      const lastTxDate = context.lastTransactionDate ? new Date(context.lastTransactionDate) : null;
+      let hasGap = false;
+      let gapStart: string | null = null;
+      let gapEnd: string | null = null;
+      if (lastTxDate) {
+        const dayAfterLast = new Date(lastTxDate);
+        dayAfterLast.setDate(dayAfterLast.getDate() + 1);
+        const dayDiff = Math.floor((importMinDate.getTime() - dayAfterLast.getTime()) / 86400000);
+        if (dayDiff > 7) {
+          hasGap = true;
+          gapStart = dayAfterLast.toISOString().slice(0, 10);
+          gapEnd = new Date(importMinDate.getTime() - 86400000).toISOString().slice(0, 10);
+        }
+      }
+
+      setImportContextData({
+        lastTransactionDate: context.lastTransactionDate ? new Date(context.lastTransactionDate).toISOString().slice(0, 10) : null,
+        lastImportDate: context.lastImportDate ? new Date(context.lastImportDate).toISOString().slice(0, 10) : null,
+        lastImportFileName: context.lastImportFileName,
+        lastImportRowCount: context.lastImportRowCount,
+        overlapDays,
+        hasGap,
+        gapStart,
+        gapEnd,
+        dateComparison,
+      });
+
+      // Fast deterministic duplicate flagging
+      const existingByDate = new Map<string, { amount: number; description: string }[]>();
+      for (const ex of context.existingInOverlap) {
+        const key = new Date(ex.date).toISOString().slice(0, 10);
+        if (!existingByDate.has(key)) existingByDate.set(key, []);
+        existingByDate.get(key)!.push({ amount: ex.amount, description: ex.description });
+      }
+
+      const flags: DuplicateFlag[] = txs.map((tx) => {
+        const txDate = tx.date.toISOString().slice(0, 10);
+        const sameDateExisting = existingByDate.get(txDate) ?? [];
+
+        // Check exact match: same date + same amount
+        const amountMatch = sameDateExisting.find((ex) => ex.amount === tx.amount);
+        if (amountMatch) {
+          // Check description similarity
+          const descA = tx.description.toLowerCase().slice(0, 20);
+          const descB = amountMatch.description.toLowerCase().slice(0, 20);
+          if (descA.includes(descB) || descB.includes(descA)) {
+            return "duplicate"; // Same date + amount + similar description
+          }
+          return "sameAmount"; // Same date + amount but different description
+        }
+
+        // Check adjacent date (±1 day)
+        const prevDate = new Date(tx.date.getTime() - 86400000).toISOString().slice(0, 10);
+        const nextDate = new Date(tx.date.getTime() + 86400000).toISOString().slice(0, 10);
+        const adjacentExisting = [
+          ...(existingByDate.get(prevDate) ?? []),
+          ...(existingByDate.get(nextDate) ?? []),
+        ];
+        if (adjacentExisting.some((ex) => ex.amount === tx.amount)) {
+          return "similar";
+        }
+
+        return null;
+      });
+
+      setDuplicateFlags(flags);
+
+      // Auto-mark definite duplicates
+      const definiteDups = flags
+        .map((f, i) => (f === "duplicate" ? i : -1))
+        .filter((i) => i >= 0);
+      setDuplicateIndices(definiteDups);
+
+    } catch {
+      // Fallback: use the old checkDuplicates mutation
       checkDuplicatesMutation.mutate({
         accountId,
         transactions: txs.map((tx) => ({
@@ -472,7 +681,7 @@ export default function ImportPage() {
         })),
       });
     }
-  };
+  }, [accountId, queryClient, trpc.import.getAccountImportContext, checkDuplicatesMutation]);
 
   const handleCommit = () => {
     // Combined skip set: definite duplicates + AI/user-flagged fuzzy duplicates
@@ -507,6 +716,37 @@ export default function ImportPage() {
         tagIds: tagOverrides[originalIdx] ?? [],
         externalId: tx.externalId,
       })),
+    }, {
+      onSuccess: () => {
+        // Auto-save the import profile for next time
+        if (accountId && format === "CSV") {
+          // Serialize column filters: store EXCLUDED values
+          const serializedFilters: Record<string, string[]> = {};
+          for (const fc of filterableColumns) {
+            const selected = columnFilters[fc.column];
+            if (selected && selected.size < fc.values.length) {
+              const excluded = fc.values.filter((v) => !selected.has(v));
+              if (excluded.length > 0) {
+                serializedFilters[fc.column] = excluded;
+              }
+            }
+          }
+
+          saveProfileMutation.mutate({
+            accountId,
+            format,
+            columnMapping: mapping as unknown as Record<string, string>,
+            dateFormat: opheliaAnalysis?.dateFormat ?? "dd/MM/yyyy",
+            delimiter,
+            amountMode,
+            invertAmounts,
+            columnFilters: Object.keys(serializedFilters).length > 0 ? serializedFilters : undefined,
+          });
+        }
+
+        queryClient.invalidateQueries();
+        router.push("/transactions");
+      },
     });
   };
 
@@ -546,19 +786,31 @@ export default function ImportPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Bank File</Label>
-              <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+                  isDragging
+                    ? "border-primary bg-primary/5"
+                    : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                )}
+              >
+                <Upload className={cn("h-8 w-8 mx-auto mb-2", isDragging ? "text-primary" : "text-muted-foreground")} />
                 <p className="text-sm text-muted-foreground mb-2">
-                  Drag and drop or click to upload
+                  {isDragging ? "Drop your file here" : "Drag and drop or click to upload"}
                 </p>
-                <p className="text-xs text-muted-foreground mb-4">
+                <p className="text-xs text-muted-foreground">
                   CSV, TSV, Excel (.xls/.xlsx), MT940 supported. Other formats? Let Ophelia try!
                 </p>
-                <Input
+                <input
+                  ref={fileInputRef}
                   type="file"
                   accept="*"
                   onChange={handleFileUpload}
-                  className="max-w-xs mx-auto"
+                  className="hidden"
                 />
               </div>
             </div>
@@ -618,8 +870,8 @@ export default function ImportPage() {
               <Button
                 onClick={() => {
                   setStep("mapping");
-                  if (format === "CSV") {
-                    // Kick off Ophelia file analysis immediately
+                  if (format === "CSV" && !savedProfileLoaded) {
+                    // First import — kick off Ophelia file analysis immediately
                     const sampleLines = fileContent
                       .split("\n")
                       .filter((l) => l.trim().length > 0)
@@ -633,11 +885,12 @@ export default function ImportPage() {
                       delimiter,
                     });
                   }
+                  // If savedProfileLoaded, skip Ophelia — mapping is already pre-filled
                 }}
                 disabled={!fileContent}
                 className="w-full"
               >
-                Next: Analyse File
+                Next: {savedProfileLoaded ? "Review Mapping" : "Analyse File"}
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             )}
@@ -695,11 +948,43 @@ export default function ImportPage() {
               <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 shrink-0" />
-                  <span className="font-medium">Ophelia pre-filled the mapping — review and adjust if needed.</span>
+                  <span className="font-medium">
+                    {savedProfileLoaded
+                      ? "Ophelia confirms your column mapping looks correct."
+                      : "Ophelia pre-filled the mapping — review and adjust if needed."}
+                  </span>
                 </div>
                 {opheliaAnalysis.additionalNotes && (
                   <p className="mt-1 pl-6 text-xs opacity-80">{opheliaAnalysis.additionalNotes}</p>
                 )}
+              </div>
+            )}
+            {/* Saved profile banner + re-analyse button */}
+            {format === "CSV" && savedProfileLoaded && !opheliaLoading && !opheliaAnalysis && (
+              <div className="flex items-center justify-between rounded-lg border border-muted p-3">
+                <div className="text-sm text-muted-foreground">
+                  Settings restored from your last import for this account.
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const sampleLines = fileContent
+                      .split("\n")
+                      .filter((l) => l.trim().length > 0)
+                      .slice(0, 30)
+                      .join("\n");
+                    setOpheliaLoading(true);
+                    analyzeFileMutation.mutate({
+                      rawContent: sampleLines,
+                      filename: fileName,
+                      delimiter,
+                    });
+                  }}
+                  disabled={opheliaLoading}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Re-analyse with Ophelia
+                </Button>
               </div>
             )}
 
@@ -915,6 +1200,11 @@ export default function ImportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {savedProfileLoaded && (
+              <div className="rounded-lg border border-muted p-2.5 text-xs text-muted-foreground">
+                Filter settings restored from last import. Adjust if needed.
+              </div>
+            )}
             <div className="flex gap-4 items-start">
               {/* Left: filter accordion panels */}
               <div className="w-56 flex-shrink-0">
@@ -1204,6 +1494,94 @@ export default function ImportPage() {
               </div>
             )}
 
+            {/* Import context — date range analysis */}
+            {importContextData && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950 space-y-2">
+                {importContextData.lastImportFileName && (
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Last import: &ldquo;{importContextData.lastImportFileName}&rdquo; on {importContextData.lastImportDate} ({importContextData.lastImportRowCount} transactions)
+                  </p>
+                )}
+                {importContextData.lastTransactionDate && (
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Latest transaction date in this account: {importContextData.lastTransactionDate}
+                  </p>
+                )}
+                {transactions.length > 0 && (
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    This file covers: {transactions[0].date.toISOString().slice(0, 10)} &ndash; {transactions[transactions.length - 1].date.toISOString().slice(0, 10)}
+                  </p>
+                )}
+                {importContextData.overlapDays > 0 ? (
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="h-3 w-3 inline mr-1" />
+                    {importContextData.overlapDays} day(s) overlap with existing data — check for duplicates below
+                  </p>
+                ) : importContextData.lastTransactionDate ? (
+                  <p className="text-xs font-medium text-green-700 dark:text-green-300">
+                    <Check className="h-3 w-3 inline mr-1" />
+                    No overlap with existing data — looking good!
+                  </p>
+                ) : null}
+                {importContextData.hasGap && importContextData.gapStart && importContextData.gapEnd && (
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="h-3 w-3 inline mr-1" />
+                    Gap detected: no data between {importContextData.gapStart} and {importContextData.gapEnd}. Did you miss a file?
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Quick actions for duplicate handling */}
+            {duplicateFlags.some((f) => f !== null) && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const dups = duplicateFlags
+                      .map((f, i) => (f === "duplicate" ? i : -1))
+                      .filter((i) => i >= 0);
+                    setDuplicateIndices(dups);
+                    setImportAnywayIndices(new Set());
+                  }}
+                >
+                  Skip all likely duplicates ({duplicateFlags.filter((f) => f === "duplicate").length})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Skip all transactions on dates that are fully covered in DB
+                    const skipDates = new Set(
+                      (importContextData?.dateComparison ?? [])
+                        .filter((d) => d.inDb > 0 && d.inDb >= d.inFile)
+                        .map((d) => d.date)
+                    );
+                    const dups = transactions
+                      .map((tx, i) => skipDates.has(tx.date.toISOString().slice(0, 10)) ? i : -1)
+                      .filter((i) => i >= 0);
+                    setDuplicateIndices(dups);
+                    setImportAnywayIndices(new Set());
+                  }}
+                >
+                  Import only new dates
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDuplicateIndices([]);
+                    setFuzzyDuplicates([]);
+                    const allIndices = new Set(transactions.map((_, i) => i));
+                    setImportAnywayIndices(allIndices);
+                  }}
+                >
+                  Import all
+                </Button>
+              </div>
+            )}
+
             <div className="max-h-[560px] overflow-y-auto space-y-1">
               {transactions.slice(0, 50).map((tx, i) => {
                 const extracted = displayNameOverrides[i] ?? extractDisplayName(tx.description);
@@ -1212,6 +1590,7 @@ export default function ImportPage() {
                 const effectiveTags = tagOverrides[i] ?? [];
 
                 const isDefiniteDup = duplicateIndices.includes(i);
+                const fastFlag = duplicateFlags[i] ?? null;
                 const fuzzy = fuzzyDuplicates.find((f) => f.index === i);
                 const isHighConfAIDup = fuzzy?.isDuplicate === true && (fuzzy.confidence ?? 0) > 0.85;
                 const isLowConfAIDup = fuzzy?.isDuplicate === true && (fuzzy.confidence ?? 0) <= 0.85;
@@ -1227,7 +1606,7 @@ export default function ImportPage() {
                     className={`py-2 px-2 rounded ${
                       isDefiniteDup || isHighConfAIDup
                         ? "bg-muted/40 opacity-60"
-                        : isLowConfAIDup || isUndecidedFuzzy
+                        : isLowConfAIDup || isUndecidedFuzzy || fastFlag === "sameAmount"
                         ? "bg-yellow-50 dark:bg-yellow-950/50"
                         : "hover:bg-muted/30"
                     }`}
@@ -1339,7 +1718,13 @@ export default function ImportPage() {
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <MoneyDisplay amount={tx.amount} className="text-sm font-medium" />
                         {isDefiniteDup && (
-                          <Badge variant="secondary" className="text-xs">Duplicate</Badge>
+                          <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">Duplicate</Badge>
+                        )}
+                        {!isDefiniteDup && fastFlag === "sameAmount" && (
+                          <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:text-amber-400">Same amount</Badge>
+                        )}
+                        {!isDefiniteDup && fastFlag === "similar" && (
+                          <Badge variant="outline" className="text-xs border-yellow-200 text-yellow-600 dark:text-yellow-400">Similar</Badge>
                         )}
                         {(isHighConfAIDup || isLowConfAIDup || isUndecidedFuzzy) && (
                           <div className="flex flex-col items-end gap-0.5">

@@ -90,6 +90,7 @@ model User {
   netWorthSnapshots     NetWorthSnapshot[]
   funds                 Fund[]
   chatConversations     ChatConversation[]
+  duplicateAlerts       DuplicateAlert[]
 
   @@map("users")
 }
@@ -201,9 +202,10 @@ model FinancialAccount {
   owner          User             @relation(fields: [ownerId], references: [id])
   household      Household?       @relation(fields: [householdId], references: [id])
   transactions   Transaction[]
-  importProfiles ImportProfile[]
-  recurringRules RecurringRule[]
-  linkedFunds    Fund[]
+  importProfiles  ImportProfile[]
+  duplicateAlerts DuplicateAlert[]
+  recurringRules  RecurringRule[]
+  linkedFunds     Fund[]
 
   @@index([ownerId])
   @@index([householdId])
@@ -535,12 +537,42 @@ model ImportProfile {
   dateFormat    String      @default("dd/MM/yyyy")
   delimiter     String      @default(",")
   skipRows      Int         @default(0)
+
+  // Import settings memory
+  amountMode    String      @default("single") // "single" | "split"
+  invertAmounts Boolean     @default(false)
+
+  // Filter step memory
+  columnFilters Json?       // { "columnName": ["excluded_value1", "excluded_value2"] }
+
   createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   account       FinancialAccount @relation(fields: [accountId], references: [id])
   importBatches ImportBatch[]
 
+  @@unique([accountId, format])
   @@map("import_profiles")
+}
+
+model DuplicateAlert {
+  id              String   @id @default(cuid())
+  userId          String
+  accountId       String
+  importBatchId   String
+  transactionIdA  String   // the imported transaction
+  transactionIdB  String   // the existing transaction it might duplicate
+  confidence      Float    // 0-1
+  reasoning       String?
+  status          String   @default("pending") // "pending" | "dismissed" | "resolved"
+  createdAt       DateTime @default(now())
+
+  user    User             @relation(fields: [userId], references: [id])
+  account FinancialAccount @relation(fields: [accountId], references: [id])
+
+  @@index([userId, status])
+  @@index([accountId])
+  @@map("duplicate_alerts")
 }
 
 // ─── RECURRING RULES ────────────────────────────────────────────────

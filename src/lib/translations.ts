@@ -281,6 +281,39 @@ const translations = {
     "dashboard.ofTarget": "of {target} target",
     "dashboard.noTarget": "No target set",
     "dashboard.completed": "Target reached",
+
+    // Import — Drag & Drop
+    "import.dropHere": "Drop your file here",
+    "import.dragOrClick": "Drag and drop or click to upload",
+    // Import — Profile persistence
+    "import.settingsRestored": "Settings restored from your last import for this account.",
+    "import.filtersRestored": "Filter settings restored from last import. Adjust if needed.",
+    "import.reanalyse": "Re-analyse with Ophelia",
+    "import.opheliaConfirms": "Ophelia confirms your column mapping looks correct.",
+    "import.opheliaSuggests": "Ophelia suggests different columns — review below.",
+    "import.applySuggestions": "Apply Ophelia's suggestions",
+    "import.keepCurrent": "Keep current",
+    // Import — Date range analysis
+    "import.lastImport": "Last import",
+    "import.latestDate": "Latest transaction date in this account",
+    "import.fileCoverage": "This file covers",
+    "import.daysOverlap": "{count} day(s) overlap with existing data — check for duplicates below",
+    "import.noOverlap": "No overlap with existing data — looking good!",
+    "import.gapDetected": "Gap detected: no data between {start} and {end}. Did you miss a file?",
+    // Import — Duplicate detection
+    "import.skipAllDuplicates": "Skip all likely duplicates",
+    "import.importOnlyNew": "Import only new dates",
+    "import.importAll": "Import all",
+    "import.duplicate": "Duplicate",
+    "import.sameAmount": "Same amount",
+    "import.similar": "Similar",
+    // Import — Background check
+    "import.duplicateAlertTitle": "Possible duplicate transactions found",
+    "import.duplicateAlertDesc": "Ophelia found {count} possible duplicates from your last import.",
+    "import.reviewDuplicates": "Review",
+    "import.dismissAll": "Dismiss all",
+    "import.deleteDuplicate": "Delete duplicate",
+    "import.notDuplicate": "Not a duplicate",
   },
 
   pt: {
@@ -563,6 +596,39 @@ const translations = {
     "dashboard.ofTarget": "de {target} meta",
     "dashboard.noTarget": "Sem meta definida",
     "dashboard.completed": "Meta atingida",
+
+    // Import — Drag & Drop
+    "import.dropHere": "Solte o ficheiro aqui",
+    "import.dragOrClick": "Arraste e solte ou clique para carregar",
+    // Import — Profile persistence
+    "import.settingsRestored": "Definições restauradas da última importação para esta conta.",
+    "import.filtersRestored": "Filtros restaurados da última importação. Ajuste se necessário.",
+    "import.reanalyse": "Re-analisar com Ophelia",
+    "import.opheliaConfirms": "Ophelia confirma que o mapeamento de colunas está correto.",
+    "import.opheliaSuggests": "Ophelia sugere colunas diferentes — reveja abaixo.",
+    "import.applySuggestions": "Aplicar sugestões da Ophelia",
+    "import.keepCurrent": "Manter atual",
+    // Import — Date range analysis
+    "import.lastImport": "Última importação",
+    "import.latestDate": "Data da transação mais recente nesta conta",
+    "import.fileCoverage": "Este ficheiro abrange",
+    "import.daysOverlap": "{count} dia(s) de sobreposição com dados existentes — verifique duplicados abaixo",
+    "import.noOverlap": "Sem sobreposição com dados existentes — tudo bem!",
+    "import.gapDetected": "Lacuna detetada: sem dados entre {start} e {end}. Faltou um ficheiro?",
+    // Import — Duplicate detection
+    "import.skipAllDuplicates": "Ignorar todos os duplicados prováveis",
+    "import.importOnlyNew": "Importar apenas datas novas",
+    "import.importAll": "Importar tudo",
+    "import.duplicate": "Duplicado",
+    "import.sameAmount": "Mesmo valor",
+    "import.similar": "Semelhante",
+    // Import — Background check
+    "import.duplicateAlertTitle": "Possíveis transações duplicadas encontradas",
+    "import.duplicateAlertDesc": "Ophelia encontrou {count} possíveis duplicados da última importação.",
+    "import.reviewDuplicates": "Rever",
+    "import.dismissAll": "Dispensar todos",
+    "import.deleteDuplicate": "Apagar duplicado",
+    "import.notDuplicate": "Não é duplicado",
   },
 
   ro: {
@@ -844,7 +910,40 @@ const translations = {
     "dashboard.fundAllocations": "Aloc\u0103ri fonduri",
     "dashboard.ofTarget": "din {target} \u021bint\u0103",
     "dashboard.noTarget": "F\u0103r\u0103 \u021bint\u0103 stabilit\u0103",
-    "dashboard.completed": "\u021aint\u0103 atins\u0103",
+    "dashboard.completed": "Țintă atinsă",
+
+    // Import — Drag & Drop
+    "import.dropHere": "Plasează fișierul aici",
+    "import.dragOrClick": "Trage și plasează sau click pentru a încărca",
+    // Import — Profile persistence
+    "import.settingsRestored": "Setările au fost restaurate din ultimul import pentru acest cont.",
+    "import.filtersRestored": "Filtrele au fost restaurate din ultimul import. Ajustează dacă este necesar.",
+    "import.reanalyse": "Re-analizează cu Ophelia",
+    "import.opheliaConfirms": "Ophelia confirmă că maparea coloanelor este corectă.",
+    "import.opheliaSuggests": "Ophelia sugerează coloane diferite — verifică mai jos.",
+    "import.applySuggestions": "Aplică sugestiile Ophelia",
+    "import.keepCurrent": "Păstrează curent",
+    // Import — Date range analysis
+    "import.lastImport": "Ultimul import",
+    "import.latestDate": "Data ultimei tranzacții din acest cont",
+    "import.fileCoverage": "Acest fișier acoperă",
+    "import.daysOverlap": "{count} zi(le) suprapunere cu datele existente — verifică duplicatele mai jos",
+    "import.noOverlap": "Fără suprapunere cu datele existente — totul e bine!",
+    "import.gapDetected": "Lacună detectată: fără date între {start} și {end}. Ai omis un fișier?",
+    // Import — Duplicate detection
+    "import.skipAllDuplicates": "Sari peste toate duplicatele probabile",
+    "import.importOnlyNew": "Importă doar datele noi",
+    "import.importAll": "Importă tot",
+    "import.duplicate": "Duplicat",
+    "import.sameAmount": "Aceeași sumă",
+    "import.similar": "Similar",
+    // Import — Background check
+    "import.duplicateAlertTitle": "Tranzacții posibil duplicate găsite",
+    "import.duplicateAlertDesc": "Ophelia a găsit {count} posibile duplicate din ultimul import.",
+    "import.reviewDuplicates": "Revizuiește",
+    "import.dismissAll": "Respinge toate",
+    "import.deleteDuplicate": "Șterge duplicatul",
+    "import.notDuplicate": "Nu este duplicat",
   },
 
   nl: {
@@ -1127,6 +1226,39 @@ const translations = {
     "dashboard.ofTarget": "van {target} doel",
     "dashboard.noTarget": "Geen doel ingesteld",
     "dashboard.completed": "Doel bereikt",
+
+    // Import — Drag & Drop
+    "import.dropHere": "Sleep je bestand hierheen",
+    "import.dragOrClick": "Sleep en laat vallen of klik om te uploaden",
+    // Import — Profile persistence
+    "import.settingsRestored": "Instellingen hersteld van je laatste import voor dit account.",
+    "import.filtersRestored": "Filterinstellingen hersteld van laatste import. Pas aan indien nodig.",
+    "import.reanalyse": "Opnieuw analyseren met Ophelia",
+    "import.opheliaConfirms": "Ophelia bevestigt dat de kolomtoewijzing correct is.",
+    "import.opheliaSuggests": "Ophelia stelt andere kolommen voor — bekijk hieronder.",
+    "import.applySuggestions": "Ophelia's suggesties toepassen",
+    "import.keepCurrent": "Huidige behouden",
+    // Import — Date range analysis
+    "import.lastImport": "Laatste import",
+    "import.latestDate": "Laatste transactiedatum in dit account",
+    "import.fileCoverage": "Dit bestand beslaat",
+    "import.daysOverlap": "{count} dag(en) overlap met bestaande gegevens — controleer op duplicaten hieronder",
+    "import.noOverlap": "Geen overlap met bestaande gegevens — ziet er goed uit!",
+    "import.gapDetected": "Gat gedetecteerd: geen gegevens tussen {start} en {end}. Bestand gemist?",
+    // Import — Duplicate detection
+    "import.skipAllDuplicates": "Alle waarschijnlijke duplicaten overslaan",
+    "import.importOnlyNew": "Alleen nieuwe datums importeren",
+    "import.importAll": "Alles importeren",
+    "import.duplicate": "Duplicaat",
+    "import.sameAmount": "Zelfde bedrag",
+    "import.similar": "Vergelijkbaar",
+    // Import — Background check
+    "import.duplicateAlertTitle": "Mogelijke dubbele transacties gevonden",
+    "import.duplicateAlertDesc": "Ophelia vond {count} mogelijke duplicaten van je laatste import.",
+    "import.reviewDuplicates": "Bekijken",
+    "import.dismissAll": "Alles negeren",
+    "import.deleteDuplicate": "Duplicaat verwijderen",
+    "import.notDuplicate": "Geen duplicaat",
   },
 } as const;
 

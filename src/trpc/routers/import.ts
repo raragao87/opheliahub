@@ -6,6 +6,7 @@ import { extractDisplayName } from "@/lib/recurring";
 import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
 import { isOpheliaEnabled } from "@/lib/ophelia";
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
+import { checkPostImportDuplicates } from "@/lib/ophelia/check-post-import-duplicates";
 
 const parsedTransactionSchema = z.object({
   date: z.coerce.date(),
@@ -271,27 +272,146 @@ export const importRouter = router({
         categorizeTransactionBatch(ctx.prisma, ctx.householdId, 50).catch((err) =>
           console.error("[Ophelia] Post-import categorization error:", err)
         );
+
+        // Background duplicate check for transactions that slipped through
+        checkPostImportDuplicates(ctx.prisma, ctx.userId, ctx.householdId, input.accountId, result.batchId)
+          .catch((err) => console.error("[Ophelia] Post-import duplicate check error:", err));
       }
 
       return result;
     }),
 
-  /** Save or update an import profile */
+  /** Save or update an import profile (upsert per account+format) */
   saveProfile: householdProcedure
     .input(
       z.object({
-        name: z.string().min(1).max(100),
         accountId: z.string(),
         format: z.enum(["CSV", "MT940"]),
         columnMapping: z.record(z.string(), z.string()),
         dateFormat: z.string().default("dd/MM/yyyy"),
         delimiter: z.string().default(","),
         skipRows: z.number().int().min(0).default(0),
+        amountMode: z.enum(["single", "split"]).default("single"),
+        invertAmounts: z.boolean().default(false),
+        columnFilters: z.record(z.string(), z.array(z.string())).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.importProfile.create({
-        data: input,
+      const { accountId, format, columnFilters, ...rest } = input;
+      return ctx.prisma.importProfile.upsert({
+        where: {
+          accountId_format: { accountId, format },
+        },
+        create: {
+          name: `${format} profile`,
+          accountId,
+          format,
+          ...rest,
+          columnFilters: columnFilters ?? undefined,
+        },
+        update: {
+          ...rest,
+          columnFilters: columnFilters ?? undefined,
+        },
+      });
+    }),
+
+  /** Get the saved profile for an account + format */
+  getProfile: householdProcedure
+    .input(z.object({ accountId: z.string(), format: z.enum(["CSV", "MT940"]) }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.importProfile.findUnique({
+        where: {
+          accountId_format: { accountId: input.accountId, format: input.format },
+        },
+      });
+    }),
+
+  /** Get import context for smart duplicate detection */
+  getAccountImportContext: householdProcedure
+    .input(
+      z.object({
+        accountId: z.string(),
+        importMinDate: z.coerce.date().optional(),
+        importMaxDate: z.coerce.date().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const lastTransaction = await ctx.prisma.transaction.findFirst({
+        where: {
+          accountId: input.accountId,
+          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+          isInitialBalance: false,
+        },
+        orderBy: { date: "desc" },
+        select: { date: true },
+      });
+
+      const lastBatch = await ctx.prisma.importBatch.findFirst({
+        where: { accountId: input.accountId, status: "COMPLETED" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true, importedRows: true, fileName: true },
+      });
+
+      // If we have a date range, get existing transaction counts per date for overlap detection
+      let existingCountsByDate: { date: Date; _count: number }[] = [];
+      let existingInOverlap: { date: Date; amount: number; description: string; id: string }[] = [];
+
+      if (input.importMinDate && input.importMaxDate) {
+        existingCountsByDate = (await ctx.prisma.transaction.groupBy({
+          by: ["date"],
+          where: {
+            accountId: input.accountId,
+            date: { gte: input.importMinDate, lte: input.importMaxDate },
+            ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+            isInitialBalance: false,
+          },
+          _count: true,
+        })).map((g) => ({ date: g.date, _count: g._count }));
+
+        // Fetch individual transactions in overlap range for amount matching
+        existingInOverlap = await ctx.prisma.transaction.findMany({
+          where: {
+            accountId: input.accountId,
+            date: { gte: input.importMinDate, lte: input.importMaxDate },
+            ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
+            isInitialBalance: false,
+          },
+          select: { id: true, date: true, amount: true, description: true },
+          orderBy: { date: "asc" },
+        });
+      }
+
+      return {
+        lastTransactionDate: lastTransaction?.date ?? null,
+        lastImportDate: lastBatch?.createdAt ?? null,
+        lastImportFileName: lastBatch?.fileName ?? null,
+        lastImportRowCount: lastBatch?.importedRows ?? 0,
+        existingCountsByDate,
+        existingInOverlap,
+      };
+    }),
+
+  /** Dismiss duplicate alerts */
+  dismissDuplicateAlerts: householdProcedure
+    .input(z.object({ alertIds: z.array(z.string()).optional(), accountId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const where: Record<string, unknown> = { userId: ctx.userId, status: "pending" };
+      if (input.alertIds) where.id = { in: input.alertIds };
+      if (input.accountId) where.accountId = input.accountId;
+      return ctx.prisma.duplicateAlert.updateMany({
+        where,
+        data: { status: "dismissed" },
+      });
+    }),
+
+  /** Get pending duplicate alerts for the current user */
+  getDuplicateAlerts: householdProcedure
+    .query(async ({ ctx }) => {
+      return ctx.prisma.duplicateAlert.findMany({
+        where: { userId: ctx.userId, status: "pending" },
+        orderBy: { createdAt: "desc" },
+        take: 50,
       });
     }),
 
