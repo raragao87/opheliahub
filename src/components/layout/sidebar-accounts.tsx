@@ -211,8 +211,11 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
     };
     const handleDragLeave = () => {
       dragCounterRef.current--;
-      if (dragCounterRef.current === 0) {
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0;
+        dragCounterByAccount.current.clear();
         setIsFileDragActive(false);
+        setDragOverAccountId(null);
       }
     };
     const handleDrop = (e: DragEvent) => {
