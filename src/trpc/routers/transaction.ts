@@ -71,7 +71,7 @@ export const transactionRouter = router({
                 : {}),
             // Category filter: special modes override all, then array takes precedence
             ...(input.opheliaUnconfirmed
-              ? { categoryId: null, fundId: null, opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null } }
+              ? { categoryId: null, fundId: null, opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null }, type: { not: "TRANSFER" as const } }
               : input.uncategorized
                 ? { categoryId: null, fundId: null, OR: [{ opheliaCategoryId: null }, { opheliaCategory: null }] }
                 : input.categoryIds?.length && input.fundIds?.length
