@@ -22,13 +22,10 @@ import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
  *   (cron expression: 0,15,30,45 * * * *)
  *   pm2 save
  *
- * For Vercel, configure the cron in vercel.json.
  */
 export async function POST(req: Request) {
-  // Verify the cron secret.
-  // Accepts OPHELIA_CRON_SECRET (explicit) or CRON_SECRET (Vercel auto-injects
-  // this for cron jobs and sends it as "Authorization: Bearer <CRON_SECRET>").
-  const secret = env.OPHELIA_CRON_SECRET ?? process.env.CRON_SECRET;
+  // Verify the cron secret (set in .env as OPHELIA_CRON_SECRET)
+  const secret = env.OPHELIA_CRON_SECRET;
   const authHeader = req.headers.get("authorization");
   const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 

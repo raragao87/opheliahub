@@ -1214,10 +1214,7 @@ export default function TrackerPage() {
           <div key={tableType} className="rounded-lg border bg-card overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col /> {/* Name column — takes remaining space */}
-                <col style={{ width: '130px' }} /> {/* Budget */}
-                <col style={{ width: '130px' }} /> {/* Actual */}
-                <col style={{ width: '150px' }} /> {/* Available */}
+                <col /><col style={{ width: '130px' }} /><col style={{ width: '130px' }} /><col style={{ width: '150px' }} />
               </colgroup>
               <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
@@ -2039,10 +2036,7 @@ export default function TrackerPage() {
         <div className="rounded-lg border bg-card overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col /> {/* Name column — takes remaining space */}
-                <col style={{ width: '130px' }} /> {/* Budget */}
-                <col style={{ width: '130px' }} /> {/* Actual */}
-                <col style={{ width: '150px' }} /> {/* Available */}
+                <col /><col style={{ width: '130px' }} /><col style={{ width: '130px' }} /><col style={{ width: '150px' }} />
               </colgroup>
               <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
