@@ -15,6 +15,7 @@ import { feedbackRouter } from "./routers/feedback";
 import { fundRouter } from "./routers/fund";
 import { chatRouter } from "./routers/chat";
 import { duplicatesRouter } from "./routers/duplicates";
+import { notesRouter } from "./routers/notes";
 
 export const appRouter = router({
   auth: authRouter,
@@ -33,6 +34,7 @@ export const appRouter = router({
   fund: fundRouter,
   chat: chatRouter,
   duplicates: duplicatesRouter,
+  notes: notesRouter,
 });
 
 export type AppRouter = typeof appRouter;

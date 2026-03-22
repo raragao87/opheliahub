@@ -91,6 +91,7 @@ model User {
   funds                 Fund[]
   chatConversations     ChatConversation[]
   duplicateAlerts       DuplicateAlert[]
+  notes                 Note[]
 
   @@map("users")
 }
@@ -833,4 +834,19 @@ model NetWorthSnapshot {
   @@index([householdId, userId])
   @@index([year, month])
   @@map("net_worth_snapshots")
+}
+
+// ─── NOTES ─────────────────────────────────────────────────────────
+
+model Note {
+  id        String   @id @default(cuid())
+  content   String   @default("") @db.Text
+  userId    String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notes")
 }

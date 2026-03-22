@@ -327,6 +327,13 @@ const translations = {
     "sidebar.dropToImport": "Drop file on an account to import",
     "sidebar.dropHere": "Drop to import",
     "import.loadedFromSidebar": "Importing to {account}",
+    // Notes
+    "notes.title": "Notes",
+    "notes.placeholder": "Jot down notes during your budget review...",
+    "notes.new": "New note",
+    "notes.saved": "Saved",
+    "notes.saving": "Saving...",
+    "notes.close": "Close notes",
   },
 
   pt: {
@@ -655,6 +662,13 @@ const translations = {
     "sidebar.dropToImport": "Arraste um ficheiro para uma conta para importar",
     "sidebar.dropHere": "Largar para importar",
     "import.loadedFromSidebar": "A importar para {account}",
+    // Notes
+    "notes.title": "Notas",
+    "notes.placeholder": "Anote ideias durante a revisão do orçamento...",
+    "notes.new": "Nova nota",
+    "notes.saved": "Guardado",
+    "notes.saving": "A guardar...",
+    "notes.close": "Fechar notas",
   },
 
   ro: {
@@ -983,6 +997,13 @@ const translations = {
     "sidebar.dropToImport": "Trage un fișier pe un cont pentru a importa",
     "sidebar.dropHere": "Lasă pentru a importa",
     "import.loadedFromSidebar": "Se importă în {account}",
+    // Notes
+    "notes.title": "Notițe",
+    "notes.placeholder": "Notează idei în timpul revizuirii bugetului...",
+    "notes.new": "Notiță nouă",
+    "notes.saved": "Salvat",
+    "notes.saving": "Se salvează...",
+    "notes.close": "Închide notițele",
   },
 
   nl: {
@@ -1311,6 +1332,13 @@ const translations = {
     "sidebar.dropToImport": "Sleep een bestand naar een rekening om te importeren",
     "sidebar.dropHere": "Laat los om te importeren",
     "import.loadedFromSidebar": "Importeren naar {account}",
+    // Notes
+    "notes.title": "Notities",
+    "notes.placeholder": "Noteer ideeën tijdens je budgetbespreking...",
+    "notes.new": "Nieuwe notitie",
+    "notes.saved": "Opgeslagen",
+    "notes.saving": "Opslaan...",
+    "notes.close": "Notities sluiten",
   },
 } as const;
 

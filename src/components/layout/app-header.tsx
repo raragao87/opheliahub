@@ -21,6 +21,7 @@ import { SidebarAccounts } from "./sidebar-accounts";
 import { FeedbackDialog } from "@/components/shared/feedback-dialog";
 import { QuickCalculator } from "@/components/shared/quick-calculator";
 import { OpheliaChat } from "@/components/ophelia/ophelia-chat";
+import { QuickNotes } from "@/components/shared/quick-notes";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { useTRPC } from "@/trpc/client";
 import { useQuery } from "@tanstack/react-query";
@@ -83,6 +84,7 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
 
         {/* Ophelia chat + Quick calculator */}
         <OpheliaChat />
+        <QuickNotes />
         <QuickCalculator />
 
         {/* User menu dropdown */}
