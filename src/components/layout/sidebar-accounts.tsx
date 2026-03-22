@@ -83,6 +83,13 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   });
   const pendingByAccount = pendingByAccountQuery.data?.byAccount ?? {};
 
+  // Fetch per-account pending duplicate alert counts (poll every 30s)
+  const duplicatesByAccountQuery = useQuery({
+    ...trpc.duplicates.pendingByAccount.queryOptions({ visibility }),
+    refetchInterval: 30_000,
+  });
+  const duplicatesByAccount = duplicatesByAccountQuery.data?.byAccount ?? {};
+
   const visibleAccounts = allAccounts.filter(
     (a) =>
       a.isActive &&
@@ -192,6 +199,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
   const [isFileDragActive, setIsFileDragActive] = useState(false);
   const dragCounterRef = useRef(0);
+  const dragCounterByAccount = useRef(new Map<string, number>());
 
   // Global file-drag detection + prevent browser default file-open behavior
   useEffect(() => {
@@ -208,20 +216,16 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
       }
     };
     const handleDrop = (e: DragEvent) => {
-      // Prevent browser from opening the file if dropped outside a handled target.
-      // This fires AFTER React synthetic handlers (which are on the root element).
-      if (hasFileDrag(e)) {
-        e.preventDefault();
-      }
+      // ALWAYS prevent default — Safari needs this to not open files.
+      e.preventDefault();
       dragCounterRef.current = 0;
+      dragCounterByAccount.current.clear();
       setIsFileDragActive(false);
       setDragOverAccountId(null);
     };
-    // Must preventDefault on dragover for drop events to fire on page elements
+    // ALWAYS prevent default on dragover — required for drop events to fire in Safari.
     const handleDragOver = (e: DragEvent) => {
-      if (hasFileDrag(e)) {
-        e.preventDefault();
-      }
+      e.preventDefault();
     };
 
     document.addEventListener("dragenter", handleDragEnter);
@@ -258,6 +262,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
 
   const isLoading = accountsQuery.isLoading;
   const totalPending = Object.values(pendingByAccount).reduce((sum, n) => sum + n, 0);
+  const totalDuplicates = Object.values(duplicatesByAccount).reduce((sum, n) => sum + n, 0);
 
   return (
     <div className="mt-2">
@@ -274,6 +279,11 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
           {totalPending > 0 && (
             <span className="rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none">
               {totalPending}
+            </span>
+          )}
+          {totalDuplicates > 0 && (
+            <span className="rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none">
+              {totalDuplicates}
             </span>
           )}
         </div>
@@ -393,6 +403,24 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                             {pendingByAccount[item.id]}
                           </span>
                         )}
+                        {(duplicatesByAccount[item.id] ?? 0) > 0 && (
+                          <Link
+                            href={`/transactions?accountId=${item.id}&duplicates=pending`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigate?.();
+                            }}
+                            className={cn(
+                              "shrink-0 rounded-full text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none hover:opacity-80 transition-opacity",
+                              isActive
+                                ? "bg-primary-foreground/20 text-primary-foreground"
+                                : "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400"
+                            )}
+                            title={`${duplicatesByAccount[item.id]} possible duplicate${duplicatesByAccount[item.id] !== 1 ? "s" : ""} — click to review`}
+                          >
+                            {duplicatesByAccount[item.id]}
+                          </Link>
+                        )}
                         {isDragTarget && (
                           <Upload className="h-3 w-3 text-primary shrink-0 ml-auto" />
                         )}
@@ -456,18 +484,32 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                         if (!hasFileDrag(e)) return;
                         e.preventDefault();
                         e.stopPropagation();
+                        e.dataTransfer.dropEffect = "copy";
                         setDragOverAccountId(item.id);
                       }}
                       onDragEnter={(e) => {
                         if (!hasFileDrag(e)) return;
                         e.preventDefault();
-                        setDragOverAccountId(item.id);
+                        e.stopPropagation();
+                        const count = (dragCounterByAccount.current.get(item.id) ?? 0) + 1;
+                        dragCounterByAccount.current.set(item.id, count);
+                        if (count === 1) {
+                          setDragOverAccountId(item.id);
+                        }
                       }}
                       onDragLeave={(e) => {
-                        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-                        setDragOverAccountId(null);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const count = (dragCounterByAccount.current.get(item.id) ?? 1) - 1;
+                        dragCounterByAccount.current.set(item.id, Math.max(0, count));
+                        if (count <= 0) {
+                          setDragOverAccountId((prev) => prev === item.id ? null : prev);
+                        }
                       }}
-                      onDrop={(e) => handleAccountDrop(e, item)}
+                      onDrop={(e) => {
+                        dragCounterByAccount.current.set(item.id, 0);
+                        handleAccountDrop(e, item);
+                      }}
                     >
                       {linkContent}
                     </div>

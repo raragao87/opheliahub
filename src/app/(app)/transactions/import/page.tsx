@@ -147,6 +147,7 @@ export default function ImportPage() {
   // Drag-and-drop
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const dropZoneDragCounter = useRef(0);
 
   // Sidebar drop-to-import
   const { consumePendingImport } = useImportDrop();
@@ -417,18 +418,31 @@ export default function ImportPage() {
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneDragCounter.current++;
+    if (dropZoneDragCounter.current === 1) {
+      setIsDragging(true);
+    }
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    dropZoneDragCounter.current--;
+    if (dropZoneDragCounter.current === 0) {
+      setIsDragging(false);
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    dropZoneDragCounter.current = 0;
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file) processFile(file);
@@ -872,6 +886,7 @@ export default function ImportPage() {
               <Label>Bank File</Label>
               <div
                 onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
