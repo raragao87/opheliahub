@@ -434,7 +434,8 @@ export default function ImportPage() {
     e.preventDefault();
     e.stopPropagation();
     dropZoneDragCounter.current--;
-    if (dropZoneDragCounter.current === 0) {
+    if (dropZoneDragCounter.current <= 0) {
+      dropZoneDragCounter.current = 0;
       setIsDragging(false);
     }
   }, []);
