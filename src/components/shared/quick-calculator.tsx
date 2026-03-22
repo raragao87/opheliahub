@@ -67,7 +67,7 @@ function InlineCalculator({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="absolute right-0 top-full mt-1.5 z-50 w-80 rounded-lg border bg-card shadow-lg overflow-hidden">
+    <div className="absolute right-0 top-full mt-1.5 z-50 w-80 rounded-lg glass shadow-ambient overflow-hidden">
       {/* Input row */}
       <div className="flex items-center border-b">
         <div className="px-3 text-muted-foreground">
@@ -251,7 +251,7 @@ function FloatingCalculator({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed z-[100] w-[220px] rounded-xl border bg-card shadow-2xl overflow-hidden select-none"
+      className="fixed z-[100] w-[220px] rounded-xl glass shadow-ambient overflow-hidden select-none"
       style={{ left: position.x, top: position.y }}
     >
       {/* Title bar — draggable */}

@@ -66,6 +66,7 @@ model User {
   language          String     @default("en")
   defaultVisibility Visibility @default(SHARED)
   theme             String     @default("system")
+  colorTheme        String     @default("luminous")
 
   // Auth.js relations
   oauthAccounts Account[]

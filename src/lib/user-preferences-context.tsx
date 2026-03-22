@@ -10,6 +10,7 @@ interface UserPreferences {
   language: Language;
   defaultVisibility: "SHARED" | "PERSONAL";
   theme: string;
+  colorTheme: "classic" | "luminous";
 }
 
 interface UserPreferencesContextValue {
@@ -23,6 +24,7 @@ const defaultPreferences: UserPreferences = {
   language: "en",
   defaultVisibility: "SHARED",
   theme: "system",
+  colorTheme: "luminous",
 };
 
 const UserPreferencesContext = createContext<UserPreferencesContextValue>({
@@ -54,6 +56,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     language: (data?.language ?? "en") as Language,
     defaultVisibility: (data?.defaultVisibility ?? "SHARED") as "SHARED" | "PERSONAL",
     theme: data?.theme ?? "system",
+    colorTheme: (data?.colorTheme ?? "luminous") as "classic" | "luminous",
   };
 
   // Sync theme with next-themes whenever it changes
@@ -63,10 +66,21 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     }
   }, [data?.theme, setTheme]);
 
+  // Sync color theme class on <html>
+  useEffect(() => {
+    const ct = data?.colorTheme ?? "luminous";
+    const html = document.documentElement;
+    html.classList.remove("theme-classic");
+    if (ct === "classic") {
+      html.classList.add("theme-classic");
+    }
+  }, [data?.colorTheme]);
+
   const updatePreferences = (patch: Partial<UserPreferences>) => {
     mutation.mutate({
       ...patch,
       theme: patch.theme as "light" | "dark" | "system" | undefined,
+      colorTheme: patch.colorTheme as "classic" | "luminous" | undefined,
     });
   };
 

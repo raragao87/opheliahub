@@ -149,9 +149,9 @@ export function OpheliaChat() {
 
       {/* Floating chat card */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 z-50 w-[380px] max-h-[520px] sm:w-[380px] max-sm:w-[calc(100vw-2rem)] max-sm:max-h-[70vh] rounded-lg border bg-card shadow-lg flex flex-col overflow-hidden">
+        <div className="absolute right-0 top-full mt-1.5 z-50 w-[380px] max-h-[520px] sm:w-[380px] max-sm:w-[calc(100vw-2rem)] max-sm:max-h-[70vh] rounded-lg glass shadow-ambient ophelia-glow flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-outline-variant shrink-0">
             <div className="flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               <span className="text-sm font-semibold">Ophelia</span>

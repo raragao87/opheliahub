@@ -94,6 +94,10 @@ export default function SettingsPage() {
     updatePreferences({ theme });
   }
 
+  function handleColorThemeChange(colorTheme: "classic" | "luminous") {
+    updatePreferences({ colorTheme });
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -282,6 +286,28 @@ export default function SettingsPage() {
                     onClick={() => handleThemeChange(themeOption)}
                   >
                     {t(language, `theme.${themeOption}` as "theme.light" | "theme.dark" | "theme.system")}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Color Theme */}
+            <div className="space-y-2">
+              <Label>{t(language, "settings.colorTheme" as any)}</Label>
+              <p className="text-xs text-muted-foreground">{t(language, "settings.colorThemeDesc" as any)}</p>
+              <div className="flex gap-2">
+                {(["classic", "luminous"] as const).map((ct) => (
+                  <Button
+                    key={ct}
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      preferences.colorTheme === ct &&
+                        "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                    )}
+                    onClick={() => handleColorThemeChange(ct)}
+                  >
+                    {t(language, `colorTheme.${ct}` as any)}
                   </Button>
                 ))}
               </div>

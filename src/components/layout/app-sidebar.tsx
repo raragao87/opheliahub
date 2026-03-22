@@ -30,9 +30,9 @@ export function AppSidebar() {
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-      <div className="flex flex-col h-full overflow-hidden border-r bg-card">
+      <div className="flex flex-col h-full overflow-hidden bg-surface-container-low">
         {/* Logo */}
-        <div className="flex items-center h-16 flex-shrink-0 px-4 border-b">
+        <div className="flex items-center h-16 flex-shrink-0 px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-sm">OH</span>

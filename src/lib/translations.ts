@@ -57,6 +57,10 @@ const translations = {
     "theme.light": "Light",
     "theme.dark": "Dark",
     "theme.system": "System",
+    "settings.colorTheme": "Color Theme",
+    "settings.colorThemeDesc": "Choose between the classic neutral look or the Luminous Ledger design.",
+    "colorTheme.classic": "Classic",
+    "colorTheme.luminous": "Luminous",
 
     // Household
     "household.setupTitle": "Set Up Your Household",
@@ -392,6 +396,10 @@ const translations = {
     "theme.light": "Claro",
     "theme.dark": "Escuro",
     "theme.system": "Sistema",
+    "settings.colorTheme": "Tema de Cores",
+    "settings.colorThemeDesc": "Escolha entre o visual neutro clássico ou o design Luminous Ledger.",
+    "colorTheme.classic": "Clássico",
+    "colorTheme.luminous": "Luminous",
 
     // Household
     "household.setupTitle": "Configure Sua Família",
@@ -727,6 +735,10 @@ const translations = {
     "theme.light": "Luminos",
     "theme.dark": "Întunecat",
     "theme.system": "Sistem",
+    "settings.colorTheme": "Tema de Culori",
+    "settings.colorThemeDesc": "Alegeți între aspectul neutru clasic sau designul Luminous Ledger.",
+    "colorTheme.classic": "Clasic",
+    "colorTheme.luminous": "Luminous",
 
     // Household
     "household.setupTitle": "Configurează Gospodăria Ta",
@@ -1062,6 +1074,10 @@ const translations = {
     "theme.light": "Licht",
     "theme.dark": "Donker",
     "theme.system": "Systeem",
+    "settings.colorTheme": "Kleurthema",
+    "settings.colorThemeDesc": "Kies tussen de klassieke neutrale look of het Luminous Ledger ontwerp.",
+    "colorTheme.classic": "Klassiek",
+    "colorTheme.luminous": "Luminous",
 
     // Household
     "household.setupTitle": "Stel Uw Huishouden In",

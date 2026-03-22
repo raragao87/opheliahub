@@ -62,7 +62,7 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6">
+      <header className="sticky top-0 z-40 flex h-16 items-center gap-4 glass px-4 md:px-6">
         {/* Mobile menu button */}
         <Button
           variant="ghost"
@@ -176,9 +176,9 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
             className="fixed inset-0 bg-black/50"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-64 bg-card shadow-lg flex flex-col overflow-hidden">
+          <div className="fixed inset-y-0 left-0 w-64 bg-surface-container-low shadow-ambient flex flex-col overflow-hidden">
             {/* Logo */}
-            <div className="flex items-center h-16 px-4 border-b flex-shrink-0">
+            <div className="flex items-center h-16 px-4 flex-shrink-0">
               <Link
                 href="/dashboard"
                 className="flex items-center gap-2"

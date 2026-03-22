@@ -151,9 +151,9 @@ export function QuickNotes() {
 
       {/* Floating card */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 z-50 w-[320px] max-h-[420px] max-sm:w-[calc(100vw-2rem)] max-sm:max-h-[60vh] rounded-lg border bg-card shadow-lg flex flex-col overflow-hidden">
+        <div className="absolute right-0 top-full mt-1.5 z-50 w-[320px] max-h-[420px] max-sm:w-[calc(100vw-2rem)] max-sm:max-h-[60vh] rounded-lg glass shadow-ambient flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-outline-variant flex-shrink-0">
             <div className="flex items-center gap-1.5">
               <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-sm font-semibold">Notes</span>
@@ -194,7 +194,7 @@ export function QuickNotes() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end px-3 py-1.5 border-t flex-shrink-0">
+          <div className="flex items-center justify-end px-3 py-1.5 border-t border-outline-variant flex-shrink-0">
             <span className="text-[11px] text-muted-foreground flex items-center gap-1">
               {saveStatus === "saving" && (
                 <>

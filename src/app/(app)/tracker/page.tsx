@@ -77,11 +77,8 @@ function getAvailableColor(remaining: number, allocated: number, spent: number):
   return "text-red-600 dark:text-red-400";
 }
 
-function getAvailableBg(remaining: number, allocated: number, spent: number): string {
-  if (allocated === 0 && spent === 0) return "";
-  if (remaining > 0) return "bg-green-100 dark:bg-green-950/40";
-  if (remaining === 0) return "bg-yellow-100 dark:bg-yellow-950/40";
-  return "bg-red-100 dark:bg-red-950/40";
+function getAvailableBg(_remaining: number, _allocated: number, _spent: number): string {
+  return "";
 }
 
 function getRowBorder(remaining: number, allocated: number, spent: number): string {
@@ -121,13 +118,11 @@ function AvailableCell({
 
   return (
     <div className="inline-flex flex-col items-end gap-0.5">
-      <span className={cn("inline-block rounded-sm px-1.5 py-0.5", bgClass)}>
-        <MoneyDisplay
+      <MoneyDisplay
           amount={amount}
           colorize={false}
           className={cn("text-sm font-medium", colorClass)}
         />
-      </span>
       {showProgress && (
         <div className="w-16 h-1 rounded-full bg-muted overflow-hidden">
           <div
@@ -159,9 +154,6 @@ function IncomeAvailableCell({
   const colorClass = amount >= 0
     ? "text-green-600 dark:text-green-400"
     : "text-amber-600 dark:text-amber-400";
-  const bgClass = amount >= 0
-    ? "bg-green-100 dark:bg-green-950/40"
-    : "bg-amber-100 dark:bg-amber-950/40";
 
   const showProgress = allocated > 0 && incomeActual > 0;
   const pct = showProgress ? Math.min((incomeActual / allocated) * 100, 100) : 0;
@@ -169,13 +161,11 @@ function IncomeAvailableCell({
 
   return (
     <div className="inline-flex flex-col items-end gap-0.5">
-      <span className={cn("inline-block rounded-sm px-1.5 py-0.5", bgClass)}>
-        <MoneyDisplay
+      <MoneyDisplay
           amount={amount}
           colorize={false}
           className={cn("text-sm font-medium", colorClass)}
         />
-      </span>
       {showProgress && (
         <div className="w-16 h-1 rounded-full bg-muted overflow-hidden">
           <div

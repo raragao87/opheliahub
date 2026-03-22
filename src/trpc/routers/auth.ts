@@ -108,6 +108,7 @@ export const authRouter = router({
       language: z.string().optional(),
       defaultVisibility: z.enum(["SHARED", "PERSONAL"]).optional(),
       theme: z.enum(["light", "dark", "system"]).optional(),
+      colorTheme: z.enum(["classic", "luminous"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const data: Record<string, unknown> = {};
@@ -116,6 +117,7 @@ export const authRouter = router({
       if (input.language !== undefined) data.language = input.language;
       if (input.defaultVisibility !== undefined) data.defaultVisibility = input.defaultVisibility;
       if (input.theme !== undefined) data.theme = input.theme;
+      if (input.colorTheme !== undefined) data.colorTheme = input.colorTheme;
       const user = await ctx.prisma.user.update({ where: { id: ctx.userId }, data });
       return user;
     }),
@@ -123,9 +125,9 @@ export const authRouter = router({
   getPreferences: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.prisma.user.findUnique({
       where: { id: ctx.userId },
-      select: { locale: true, language: true, defaultVisibility: true, theme: true, name: true, email: true, image: true },
+      select: { locale: true, language: true, defaultVisibility: true, theme: true, colorTheme: true, name: true, email: true, image: true },
     });
-    return user ?? { locale: "nl-NL", language: "en", defaultVisibility: "SHARED" as const, theme: "system", name: null, email: null, image: null };
+    return user ?? { locale: "nl-NL", language: "en", defaultVisibility: "SHARED" as const, theme: "system", colorTheme: "luminous", name: null, email: null, image: null };
   }),
 
   deleteAccount: protectedProcedure

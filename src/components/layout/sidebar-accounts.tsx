@@ -407,11 +407,13 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                           </span>
                         )}
                         {(duplicatesByAccount[item.id] ?? 0) > 0 && (
-                          <Link
-                            href={`/transactions?accountId=${item.id}&duplicates=pending`}
+                          <button
+                            type="button"
                             onClick={(e) => {
+                              e.preventDefault();
                               e.stopPropagation();
                               onNavigate?.();
+                              router.push(`/transactions?accountId=${item.id}&duplicates=pending`);
                             }}
                             className={cn(
                               "shrink-0 rounded-full text-[9px] font-semibold px-1.5 py-0.5 tabular-nums leading-none hover:opacity-80 transition-opacity",
@@ -422,7 +424,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                             title={`${duplicatesByAccount[item.id]} possible duplicate${duplicatesByAccount[item.id] !== 1 ? "s" : ""} — click to review`}
                           >
                             {duplicatesByAccount[item.id]}
-                          </Link>
+                          </button>
                         )}
                         {isDragTarget && (
                           <Upload className="h-3 w-3 text-primary shrink-0 ml-auto" />
