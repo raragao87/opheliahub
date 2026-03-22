@@ -35,6 +35,17 @@ interface SidebarGroup {
   href: string;
 }
 
+/** Check if a drag event carries files (works with both DOMStringList and string[]) */
+function hasFileDrag(e: DragEvent | React.DragEvent): boolean {
+  const types = e.dataTransfer?.types;
+  if (!types) return false;
+  // DOMStringList (native events) has .contains(), Array (React synthetic) has .includes()
+  if ("contains" in types && typeof types.contains === "function") {
+    return types.contains("Files");
+  }
+  return Array.from(types).includes("Files");
+}
+
 // ── Component ─────────────────────────────────────────────────────
 
 interface SidebarAccountsProps {
@@ -185,7 +196,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   // Global file-drag detection + prevent browser default file-open behavior
   useEffect(() => {
     const handleDragEnter = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes("Files")) {
+      if (hasFileDrag(e)) {
         dragCounterRef.current++;
         setIsFileDragActive(true);
       }
@@ -196,16 +207,19 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
         setIsFileDragActive(false);
       }
     };
-    const handleDragEnd = (e: DragEvent) => {
-      // Prevent browser from opening the file if dropped outside a drop target
-      e.preventDefault();
+    const handleDrop = (e: DragEvent) => {
+      // Prevent browser from opening the file if dropped outside a handled target.
+      // This fires AFTER React synthetic handlers (which are on the root element).
+      if (hasFileDrag(e)) {
+        e.preventDefault();
+      }
       dragCounterRef.current = 0;
       setIsFileDragActive(false);
       setDragOverAccountId(null);
     };
-    // Must preventDefault on dragover for drop to work anywhere on the page
+    // Must preventDefault on dragover for drop events to fire on page elements
     const handleDragOver = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes("Files")) {
+      if (hasFileDrag(e)) {
         e.preventDefault();
       }
     };
@@ -213,12 +227,12 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
     document.addEventListener("dragenter", handleDragEnter);
     document.addEventListener("dragleave", handleDragLeave);
     document.addEventListener("dragover", handleDragOver);
-    document.addEventListener("drop", handleDragEnd);
+    document.addEventListener("drop", handleDrop);
     return () => {
       document.removeEventListener("dragenter", handleDragEnter);
       document.removeEventListener("dragleave", handleDragLeave);
       document.removeEventListener("dragover", handleDragOver);
-      document.removeEventListener("drop", handleDragEnd);
+      document.removeEventListener("drop", handleDrop);
     };
   }, []);
 
@@ -439,13 +453,13 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                       key={item.id}
                       className="relative"
                       onDragOver={(e) => {
-                        if (!e.dataTransfer.types.includes("Files")) return;
+                        if (!hasFileDrag(e)) return;
                         e.preventDefault();
                         e.stopPropagation();
                         setDragOverAccountId(item.id);
                       }}
                       onDragEnter={(e) => {
-                        if (!e.dataTransfer.types.includes("Files")) return;
+                        if (!hasFileDrag(e)) return;
                         e.preventDefault();
                         setDragOverAccountId(item.id);
                       }}
