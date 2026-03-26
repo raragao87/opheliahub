@@ -107,20 +107,20 @@ export const transactionRouter = router({
               : input.categoryIds?.length && input.fundIds?.length
                 ? [{ OR: [
                     { categoryId: { in: input.categoryIds } },
-                    { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
+                    { categoryId: { equals: null }, fundId: { equals: null }, opheliaCategoryId: { in: input.categoryIds } },
                     { fundId: { in: input.fundIds } },
                   ] }]
                 : input.categoryIds?.length
                   ? [{ OR: [
                       { categoryId: { in: input.categoryIds } },
-                      { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
+                      { categoryId: { equals: null }, fundId: { equals: null }, opheliaCategoryId: { in: input.categoryIds } },
                     ] }]
                   : input.fundIds?.length
                     ? [{ fundId: { in: input.fundIds } }]
                     : input.categoryId
                       ? [{ OR: [
                           { categoryId: input.categoryId },
-                          { categoryId: null, opheliaCategoryId: input.categoryId },
+                          { categoryId: { equals: null }, fundId: { equals: null }, opheliaCategoryId: input.categoryId },
                         ] }]
                       : []),
 
