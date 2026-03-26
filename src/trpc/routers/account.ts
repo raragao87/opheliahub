@@ -192,13 +192,49 @@ export const accountRouter = router({
       // Force delete: remove all transactions first, then delete account
       if (input.force) {
         return ctx.prisma.$transaction(async (tx) => {
-          // Delete transaction tags first (foreign key constraint)
+          // Get all transaction IDs in this account
+          const txnIds = await tx.transaction
+            .findMany({ where: { accountId: input.id }, select: { id: true } })
+            .then((rows) => rows.map((r) => r.id));
+
+          // Unlink transfers: null out linkedTransactionId on both sides
+          if (txnIds.length > 0) {
+            await tx.transaction.updateMany({
+              where: { accountId: input.id, linkedTransactionId: { not: null } },
+              data: { linkedTransactionId: null },
+            });
+            await tx.transaction.updateMany({
+              where: { linkedTransactionId: { in: txnIds } },
+              data: { linkedTransactionId: null },
+            });
+          }
+
+          // Delete transaction tags (FK constraint)
           await tx.transactionTag.deleteMany({
             where: { transaction: { accountId: input.id } },
           });
+
+          // Delete duplicate alerts referencing this account
+          await tx.duplicateAlert.deleteMany({
+            where: { accountId: input.id },
+          });
+
+          // Delete import profiles for this account
+          await tx.importProfile.deleteMany({
+            where: { accountId: input.id },
+          });
+
+          // Delete recurring rules for this account
+          await tx.recurringRule.deleteMany({
+            where: { accountId: input.id },
+          });
+
+          // Delete transactions
           await tx.transaction.deleteMany({
             where: { accountId: input.id },
           });
+
+          // Delete the account
           return tx.financialAccount.delete({
             where: { id: input.id },
           });

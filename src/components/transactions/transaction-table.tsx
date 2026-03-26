@@ -1154,7 +1154,7 @@ function TransactionRow({
         ) : (
           <>
             <InlineDateEdit value={txn.date} onSave={(date) => onUpdate(txn.id, { date })} />
-            <AccrualDateCell txnId={txn.id} accrualDate={txn.accrualDate ?? null} onUpdate={onUpdate} />
+            <AccrualDateCell txnId={txn.id} accrualDate={txn.accrualDate ?? null} txnDate={txn.date} onUpdate={onUpdate} />
           </>
         )}
       </td>
@@ -1307,14 +1307,21 @@ function TransactionRow({
 // ── Accrual date cell ─────────────────────────────────────────────────
 
 function AccrualDateCell({
-  txnId, accrualDate, onUpdate,
+  txnId, accrualDate, txnDate, onUpdate,
 }: {
   txnId: string;
   accrualDate: Date | string | null;
+  txnDate: Date | string;
   onUpdate: (id: string, data: Record<string, unknown>) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Default to the transaction's own date so the picker opens at the right month
+  const defaultDate = (() => {
+    const d = typeof txnDate === "string" ? new Date(txnDate) : txnDate;
+    return d.toISOString().slice(0, 10);
+  })();
 
   useEffect(() => {
     if (adding && inputRef.current) {
@@ -1347,8 +1354,18 @@ function AccrualDateCell({
       <input
         ref={inputRef}
         type="date"
+        defaultValue={defaultDate}
         onBlur={() => setAdding(false)}
-        onKeyDown={(e) => { if (e.key === "Escape") setAdding(false); }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setAdding(false);
+          if (e.key === "Enter") {
+            const val = inputRef.current?.value;
+            if (val) {
+              onUpdate(txnId, { accrualDate: new Date(val + "T12:00:00") });
+              setAdding(false);
+            }
+          }
+        }}
         onChange={(e) => {
           const val = e.target.value;
           if (val) {

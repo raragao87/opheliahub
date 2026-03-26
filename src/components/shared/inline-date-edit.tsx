@@ -30,6 +30,7 @@ export function InlineDateEdit({
 }: InlineDateEditProps) {
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const originalValue = toDateString(value);
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -38,24 +39,20 @@ export function InlineDateEdit({
     }
   }, [editing]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (val) {
-      const newDate = new Date(val + "T12:00:00");
-      setEditing(false);
-      if (toDateString(newDate) !== toDateString(value)) {
-        onSave(newDate);
-      }
-    }
-  };
-
-  const handleBlur = () => {
+  const commitValue = () => {
+    const val = inputRef.current?.value;
     setEditing(false);
+    if (val && val !== originalValue) {
+      onSave(new Date(val + "T12:00:00"));
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setEditing(false);
+    }
+    if (e.key === "Enter") {
+      commitValue();
     }
   };
 
@@ -64,9 +61,8 @@ export function InlineDateEdit({
       <input
         ref={inputRef}
         type="date"
-        defaultValue={toDateString(value)}
-        onChange={handleChange}
-        onBlur={handleBlur}
+        defaultValue={originalValue}
+        onBlur={commitValue}
         onKeyDown={handleKeyDown}
         className={cn(
           "bg-transparent border-0 border-b border-primary/50 outline-none text-sm py-0 px-1 rounded-none",
