@@ -496,6 +496,14 @@ export default function TrackerPage() {
     })
   );
 
+  const setCarryForwardMutation = useMutation(
+    trpc.tracker.setCarryForward.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries();
+      },
+    })
+  );
+
   const suggestIconMutation = useMutation(
     trpc.category.suggestIcon.mutationOptions({
       onSuccess: (data) => {
@@ -771,12 +779,15 @@ export default function TrackerPage() {
   const fundsData = (fundsQuery.data?.funds ?? []) as FundData[];
   const historicalAccountBalance = fundsQuery.data?.historicalAccountBalance ?? null;
   const totalFundContributions = fundsData.reduce((sum, f) => sum + f.budget, 0);
-  const readyToAssign = incomeAssigned - expenseAssigned - totalFundContributions;
+  const carryForward = summaryQuery.data?.carryForward ?? 0;
+  const carryForwardIsManual = summaryQuery.data?.carryForwardIsManual ?? false;
+  const autoCarryForward = summaryQuery.data?.autoCarryForward ?? 0;
+  const readyToAssign = carryForward + incomeAssigned - expenseAssigned - totalFundContributions;
   const totalIncomeActual = incomeGroups.reduce((s, g) => s + g.totalIncomeActual - g.totalExpenseActual, 0);
 
   const uncategorizedEntry = summaryCategories.find((c) => !c.categoryId);
 
-  const totalIncome = incomeAssigned;
+  const totalIncome = carryForward + incomeAssigned;
 
   const totalSpentExpenses = groupsWithData
     .filter((g) => g.type === "EXPENSE")
@@ -1189,6 +1200,44 @@ export default function TrackerPage() {
         onDragStart={isEditing ? undefined : handleDragStart}
         onDragEnd={isEditing ? undefined : handleDragEnd}
       >
+      {/* ── Carry Forward from Previous Month ── */}
+      <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            ↪ Carry Forward
+          </span>
+          {carryForwardIsManual && (
+            <button
+              type="button"
+              onClick={() => {
+                const trackerId = trackerQuery.data?.id;
+                if (trackerId) {
+                  setCarryForwardMutation.mutate({ trackerId, amount: null });
+                }
+              }}
+              className="text-[10px] text-primary hover:text-primary/80 underline transition-colors"
+            >
+              Reset to auto
+            </button>
+          )}
+        </div>
+        <InlineMoneyEdit
+          value={carryForward}
+          onSave={(cents) => {
+            const trackerId = trackerQuery.data?.id;
+            if (trackerId) {
+              setCarryForwardMutation.mutate({ trackerId, amount: cents });
+            }
+          }}
+          className={cn(
+            "text-sm font-semibold tabular-nums",
+            carryForward > 0 ? "text-green-600 dark:text-green-400"
+              : carryForward < 0 ? "text-red-600 dark:text-red-400"
+              : "text-muted-foreground"
+          )}
+        />
+      </div>
+
       {(["INCOME", "EXPENSE"] as const).map((tableType) => {
         const groups = tableType === "INCOME" ? incomeGroups : expenseGroups;
         const sortIds = tableType === "INCOME" ? incomeSortableIds : expenseSortableIds;

@@ -5,6 +5,60 @@ import { visibleTransactionsWhere } from "@/lib/privacy";
 import { getMonthRange, getPreviousMonth } from "@/lib/date";
 import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
 
+/**
+ * Compute the auto carry-forward from the previous month.
+ * Returns the previous month's (carryForward + incomeAllocated - expenseAllocated - fundAllocated).
+ * Uses the previous month's stored carryForward value if manually set, otherwise treats it as 0
+ * to avoid expensive recursive lookups.
+ */
+async function computeAutoCarryForward(
+  prisma: any,
+  householdId: string,
+  userId: string,
+  visibility: "SHARED" | "PERSONAL",
+  year: number,
+  month: number,
+): Promise<number> {
+  const prev = getPreviousMonth(year, month);
+
+  const prevTracker = await prisma.tracker.findUnique({
+    where: {
+      householdId_userId_month_year_visibility: {
+        householdId,
+        userId,
+        month: prev.month,
+        year: prev.year,
+        visibility,
+      },
+    },
+    include: {
+      allocations: {
+        include: { category: { select: { type: true } } },
+      },
+      fundAllocations: true,
+    },
+  });
+
+  if (!prevTracker) return 0;
+
+  const prevIncomeAllocated = prevTracker.allocations
+    .filter((a: any) => a.category.type === "INCOME")
+    .reduce((sum: number, a: any) => sum + a.amount, 0);
+
+  const prevExpenseAllocated = prevTracker.allocations
+    .filter((a: any) => a.category.type === "EXPENSE")
+    .reduce((sum: number, a: any) => sum + a.amount, 0);
+
+  const prevFundAllocated = prevTracker.fundAllocations
+    .reduce((sum: number, a: any) => sum + a.amount, 0);
+
+  // Use previous month's carry-forward if manually set, otherwise 0
+  // (to avoid expensive recursive calculation)
+  const prevCF = prevTracker.carryForward ?? 0;
+
+  return prevCF + prevIncomeAllocated - prevExpenseAllocated - prevFundAllocated;
+}
+
 export const trackerRouter = router({
   getOrCreate: householdProcedure
     .input(
@@ -283,6 +337,9 @@ export const trackerRouter = router({
           totalActualExpenses,
           unallocated: 0,
           categories,
+          carryForward: 0,
+          carryForwardIsManual: false,
+          autoCarryForward: 0,
         };
       }
 
@@ -354,6 +411,12 @@ export const trackerRouter = router({
         });
       }
 
+      // Compute carry-forward
+      const autoCarryForward = await computeAutoCarryForward(
+        ctx.prisma, ctx.householdId, ctx.userId, input.visibility, input.year, input.month
+      );
+      const effectiveCarryForward = tracker.carryForward ?? autoCarryForward;
+
       return {
         totalIncome: tracker.totalIncome,
         actualIncome,
@@ -361,6 +424,9 @@ export const trackerRouter = router({
         totalActualExpenses,
         unallocated: tracker.totalIncome - totalAllocated,
         categories,
+        carryForward: effectiveCarryForward,
+        carryForwardIsManual: tracker.carryForward !== null,
+        autoCarryForward,
       };
     }),
 
@@ -386,6 +452,20 @@ export const trackerRouter = router({
           fundId: input.fundId,
           amount: input.amount,
         },
+      });
+    }),
+
+  setCarryForward: householdProcedure
+    .input(
+      z.object({
+        trackerId: z.string(),
+        amount: z.number().int().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.tracker.update({
+        where: { id: input.trackerId },
+        data: { carryForward: input.amount },
       });
     }),
 
@@ -712,6 +792,12 @@ export const trackerRouter = router({
           where: { trackerId: tracker.id },
         }),
       ]);
+
+      // Also clear carry-forward override
+      await ctx.prisma.tracker.update({
+        where: { id: tracker.id },
+        data: { carryForward: null },
+      });
 
       return { reset: catDeleted.count + fundDeleted.count + tagDeleted.count };
     }),

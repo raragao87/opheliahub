@@ -381,14 +381,15 @@ model Tag {
 // ─── TRACKER (ZERO-BASED) ───────────────────────────────────────────
 
 model Tracker {
-  id          String     @id @default(cuid())
-  month       Int // 1-12
-  year        Int
-  totalIncome Int        @default(0) // cents
-  householdId String
-  userId      String
-  visibility  Visibility @default(SHARED)
-  createdAt   DateTime   @default(now())
+  id            String     @id @default(cuid())
+  month         Int // 1-12
+  year          Int
+  totalIncome   Int        @default(0) // cents
+  householdId   String
+  userId        String
+  visibility    Visibility @default(SHARED)
+  carryForward  Int?       // cents — null = auto-calculate from prev month; non-null = manual override
+  createdAt     DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   household      Household              @relation(fields: [householdId], references: [id])
