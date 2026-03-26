@@ -1239,23 +1239,26 @@ export default function TrackerPage() {
       </div>
 
       {/* ── To Next Month ── */}
-      <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          ↗ To next month
-        </span>
-        <MoneyDisplay
-          amount={(totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses)}
-          colorize={false}
-          className={cn(
-            "text-sm font-semibold tabular-nums",
-            (totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses) > 0
-              ? "text-green-600 dark:text-green-400"
-              : (totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses) < 0
-                ? "text-red-600 dark:text-red-400"
-                : "text-muted-foreground"
-          )}
-        />
-      </div>
+      {(() => {
+        const toNextMonth = readyToAssign + (totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses);
+        return (
+          <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              ↗ To next month
+            </span>
+            <MoneyDisplay
+              amount={toNextMonth}
+              colorize={false}
+              className={cn(
+                "text-sm font-semibold tabular-nums",
+                toNextMonth > 0 ? "text-green-600 dark:text-green-400"
+                  : toNextMonth < 0 ? "text-red-600 dark:text-red-400"
+                  : "text-muted-foreground"
+              )}
+            />
+          </div>
+        );
+      })()}
 
       {(["INCOME", "EXPENSE"] as const).map((tableType) => {
         const groups = tableType === "INCOME" ? incomeGroups : expenseGroups;
