@@ -181,7 +181,7 @@ export const categoryRouter = router({
         if (input.reassignTo === "uncategorized") {
           await ctx.prisma.transaction.updateMany({
             where: { categoryId: input.id },
-            data: { categoryId: null },
+            data: { categoryId: null, effectiveCategoryId: null },
           });
         } else if (input.reassignTo === "category" && input.targetCategoryId) {
           const target = await ctx.prisma.category.findFirst({
@@ -192,7 +192,7 @@ export const categoryRouter = router({
           }
           await ctx.prisma.transaction.updateMany({
             where: { categoryId: input.id },
-            data: { categoryId: input.targetCategoryId },
+            data: { categoryId: input.targetCategoryId, effectiveCategoryId: input.targetCategoryId },
           });
         } else if (input.reassignTo === "fund" && input.targetFundId) {
           const targetFund = await ctx.prisma.fund.findFirst({
@@ -203,10 +203,17 @@ export const categoryRouter = router({
           }
           await ctx.prisma.transaction.updateMany({
             where: { categoryId: input.id },
-            data: { categoryId: null, fundId: input.targetFundId },
+            data: { categoryId: null, effectiveCategoryId: null, fundId: input.targetFundId },
           });
         }
       }
+
+      // Clear effectiveCategoryId for any transactions referencing this category
+      // via opheliaCategoryId (where it was the Ophelia suggestion, not user-confirmed)
+      await ctx.prisma.transaction.updateMany({
+        where: { effectiveCategoryId: input.id },
+        data: { effectiveCategoryId: null },
+      });
 
       return ctx.prisma.category.delete({ where: { id: input.id } });
     }),

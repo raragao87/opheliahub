@@ -5,6 +5,7 @@ import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere, visibleAccountsWhere } from "@/lib/privacy";
 import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
+import { computeEffectiveCategoryId } from "@/lib/effective-category";
 
 export const transactionRouter = router({
   list: householdProcedure
@@ -99,29 +100,24 @@ export const transactionRouter = router({
             }),
           },
 
-          // Category filter (uses OR — separate AND entry to avoid key collision)
+          // Category filter (separate AND entry)
           ...(input.opheliaUnconfirmed
-            ? [{ categoryId: null, fundId: null, opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null }, type: { not: "TRANSFER" as const } }]
+            ? [{ categoryId: { equals: null }, fundId: { equals: null },
+                 opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null },
+                 type: { not: "TRANSFER" as const } }]
             : input.uncategorized
-              ? [{ categoryId: null, fundId: null, OR: [{ opheliaCategoryId: null }, { opheliaCategory: null }] }]
+              ? [{ effectiveCategoryId: { equals: null }, fundId: { equals: null } }]
               : input.categoryIds?.length && input.fundIds?.length
                 ? [{ OR: [
-                    { categoryId: { in: input.categoryIds } },
-                    { categoryId: { equals: null }, fundId: { equals: null }, type: { not: "TRANSFER" as const }, opheliaCategoryId: { in: input.categoryIds } },
+                    { effectiveCategoryId: { in: input.categoryIds } },
                     { fundId: { in: input.fundIds } },
                   ] }]
                 : input.categoryIds?.length
-                  ? [{ OR: [
-                      { categoryId: { in: input.categoryIds } },
-                      { categoryId: { equals: null }, fundId: { equals: null }, type: { not: "TRANSFER" as const }, opheliaCategoryId: { in: input.categoryIds } },
-                    ] }]
+                  ? [{ effectiveCategoryId: { in: input.categoryIds } }]
                   : input.fundIds?.length
                     ? [{ fundId: { in: input.fundIds } }]
                     : input.categoryId
-                      ? [{ OR: [
-                          { categoryId: input.categoryId },
-                          { categoryId: { equals: null }, fundId: { equals: null }, type: { not: "TRANSFER" as const }, opheliaCategoryId: input.categoryId },
-                        ] }]
+                      ? [{ effectiveCategoryId: input.categoryId }]
                       : []),
 
           // Date filter (uses OR — separate AND entry)
@@ -325,6 +321,7 @@ export const transactionRouter = router({
               userId: ctx.userId,
               visibility: toAccount!.ownership,
               notes: input.notes,
+              effectiveCategoryId: null,
             },
           });
 
@@ -342,6 +339,7 @@ export const transactionRouter = router({
               visibility: account.ownership,
               notes: input.notes,
               linkedTransactionId: inflow.id,
+              effectiveCategoryId: null,
             },
             include: {
               account: { select: { id: true, name: true } },
@@ -374,6 +372,7 @@ export const transactionRouter = router({
           visibility: account.ownership,
           displayName: extractDisplayName(data.description),
           originalDescription: data.description,
+          effectiveCategoryId: computeEffectiveCategoryId(data.categoryId, null),
           tags: tagIds.length > 0
             ? {
                 create: tagIds.map((tagId) => ({ tagId })),
@@ -593,9 +592,18 @@ export const transactionRouter = router({
         });
       }
 
+      // If categoryId changed, recompute effectiveCategoryId
+      const updateData: Record<string, unknown> = { ...data };
+      if (input.categoryId !== undefined) {
+        updateData.effectiveCategoryId = computeEffectiveCategoryId(
+          input.categoryId,
+          existing.opheliaCategoryId,
+        );
+      }
+
       return ctx.prisma.transaction.update({
         where: { id },
-        data,
+        data: updateData,
         include: {
           account: { select: { id: true, name: true } },
           category: { select: { id: true, name: true, icon: true } },
@@ -703,7 +711,7 @@ export const transactionRouter = router({
       }
 
       // Category and fund are mutually exclusive
-      const data: { categoryId: string | null; fundId?: string | null } = {
+      const data: { categoryId: string | null; fundId?: string | null; effectiveCategoryId?: string | null } = {
         categoryId: input.categoryId,
       };
       if (input.fundId !== undefined) {
@@ -711,6 +719,8 @@ export const transactionRouter = router({
         if (input.fundId) data.categoryId = null; // fund clears category
       }
       if (input.categoryId) data.fundId = null; // category clears fund
+      // Confirmed category always wins for effectiveCategoryId
+      data.effectiveCategoryId = data.categoryId;
 
       await ctx.prisma.transaction.updateMany({
         where: { id: { in: accessibleIds } },
@@ -909,7 +919,7 @@ export const transactionRouter = router({
         txns.map((tx) =>
           ctx.prisma.transaction.update({
             where: { id: tx.id },
-            data: { categoryId: tx.opheliaCategoryId },
+            data: { categoryId: tx.opheliaCategoryId, effectiveCategoryId: tx.opheliaCategoryId },
           })
         )
       );
@@ -1096,18 +1106,18 @@ export const transactionRouter = router({
         await ctx.prisma.$transaction([
           ctx.prisma.transaction.update({
             where: { id: outflow.id },
-            data: { type: "TRANSFER", categoryId: null, linkedTransactionId: inflow.id },
+            data: { type: "TRANSFER", categoryId: null, effectiveCategoryId: null, linkedTransactionId: inflow.id },
           }),
           ctx.prisma.transaction.update({
             where: { id: inflow.id },
-            data: { type: "TRANSFER", categoryId: null },
+            data: { type: "TRANSFER", categoryId: null, effectiveCategoryId: null },
           }),
         ]);
       } else {
         // Unlinked transfer (e.g. cash withdrawal)
         await ctx.prisma.transaction.update({
           where: { id: input.transactionId },
-          data: { type: "TRANSFER", categoryId: null },
+          data: { type: "TRANSFER", categoryId: null, effectiveCategoryId: null },
         });
       }
 

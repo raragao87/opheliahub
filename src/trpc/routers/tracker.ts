@@ -82,7 +82,7 @@ async function computeAutoCarryForward(
         { fundId: null },
       ],
     },
-    select: { amount: true, categoryId: true, opheliaCategoryId: true },
+    select: { amount: true, effectiveCategoryId: true },
   });
 
   const incomeCatSet = new Set(incomeCatIds);
@@ -92,7 +92,7 @@ async function computeAutoCarryForward(
   let actualExpenses = 0;
 
   for (const tx of prevTxns) {
-    const catId = tx.categoryId ?? tx.opheliaCategoryId;
+    const catId = tx.effectiveCategoryId;
     if (catId && incomeCatSet.has(catId)) {
       actualIncome += tx.amount;
     } else if (!catId || expenseCatSet.has(catId)) {
@@ -274,6 +274,7 @@ export const trackerRouter = router({
           amount: true,
           categoryId: true,
           opheliaCategoryId: true,
+          effectiveCategoryId: true,
           fundId: true,
         },
       });
@@ -281,7 +282,7 @@ export const trackerRouter = router({
       const incomeCategoryIdSet = new Set(incomeCategoryIds);
       const expenseCategoryIdSet = new Set(expenseCategoryIds);
 
-      // Build unified actual map using effective category (categoryId ?? opheliaCategoryId)
+      // Build unified actual map using effectiveCategoryId column
       // Fund transactions are excluded (tracked separately in fund table)
       const categoryActualMap = new Map<string | null, number>();
       let actualIncome = 0;
@@ -289,9 +290,7 @@ export const trackerRouter = router({
       for (const tx of allMonthTxs) {
         if (tx.fundId) continue; // fund transactions tracked separately
 
-        // Effective category: confirmed > ophelia suggestion (if still valid) > null
-        const effectiveCatId = tx.categoryId
-          ?? (tx.opheliaCategoryId && validCategoryIds.has(tx.opheliaCategoryId) ? tx.opheliaCategoryId : null);
+        const effectiveCatId = tx.effectiveCategoryId;
 
         categoryActualMap.set(effectiveCatId, (categoryActualMap.get(effectiveCatId) ?? 0) + tx.amount);
 

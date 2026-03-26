@@ -254,7 +254,8 @@ model Transaction {
   opheliaCategoryId  String?   // Ophelia's suggested category (FK to Category)
   opheliaConfidence  Float?    // 0.0 - 1.0
   opheliaDisplayName String?   // Ophelia's suggested clean merchant name
-  opheliaProcessedAt DateTime? // when Ophelia last processed this transaction
+  opheliaProcessedAt  DateTime? // when Ophelia last processed this transaction
+  effectiveCategoryId String?   // denormalized: categoryId ?? opheliaCategoryId — kept in sync at write-time
 
   // Transfer linking — one-to-one self-relation
   linkedTransactionId String?       @unique
@@ -279,6 +280,7 @@ model Transaction {
   @@index([visibility, userId])
   @@index([categoryId, date])
   @@index([fundId, date])
+  @@index([effectiveCategoryId])
   @@map("transactions")
 }
 

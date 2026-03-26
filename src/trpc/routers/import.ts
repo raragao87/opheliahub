@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
 import { extractDisplayName } from "@/lib/recurring";
+import { computeEffectiveCategoryId } from "@/lib/effective-category";
 import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
 import { isOpheliaEnabled } from "@/lib/ophelia";
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
@@ -238,6 +239,7 @@ export const importRouter = router({
               accountId: input.accountId,
               userId: ctx.userId,
               importBatchId: batch.id,
+              effectiveCategoryId: computeEffectiveCategoryId(transactionData.categoryId, null),
               tags: tagIds.length > 0
                 ? { create: tagIds.map((tagId) => ({ tagId })) }
                 : undefined,

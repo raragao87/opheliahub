@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { extractDisplayName } from "@/lib/recurring";
 import { enrichTransactions } from "./enrichTransactions";
 import { isOpheliaEnabled } from "./provider";
+import { computeEffectiveCategoryId } from "@/lib/effective-category";
 
 const DEFAULT_BATCH_SIZE = 200;
 const REPROCESS_AFTER_DAYS = 7;
@@ -101,6 +102,7 @@ export async function categorizeTransactionBatch(
           amount: true,
           date: true,
           visibility: true,
+          categoryId: true,
         },
         take: batchSize,
         orderBy: { opheliaProcessedAt: "asc" }, // null comes first
@@ -333,6 +335,7 @@ export async function categorizeTransactionBatch(
               opheliaConfidence: safeCategoryId ? (result?.categoryConfidence ?? null) : null,
               opheliaDisplayName: result?.suggestedDisplayName ?? null,
               opheliaProcessedAt: now,
+              effectiveCategoryId: computeEffectiveCategoryId(tx.categoryId, safeCategoryId),
               ...(shouldAutoApplyDisplayName ? { displayName: result!.suggestedDisplayName } : {}),
             },
           });
@@ -407,6 +410,7 @@ export async function categorizeTransactionBatch(
                   data: {
                     opheliaCategoryId: retryId,
                     opheliaConfidence: retryResult?.categoryConfidence ?? null,
+                    effectiveCategoryId: computeEffectiveCategoryId(tx.categoryId, retryId),
                   },
                 });
                 console.log(`[Ophelia] Retry success for tx ${tx.id} — category: ${retryId}`);
