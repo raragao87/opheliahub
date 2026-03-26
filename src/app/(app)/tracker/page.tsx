@@ -1200,11 +1200,11 @@ export default function TrackerPage() {
         onDragStart={isEditing ? undefined : handleDragStart}
         onDragEnd={isEditing ? undefined : handleDragEnd}
       >
-      {/* ── Carry Forward from Previous Month ── */}
-      <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
+      {/* ── From Previous Month ── */}
+      <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-1">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            ↪ Carry Forward
+            ↪ From previous month
           </span>
           {carryForwardIsManual && (
             <button
@@ -1234,6 +1234,25 @@ export default function TrackerPage() {
             carryForward > 0 ? "text-green-600 dark:text-green-400"
               : carryForward < 0 ? "text-red-600 dark:text-red-400"
               : "text-muted-foreground"
+          )}
+        />
+      </div>
+
+      {/* ── To Next Month ── */}
+      <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          ↗ To next month
+        </span>
+        <MoneyDisplay
+          amount={(totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses)}
+          colorize={false}
+          className={cn(
+            "text-sm font-semibold tabular-nums",
+            (totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses) > 0
+              ? "text-green-600 dark:text-green-400"
+              : (totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses) < 0
+                ? "text-red-600 dark:text-red-400"
+                : "text-muted-foreground"
           )}
         />
       </div>

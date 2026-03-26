@@ -7,9 +7,9 @@ import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
 
 /**
  * Compute the auto carry-forward from the previous month.
- * Returns the previous month's (carryForward + incomeAllocated - expenseAllocated - fundAllocated).
- * Uses the previous month's stored carryForward value if manually set, otherwise treats it as 0
- * to avoid expensive recursive lookups.
+ * Returns: previous month's (income available + expense available)
+ * where income available = actual income - income budget
+ * and expense available = expense budget - actual expenses
  */
 async function computeAutoCarryForward(
   prisma: any,
@@ -33,14 +33,14 @@ async function computeAutoCarryForward(
     },
     include: {
       allocations: {
-        include: { category: { select: { type: true } } },
+        include: { category: { select: { id: true, type: true } } },
       },
-      fundAllocations: true,
     },
   });
 
   if (!prevTracker) return 0;
 
+  // Get budget allocations
   const prevIncomeAllocated = prevTracker.allocations
     .filter((a: any) => a.category.type === "INCOME")
     .reduce((sum: number, a: any) => sum + a.amount, 0);
@@ -49,14 +49,63 @@ async function computeAutoCarryForward(
     .filter((a: any) => a.category.type === "EXPENSE")
     .reduce((sum: number, a: any) => sum + a.amount, 0);
 
-  const prevFundAllocated = prevTracker.fundAllocations
-    .reduce((sum: number, a: any) => sum + a.amount, 0);
+  // Get actual income and expense from transactions
+  const { start, end } = getMonthRange(prev.year, prev.month);
 
-  // Use previous month's carry-forward if manually set, otherwise 0
-  // (to avoid expensive recursive calculation)
-  const prevCF = prevTracker.carryForward ?? 0;
+  const incomeCatIds = prevTracker.allocations
+    .filter((a: any) => a.category.type === "INCOME")
+    .map((a: any) => a.category.id);
+  const expenseCatIds = prevTracker.allocations
+    .filter((a: any) => a.category.type === "EXPENSE")
+    .map((a: any) => a.category.id);
 
-  return prevCF + prevIncomeAllocated - prevExpenseAllocated - prevFundAllocated;
+  const visibilityFilter =
+    visibility === "SHARED"
+      ? visibleTransactionsWhere(userId, householdId)
+      : { userId, visibility: "PERSONAL" as const };
+
+  const effectiveDateFilter = {
+    OR: [
+      { accrualDate: { gte: start, lte: end } },
+      { accrualDate: null, date: { gte: start, lte: end } },
+    ],
+  };
+
+  const prevTxns = await prisma.transaction.findMany({
+    where: {
+      AND: [
+        visibilityFilter,
+        { account: { type: { in: LIQUID_ACCOUNT_TYPES } } },
+        effectiveDateFilter,
+        { type: { not: "TRANSFER" } },
+        { isInitialBalance: false },
+        { fundId: null },
+      ],
+    },
+    select: { amount: true, categoryId: true, opheliaCategoryId: true },
+  });
+
+  const incomeCatSet = new Set(incomeCatIds);
+  const expenseCatSet = new Set(expenseCatIds);
+
+  let actualIncome = 0;
+  let actualExpenses = 0;
+
+  for (const tx of prevTxns) {
+    const catId = tx.categoryId ?? tx.opheliaCategoryId;
+    if (catId && incomeCatSet.has(catId)) {
+      actualIncome += tx.amount;
+    } else if (!catId || expenseCatSet.has(catId)) {
+      actualExpenses += Math.abs(tx.amount);
+    }
+  }
+
+  // Income available = actual income - income budget (positive = received more than budgeted)
+  // Expense available = expense budget - actual expenses (positive = under budget)
+  const incomeAvailable = actualIncome - prevIncomeAllocated;
+  const expenseAvailable = prevExpenseAllocated - actualExpenses;
+
+  return incomeAvailable + expenseAvailable;
 }
 
 export const trackerRouter = router({
