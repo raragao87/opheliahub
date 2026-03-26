@@ -73,25 +73,25 @@ export const transactionRouter = router({
             ...(input.opheliaUnconfirmed
               ? { categoryId: null, fundId: null, opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null }, type: { not: "TRANSFER" as const } }
               : input.uncategorized
-                ? { categoryId: null, fundId: null, OR: [{ opheliaCategoryId: null }, { opheliaCategory: null }] }
+                ? { categoryId: null, fundId: null, AND: [{ OR: [{ opheliaCategoryId: null }, { opheliaCategory: null }] }] }
                 : input.categoryIds?.length && input.fundIds?.length
-                  ? { OR: [
+                  ? { AND: [{ OR: [
                       { categoryId: { in: input.categoryIds } },
                       { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
                       { fundId: { in: input.fundIds } },
-                    ] }
+                    ] }] }
                   : input.categoryIds?.length
-                    ? { OR: [
+                    ? { AND: [{ OR: [
                         { categoryId: { in: input.categoryIds } },
                         { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
-                      ] }
+                      ] }] }
                     : input.fundIds?.length
                       ? { fundId: { in: input.fundIds } }
                       : input.categoryId
-                        ? { OR: [
+                        ? { AND: [{ OR: [
                             { categoryId: input.categoryId },
                             { categoryId: null, opheliaCategoryId: input.categoryId },
-                          ] }
+                          ] }] }
                         : {}),
             // transferType takes precedence over type (forces TRANSFER)
             ...(input.transferType
