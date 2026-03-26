@@ -59,50 +59,23 @@ export const transactionRouter = router({
     .query(async ({ ctx, input }) => {
       const where: Prisma.TransactionWhereInput = {
         AND: [
-          // Privacy filter (contains its own OR clause)
+          // Privacy filter
           visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          // All other filters
+
+          // Simple filters (no OR/AND — safe to merge into one object)
           {
-            // Account filter: array takes precedence over single
             ...(input.accountIds?.length
               ? { accountId: { in: input.accountIds } }
               : input.accountId
                 ? { accountId: input.accountId }
                 : {}),
-            // Category filter: special modes override all, then array takes precedence
-            ...(input.opheliaUnconfirmed
-              ? { categoryId: null, fundId: null, opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null }, type: { not: "TRANSFER" as const } }
-              : input.uncategorized
-                ? { categoryId: null, fundId: null, AND: [{ OR: [{ opheliaCategoryId: null }, { opheliaCategory: null }] }] }
-                : input.categoryIds?.length && input.fundIds?.length
-                  ? { AND: [{ OR: [
-                      { categoryId: { in: input.categoryIds } },
-                      { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
-                      { fundId: { in: input.fundIds } },
-                    ] }] }
-                  : input.categoryIds?.length
-                    ? { AND: [{ OR: [
-                        { categoryId: { in: input.categoryIds } },
-                        { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
-                      ] }] }
-                    : input.fundIds?.length
-                      ? { fundId: { in: input.fundIds } }
-                      : input.categoryId
-                        ? { AND: [{ OR: [
-                            { categoryId: input.categoryId },
-                            { categoryId: null, opheliaCategoryId: input.categoryId },
-                          ] }] }
-                        : {}),
-            // transferType takes precedence over type (forces TRANSFER)
             ...(input.transferType
               ? { type: "TRANSFER" as const }
               : input.type
                 ? { type: input.type }
                 : {}),
             ...(input.visibility && { visibility: input.visibility }),
-            // Fund filter (single — used by tracker drill-down, not when fundIds is already in category block)
             ...(!input.fundIds?.length && input.fundId && { fundId: input.fundId }),
-            // Tag filter: noTags overrides tagIds; array takes precedence over single
             ...(input.noTags
               ? { tags: { none: {} } }
               : input.tagIds?.length
@@ -110,30 +83,8 @@ export const transactionRouter = router({
                 : input.tagId
                   ? { tags: { some: { tagId: input.tagId } } }
                   : {}),
-            // Notes filter
             ...(input.hasNotes && { notes: { not: null } }),
-            // Mentioned-me filter: match notes containing (userId)
             ...(input.mentionedMe && { notes: { contains: `(${ctx.userId})` } }),
-            // Date filter exempts initial balance transactions so they always appear
-            ...(input.dateFrom || input.dateTo
-              ? {
-                  OR: [
-                    { isInitialBalance: true },
-                    {
-                      date: {
-                        ...(input.dateFrom && { gte: input.dateFrom }),
-                        ...(input.dateTo && { lte: input.dateTo }),
-                      },
-                    },
-                  ],
-                }
-              : {}),
-            ...(input.search && {
-              OR: [
-                { description: { contains: input.search, mode: "insensitive" as const } },
-                { displayName: { contains: input.search, mode: "insensitive" as const } },
-              ],
-            }),
             ...(input.amountMin !== undefined || input.amountMax !== undefined
               ? {
                   amount: {
@@ -142,13 +93,61 @@ export const transactionRouter = router({
                   },
                 }
               : {}),
-            // External: no linked partner at all
             ...(input.transferType === "EXTERNAL" && {
               linkedTransactionId: null,
               linkedBy: { is: null },
             }),
           },
-          // Internal: has a linked partner on either side (needs its own OR)
+
+          // Category filter (uses OR — separate AND entry to avoid key collision)
+          ...(input.opheliaUnconfirmed
+            ? [{ categoryId: null, fundId: null, opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null }, type: { not: "TRANSFER" as const } }]
+            : input.uncategorized
+              ? [{ categoryId: null, fundId: null, OR: [{ opheliaCategoryId: null }, { opheliaCategory: null }] }]
+              : input.categoryIds?.length && input.fundIds?.length
+                ? [{ OR: [
+                    { categoryId: { in: input.categoryIds } },
+                    { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
+                    { fundId: { in: input.fundIds } },
+                  ] }]
+                : input.categoryIds?.length
+                  ? [{ OR: [
+                      { categoryId: { in: input.categoryIds } },
+                      { categoryId: null, opheliaCategoryId: { in: input.categoryIds } },
+                    ] }]
+                  : input.fundIds?.length
+                    ? [{ fundId: { in: input.fundIds } }]
+                    : input.categoryId
+                      ? [{ OR: [
+                          { categoryId: input.categoryId },
+                          { categoryId: null, opheliaCategoryId: input.categoryId },
+                        ] }]
+                      : []),
+
+          // Date filter (uses OR — separate AND entry)
+          ...(input.dateFrom || input.dateTo
+            ? [{
+                OR: [
+                  { isInitialBalance: true },
+                  { date: {
+                    ...(input.dateFrom && { gte: input.dateFrom }),
+                    ...(input.dateTo && { lte: input.dateTo }),
+                  } },
+                ],
+              }]
+            : []),
+
+          // Search filter (uses OR — separate AND entry)
+          ...(input.search
+            ? [{
+                OR: [
+                  { description: { contains: input.search, mode: "insensitive" as const } },
+                  { displayName: { contains: input.search, mode: "insensitive" as const } },
+                ],
+              }]
+            : []),
+
+          // Internal transfer filter (uses OR — already separate)
           ...(input.transferType === "INTERNAL"
             ? [{
                 OR: [
@@ -157,16 +156,18 @@ export const transactionRouter = router({
                 ],
               }]
             : []),
-          // Liquid-only: separate AND entry to avoid conflicting with privacy account filter
+
+          // Liquid-only
           ...(input.liquidOnly
             ? [{ account: { type: { in: LIQUID_ACCOUNT_TYPES } } }]
             : []),
-          // Exclude transfers (used by tracker drill-down to match budget calculation)
+
+          // Exclude transfers
           ...(input.excludeTransfers
             ? [{ type: { not: "TRANSFER" as const } }]
             : []),
-          // Accrual date filter: effective budget date (accrualDate ?? date).
-          // Used by the tracker drill-down. Initial balance is always exempt.
+
+          // Accrual date filter (uses OR — already separate)
           ...(input.accrualDateFrom || input.accrualDateTo
             ? [{
                 OR: [
