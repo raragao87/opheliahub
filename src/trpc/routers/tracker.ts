@@ -369,7 +369,7 @@ export const trackerRouter = router({
       z.object({
         trackerId: z.string(),
         fundId: z.string(),
-        amount: z.number().int().min(0),
+        amount: z.number().int(),
       })
     )
     .mutation(async ({ ctx, input }) => {

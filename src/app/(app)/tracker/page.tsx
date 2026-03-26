@@ -2234,10 +2234,15 @@ export default function TrackerPage() {
                             onClick={() => setExpandedFundId(expandedFundId === fund.id ? null : fund.id)}
                             title="Click to see breakdown"
                           >
-                            <AvailableCell
+                            <MoneyDisplay
                               amount={fund.available}
-                              allocated={fund.budget}
-                              spent={fund.thisMonthActual}
+                              colorize={false}
+                              className={cn(
+                                "text-sm font-medium",
+                                fund.available > 0 ? "text-green-600 dark:text-green-400"
+                                  : fund.available === 0 ? "text-muted-foreground"
+                                  : "text-red-600 dark:text-red-400"
+                              )}
                             />
                           </td>
                           </>)}
