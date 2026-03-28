@@ -410,11 +410,11 @@ export const trackerRouter = router({
       const expenseAvail = expenseAllocated - totalActualExpenses;
       const toNextMonth = readyToAssign + incomeAvail + expenseAvail;
 
-      // Persist toNextMonth (fire-and-forget, don't block the response)
-      void ctx.prisma.tracker.update({
+      // Persist toNextMonth
+      await ctx.prisma.tracker.update({
         where: { id: tracker.id },
         data: { toNextMonth },
-      }).catch(() => {});
+      });
 
       return {
         totalIncome: tracker.totalIncome,
