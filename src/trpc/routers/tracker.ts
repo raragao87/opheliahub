@@ -35,6 +35,7 @@ async function computeAutoCarryForward(
       allocations: {
         include: { category: { select: { id: true, type: true } } },
       },
+      fundAllocations: true,
     },
   });
 
@@ -100,12 +101,19 @@ async function computeAutoCarryForward(
     }
   }
 
+  // Previous month's readyToAssign (unassigned budget)
+  const prevFundAllocated = (prevTracker.fundAllocations as any[])
+    .reduce((sum: number, a: any) => sum + a.amount, 0);
+  const prevCarryForward = prevTracker.carryForward ?? 0;
+  const prevReadyToAssign = prevCarryForward + prevIncomeAllocated - prevExpenseAllocated - prevFundAllocated;
+
   // Income available = actual income - income budget (positive = received more than budgeted)
   // Expense available = expense budget - actual expenses (positive = under budget)
   const incomeAvailable = actualIncome - prevIncomeAllocated;
   const expenseAvailable = prevExpenseAllocated - actualExpenses;
 
-  return incomeAvailable + expenseAvailable;
+  // Match the "to next month" formula: readyToAssign + incomeAvailable + expenseAvailable
+  return prevReadyToAssign + incomeAvailable + expenseAvailable;
 }
 
 export const trackerRouter = router({
