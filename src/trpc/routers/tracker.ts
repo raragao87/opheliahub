@@ -104,7 +104,10 @@ async function computeAutoCarryForward(
   // Previous month's readyToAssign (unassigned budget)
   const prevFundAllocated = (prevTracker.fundAllocations as any[])
     .reduce((sum: number, a: any) => sum + a.amount, 0);
-  const prevCarryForward = prevTracker.carryForward ?? 0;
+  // If the previous month has a manual carryForward, use it.
+  // Otherwise, recursively compute what "from previous month" was for that month.
+  const prevCarryForward = prevTracker.carryForward
+    ?? await computeAutoCarryForward(prisma, householdId, userId, visibility, prev.year, prev.month);
   const prevReadyToAssign = prevCarryForward + prevIncomeAllocated - prevExpenseAllocated - prevFundAllocated;
 
   // Income available = actual income - income budget (positive = received more than budgeted)
