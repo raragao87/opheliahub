@@ -391,6 +391,7 @@ model Tracker {
   userId        String
   visibility    Visibility @default(SHARED)
   carryForward  Int?       // cents — null = auto-calculate from prev month; non-null = manual override
+  toNextMonth   Int?       // cents — persisted "to next month" value, computed on each getSummary call
   createdAt     DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
