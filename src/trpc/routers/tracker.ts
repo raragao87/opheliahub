@@ -29,10 +29,16 @@ async function computeAutoCarryForward(
         visibility,
       },
     },
-    select: { toNextMonth: true },
+    select: { id: true, toNextMonth: true },
   });
 
-  return prevTracker?.toNextMonth ?? 0;
+  if (!prevTracker) return 0;
+
+  // If toNextMonth is already persisted, use it directly
+  if (prevTracker.toNextMonth !== null) return prevTracker.toNextMonth;
+
+  // Otherwise, return 0 — it will be computed and persisted when the user visits that month
+  return 0;
 }
 
 export const trackerRouter = router({
