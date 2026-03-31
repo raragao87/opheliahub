@@ -2292,7 +2292,7 @@ export default function TrackerPage() {
                             />
                           </td>
                           <td className="py-1.5 px-3 text-right">
-                            {fund.thisMonthActual > 0 ? (
+                            {fund.thisMonthActual !== 0 ? (
                               <Link href={buildFundTransactionsUrl(fund.id, period)}>
                                 <MoneyDisplay amount={-fund.thisMonthActual} className="text-sm font-mono tabular-nums" />
                               </Link>
