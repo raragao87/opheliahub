@@ -496,13 +496,6 @@ export default function TrackerPage() {
     })
   );
 
-  const setCarryForwardMutation = useMutation(
-    trpc.tracker.setCarryForward.mutationOptions({
-      onSuccess: () => {
-        void queryClient.invalidateQueries();
-      },
-    })
-  );
 
   const suggestIconMutation = useMutation(
     trpc.category.suggestIcon.mutationOptions({
@@ -780,8 +773,6 @@ export default function TrackerPage() {
   const historicalAccountBalance = fundsQuery.data?.historicalAccountBalance ?? null;
   const totalFundContributions = fundsData.reduce((sum, f) => sum + f.budget, 0);
   const carryForward = summaryQuery.data?.carryForward ?? 0;
-  const carryForwardIsManual = summaryQuery.data?.carryForwardIsManual ?? false;
-  const autoCarryForward = summaryQuery.data?.autoCarryForward ?? 0;
   const readyToAssign = carryForward + incomeAssigned - expenseAssigned - totalFundContributions;
   const totalIncomeActual = incomeGroups.reduce((s, g) => s + g.totalIncomeActual - g.totalExpenseActual, 0);
 
@@ -1202,33 +1193,12 @@ export default function TrackerPage() {
       >
       {/* ── From Previous Month ── */}
       <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            ↪ From previous month
-          </span>
-          {carryForwardIsManual && (
-            <button
-              type="button"
-              onClick={() => {
-                const trackerId = trackerQuery.data?.id;
-                if (trackerId) {
-                  setCarryForwardMutation.mutate({ trackerId, amount: null });
-                }
-              }}
-              className="text-[10px] text-primary hover:text-primary/80 underline transition-colors"
-            >
-              Reset to auto
-            </button>
-          )}
-        </div>
-        <InlineMoneyEdit
-          value={carryForward}
-          onSave={(cents) => {
-            const trackerId = trackerQuery.data?.id;
-            if (trackerId) {
-              setCarryForwardMutation.mutate({ trackerId, amount: cents });
-            }
-          }}
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          ↪ From previous month
+        </span>
+        <MoneyDisplay
+          amount={carryForward}
+          colorize={false}
           className={cn(
             "text-sm font-semibold tabular-nums",
             carryForward > 0 ? "text-green-600 dark:text-green-400"
