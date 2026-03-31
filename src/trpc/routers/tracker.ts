@@ -432,6 +432,7 @@ export const trackerRouter = router({
         carryForward: effectiveCarryForward,
         carryForwardIsManual: tracker.carryForward !== null,
         autoCarryForward,
+        toNextMonth,
       };
     }),
 

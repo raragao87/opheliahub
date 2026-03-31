@@ -1240,7 +1240,7 @@ export default function TrackerPage() {
 
       {/* ── To Next Month ── */}
       {(() => {
-        const toNextMonth = readyToAssign + (totalIncomeActual - incomeAssigned) + (expenseAssigned - totalSpentExpenses);
+        const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
         return (
           <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
