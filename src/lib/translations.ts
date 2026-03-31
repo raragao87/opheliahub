@@ -61,6 +61,10 @@ const translations = {
     "settings.colorThemeDesc": "Choose between the classic neutral look or the Luminous Ledger design.",
     "colorTheme.classic": "Classic",
     "colorTheme.luminous": "Luminous",
+    "settings.budgetMonths": "Budget months",
+    "settings.budgetMonthsDesc": "Choose whether unspent budget carries forward between months.",
+    "budgetMonths.independent": "Independent",
+    "budgetMonths.linked": "Linked",
 
     // Household
     "household.setupTitle": "Set Up Your Household",
@@ -400,6 +404,10 @@ const translations = {
     "settings.colorThemeDesc": "Escolha entre o visual neutro clássico ou o design Luminous Ledger.",
     "colorTheme.classic": "Clássico",
     "colorTheme.luminous": "Luminous",
+    "settings.budgetMonths": "Meses de orçamento",
+    "settings.budgetMonthsDesc": "Escolha se o orçamento não utilizado é transferido entre meses.",
+    "budgetMonths.independent": "Independente",
+    "budgetMonths.linked": "Vinculado",
 
     // Household
     "household.setupTitle": "Configure Sua Família",
@@ -739,6 +747,10 @@ const translations = {
     "settings.colorThemeDesc": "Alegeți între aspectul neutru clasic sau designul Luminous Ledger.",
     "colorTheme.classic": "Clasic",
     "colorTheme.luminous": "Luminous",
+    "settings.budgetMonths": "Luni bugetare",
+    "settings.budgetMonthsDesc": "Alegeți dacă bugetul neutilizat se transferă între luni.",
+    "budgetMonths.independent": "Independent",
+    "budgetMonths.linked": "Legat",
 
     // Household
     "household.setupTitle": "Configurează Gospodăria Ta",
@@ -1078,6 +1090,10 @@ const translations = {
     "settings.colorThemeDesc": "Kies tussen de klassieke neutrale look of het Luminous Ledger ontwerp.",
     "colorTheme.classic": "Klassiek",
     "colorTheme.luminous": "Luminous",
+    "settings.budgetMonths": "Budgetmaanden",
+    "settings.budgetMonthsDesc": "Kies of ongebruikt budget wordt overgedragen naar volgende maanden.",
+    "budgetMonths.independent": "Onafhankelijk",
+    "budgetMonths.linked": "Gekoppeld",
 
     // Household
     "household.setupTitle": "Stel Uw Huishouden In",

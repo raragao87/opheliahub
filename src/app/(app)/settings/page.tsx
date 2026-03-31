@@ -98,6 +98,10 @@ export default function SettingsPage() {
     updatePreferences({ colorTheme });
   }
 
+  function handleBudgetMonthsChange(linked: boolean) {
+    updatePreferences({ budgetMonthsLinked: linked });
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -308,6 +312,28 @@ export default function SettingsPage() {
                     onClick={() => handleColorThemeChange(ct)}
                   >
                     {t(language, `colorTheme.${ct}` as any)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Budget Months */}
+            <div className="space-y-2">
+              <Label>{t(language, "settings.budgetMonths" as any)}</Label>
+              <p className="text-xs text-muted-foreground">{t(language, "settings.budgetMonthsDesc" as any)}</p>
+              <div className="flex gap-2">
+                {([false, true] as const).map((linked) => (
+                  <Button
+                    key={String(linked)}
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      preferences.budgetMonthsLinked === linked &&
+                        "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                    )}
+                    onClick={() => handleBudgetMonthsChange(linked)}
+                  >
+                    {t(language, linked ? "budgetMonths.linked" as any : "budgetMonths.independent" as any)}
                   </Button>
                 ))}
               </div>

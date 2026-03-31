@@ -67,6 +67,7 @@ model User {
   defaultVisibility Visibility @default(SHARED)
   theme             String     @default("system")
   colorTheme        String     @default("luminous")
+  budgetMonthsLinked  Boolean    @default(true)
 
   // Auth.js relations
   oauthAccounts Account[]

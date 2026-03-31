@@ -11,6 +11,7 @@ interface UserPreferences {
   defaultVisibility: "SHARED" | "PERSONAL";
   theme: string;
   colorTheme: "classic" | "luminous";
+  budgetMonthsLinked: boolean;
 }
 
 interface UserPreferencesContextValue {
@@ -25,6 +26,7 @@ const defaultPreferences: UserPreferences = {
   defaultVisibility: "SHARED",
   theme: "system",
   colorTheme: "luminous",
+  budgetMonthsLinked: true,
 };
 
 const UserPreferencesContext = createContext<UserPreferencesContextValue>({
@@ -57,6 +59,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     defaultVisibility: (data?.defaultVisibility ?? "SHARED") as "SHARED" | "PERSONAL",
     theme: data?.theme ?? "system",
     colorTheme: (data?.colorTheme ?? "luminous") as "classic" | "luminous",
+    budgetMonthsLinked: data?.budgetMonthsLinked ?? true,
   };
 
   // Sync theme with next-themes whenever it changes

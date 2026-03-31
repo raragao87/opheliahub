@@ -772,7 +772,8 @@ export default function TrackerPage() {
   const fundsData = (fundsQuery.data?.funds ?? []) as FundData[];
   const historicalAccountBalance = fundsQuery.data?.historicalAccountBalance ?? null;
   const totalFundContributions = fundsData.reduce((sum, f) => sum + f.budget, 0);
-  const carryForward = summaryQuery.data?.carryForward ?? 0;
+  const budgetMonthsLinked = preferences.budgetMonthsLinked;
+  const carryForward = budgetMonthsLinked ? (summaryQuery.data?.carryForward ?? 0) : 0;
   const readyToAssign = carryForward + incomeAssigned - expenseAssigned - totalFundContributions;
   const totalIncomeActual = incomeGroups.reduce((s, g) => s + g.totalIncomeActual - g.totalExpenseActual, 0);
 
@@ -1191,44 +1192,48 @@ export default function TrackerPage() {
         onDragStart={isEditing ? undefined : handleDragStart}
         onDragEnd={isEditing ? undefined : handleDragEnd}
       >
-      {/* ── From Previous Month ── */}
-      <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-1">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          ↪ From previous month
-        </span>
-        <MoneyDisplay
-          amount={carryForward}
-          colorize={false}
-          className={cn(
-            "text-sm font-semibold tabular-nums",
-            carryForward > 0 ? "text-green-600 dark:text-green-400"
-              : carryForward < 0 ? "text-red-600 dark:text-red-400"
-              : "text-muted-foreground"
-          )}
-        />
-      </div>
-
-      {/* ── To Next Month ── */}
-      {(() => {
-        const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
-        return (
-          <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
+      {budgetMonthsLinked && (
+        <>
+          {/* ── From Previous Month ── */}
+          <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              ↗ To next month
+              ↪ From previous month
             </span>
             <MoneyDisplay
-              amount={toNextMonth}
+              amount={carryForward}
               colorize={false}
               className={cn(
                 "text-sm font-semibold tabular-nums",
-                toNextMonth > 0 ? "text-green-600 dark:text-green-400"
-                  : toNextMonth < 0 ? "text-red-600 dark:text-red-400"
+                carryForward > 0 ? "text-green-600 dark:text-green-400"
+                  : carryForward < 0 ? "text-red-600 dark:text-red-400"
                   : "text-muted-foreground"
               )}
             />
           </div>
-        );
-      })()}
+
+          {/* ── To Next Month ── */}
+          {(() => {
+            const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
+            return (
+              <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  ↗ To next month
+                </span>
+                <MoneyDisplay
+                  amount={toNextMonth}
+                  colorize={false}
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    toNextMonth > 0 ? "text-green-600 dark:text-green-400"
+                      : toNextMonth < 0 ? "text-red-600 dark:text-red-400"
+                      : "text-muted-foreground"
+                  )}
+                />
+              </div>
+            );
+          })()}
+        </>
+      )}
 
       {(["INCOME", "EXPENSE"] as const).map((tableType) => {
         const groups = tableType === "INCOME" ? incomeGroups : expenseGroups;
