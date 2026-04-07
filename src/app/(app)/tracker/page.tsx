@@ -806,18 +806,21 @@ export default function TrackerPage() {
       ? 0
       : daysInMonth;
 
+  // Actual income including carry-in (mirrors how totalIncome includes carryForward on budget side)
+  const totalActualWithCarryIn = carryForward + totalIncomeActual;
+
   // Shared bar scale — both bars use the same denominator
   const maxBarValue = Math.max(
     totalIncome,
     expenseAssigned + totalFundContributions,
-    totalIncomeActual,
+    totalActualWithCarryIn,
     totalSpentExpenses + totalFundActual,
     1
   );
   const incomeBudgetPct = (totalIncome / maxBarValue) * 100;
   const expenseBudgetPct = (expenseAssigned / maxBarValue) * 100;
   const fundsBudgetPct = (totalFundContributions / maxBarValue) * 100;
-  const incomeReceivedPct = (totalIncomeActual / maxBarValue) * 100;
+  const incomeReceivedPct = (totalActualWithCarryIn / maxBarValue) * 100;
   const expenseSpentPct = (totalSpentExpenses / maxBarValue) * 100;
   const fundSpentPct = (totalFundActual / maxBarValue) * 100;
 
@@ -904,19 +907,48 @@ export default function TrackerPage() {
             {/* Actual bar */}
             {(() => {
               const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
-              const showCarryOut = budgetMonthsLinked && toNextMonth > 0 && totalIncomeActual > 0;
+              const showCarryOut = budgetMonthsLinked && toNextMonth > 0 && totalActualWithCarryIn > 0;
+              const availableSpacePct = Math.max(incomeReceivedPct - expenseSpentPct - fundSpentPct, 0);
               const carryOutPct = showCarryOut
-                ? Math.min(Math.max((toNextMonth / totalIncomeActual) * incomeReceivedPct, 1.5), incomeReceivedPct * 0.4)
+                ? Math.min(Math.max((toNextMonth / totalActualWithCarryIn) * incomeReceivedPct, 1.5), availableSpacePct)
                 : 0;
+              // Carry-in on actual bar (same as budget bar)
+              const actualCarryInPct = budgetMonthsLinked && carryForward > 0 && totalActualWithCarryIn > 0
+                ? Math.min(Math.max((carryForward / totalActualWithCarryIn) * incomeReceivedPct, 1.5), incomeReceivedPct * 0.4)
+                : 0;
+              const actualIncomeOnlyPct = incomeReceivedPct - actualCarryInPct;
               return (
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
                   <div className="flex-1 relative h-[18px]">
-                    {/* Green income border */}
-                    {totalIncomeActual > 0 && (
+                    {/* Carry-in border (left of green income border) */}
+                    {actualCarryInPct > 0 && (
                       <div
-                        className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
-                        style={{ width: `calc(${incomeReceivedPct}% + 2px)`, height: 'calc(100% + 2px)' }}
+                        className="absolute border-2 border-blue-400/60 dark:border-blue-300/50 border-r-0 rounded-l-[7px]"
+                        style={{
+                          width: `${actualCarryInPct}%`,
+                          minWidth: '20px',
+                          top: '-3px',
+                          bottom: '-3px',
+                          left: '-1px',
+                        }}
+                      />
+                    )}
+                    {/* Green income border (adjusted for carry-in) */}
+                    {totalActualWithCarryIn > 0 && (
+                      <div
+                        className={cn(
+                          "absolute border-2 border-green-600 dark:border-green-500",
+                          actualCarryInPct > 0 ? "rounded-r-md border-l-0" : "rounded-md -left-px"
+                        )}
+                        style={{
+                          left: actualCarryInPct > 0 ? `max(${actualCarryInPct}%, 20px)` : undefined,
+                          width: actualCarryInPct > 0
+                            ? `calc(${actualIncomeOnlyPct}% + 2px - max(0px, 20px - ${actualCarryInPct}%))`
+                            : `calc(${incomeReceivedPct}% + 2px)`,
+                          top: '-1px',
+                          height: 'calc(100% + 2px)',
+                        }}
                       />
                     )}
                     {/* Actual fill segments */}
@@ -931,8 +963,8 @@ export default function TrackerPage() {
                         )}
                       </div>
                     )}
-                    {/* Carry-out dashed zone (right side, inside green border) */}
-                    {showCarryOut && (
+                    {/* Carry-out dashed zone (in the whitespace after spending) */}
+                    {showCarryOut && carryOutPct > 0 && (
                       <div
                         className="absolute rounded-r-[3px] border-2 border-dashed border-green-600 dark:border-green-500 bg-green-500/[0.08]"
                         style={{
@@ -941,7 +973,7 @@ export default function TrackerPage() {
                           bottom: '3px',
                           width: `${carryOutPct}%`,
                           minWidth: '20px',
-                          maxWidth: `calc(${incomeReceivedPct}% - 10px)`,
+                          maxWidth: `calc(${availableSpacePct}% - 6px)`,
                           zIndex: 2,
                         }}
                       />
