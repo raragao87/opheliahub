@@ -849,10 +849,10 @@ export default function TrackerPage() {
           >
             {/* Budget bar */}
             {(() => {
-              const carryInPct = budgetMonthsLinked && carryForward > 0 && totalIncome > 0
-                ? Math.min(Math.max((carryForward / totalIncome) * incomeBudgetPct, 1.5), incomeBudgetPct * 0.4)
+              const carryInPct = budgetMonthsLinked && carryForward > 0
+                ? Math.max((carryForward / maxBarValue) * 100, 1.5)
                 : 0;
-              const incomeOnlyPct = incomeBudgetPct - carryInPct;
+              const incomeOnlyPct = Math.max(incomeBudgetPct - carryInPct, 0);
               return (
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Budget</span>
@@ -909,11 +909,11 @@ export default function TrackerPage() {
               const carryOutPct = showCarryOut
                 ? Math.min(Math.max((toNextMonth / totalActualWithCarryIn) * incomeReceivedPct, 1.5), availableSpacePct)
                 : 0;
-              // Carry-in on actual bar (same as budget bar)
-              const actualCarryInPct = budgetMonthsLinked && carryForward > 0 && totalActualWithCarryIn > 0
-                ? Math.min(Math.max((carryForward / totalActualWithCarryIn) * incomeReceivedPct, 1.5), incomeReceivedPct * 0.4)
+              // Carry-in on actual bar — same percentage as budget bar
+              const actualCarryInPct = budgetMonthsLinked && carryForward > 0
+                ? Math.max((carryForward / maxBarValue) * 100, 1.5)
                 : 0;
-              const actualIncomeOnlyPct = incomeReceivedPct - actualCarryInPct;
+              const actualIncomeOnlyPct = Math.max(incomeReceivedPct - actualCarryInPct, 0);
               return (
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
