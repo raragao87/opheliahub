@@ -863,7 +863,6 @@ export default function TrackerPage() {
                         className="absolute border-2 border-blue-400/60 dark:border-blue-300/50 rounded-md"
                         style={{
                           width: `${carryInPct}%`,
-                          minWidth: '20px',
                           top: '-1px',
                           left: '-1px',
                           height: 'calc(100% + 2px)',
@@ -875,7 +874,7 @@ export default function TrackerPage() {
                       <div
                         className="absolute border-2 border-green-600 dark:border-green-500 rounded-md"
                         style={{
-                          left: carryInPct > 0 ? `max(${carryInPct}%, 20px)` : '-1px',
+                          left: carryInPct > 0 ? `${carryInPct}%` : '-1px',
                           width: carryInPct > 0
                             ? `calc(${incomeOnlyPct}% + 2px)`
                             : `calc(${incomeBudgetPct}% + 2px)`,
@@ -940,7 +939,7 @@ export default function TrackerPage() {
                       <div
                         className="absolute border-2 border-green-600 dark:border-green-500 rounded-md"
                         style={{
-                          left: actualCarryInPct > 0 ? `max(${actualCarryInPct}%, 20px)` : '-1px',
+                          left: actualCarryInPct > 0 ? `${actualCarryInPct}%` : '-1px',
                           width: actualCarryInPct > 0
                             ? `calc(${actualIncomeOnlyPct}% + 2px)`
                             : `calc(${incomeReceivedPct}% + 2px)`,
@@ -971,7 +970,6 @@ export default function TrackerPage() {
                           bottom: '3px',
                           width: `${Math.min(carryOutPct, availableSpacePct)}%`,
                           maxWidth: `calc(${incomeReceivedPct}% - ${expenseSpentPct + fundSpentPct}% - 6px)`,
-                          minWidth: '16px',
                           zIndex: 2,
                         }}
                       />
@@ -985,7 +983,6 @@ export default function TrackerPage() {
                           top: '3px',
                           bottom: '3px',
                           width: `${negativeCarryOutPct}%`,
-                          minWidth: '16px',
                           zIndex: 2,
                         }}
                       />
