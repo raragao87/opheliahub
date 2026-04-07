@@ -957,17 +957,17 @@ export default function TrackerPage() {
                         )}
                       </div>
                     )}
-                    {/* Carry-out dashed zone (in the whitespace after spending) */}
+                    {/* Carry-out dashed zone (inside green income border, after spending) */}
                     {showCarryOut && carryOutPct > 0 && (
                       <div
-                        className="absolute rounded-r-[3px] border-2 border-dashed border-green-600 dark:border-green-500 bg-green-500/[0.08]"
+                        className="absolute rounded-[3px] border-2 border-dashed border-green-600 dark:border-green-500 bg-green-500/[0.08]"
                         style={{
-                          right: '3px',
+                          left: `calc(${expenseSpentPct + fundSpentPct}% + 3px)`,
                           top: '3px',
                           bottom: '3px',
-                          width: `${carryOutPct}%`,
-                          minWidth: '20px',
-                          maxWidth: `calc(${availableSpacePct}% - 6px)`,
+                          width: `${Math.min(carryOutPct, availableSpacePct)}%`,
+                          maxWidth: `calc(${incomeReceivedPct}% - ${expenseSpentPct + fundSpentPct}% - 6px)`,
+                          minWidth: '16px',
                           zIndex: 2,
                         }}
                       />
