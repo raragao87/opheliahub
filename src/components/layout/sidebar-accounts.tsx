@@ -442,7 +442,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
                               onKeyDown={(e) => handleEditKeyDown(e, item)}
                               onBlur={handleEditBlur}
                               onClick={(e) => e.preventDefault()}
-                              className="w-20 text-xs text-right bg-background border border-border rounded px-1.5 py-0.5 font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                              className="w-20 text-xs text-right bg-input text-foreground border border-border rounded px-1.5 py-0.5 font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-primary caret-foreground"
                             />
                           ) : canEdit ? (
                             <button
