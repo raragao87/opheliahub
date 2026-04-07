@@ -857,7 +857,7 @@ export default function TrackerPage() {
                     {/* Carry-in border (left of green income border) */}
                     {carryInPct > 0 && (
                       <div
-                        className="absolute border-2 border-border/45 border-r-0 rounded-l-[7px]"
+                        className="absolute border-2 border-blue-400/60 dark:border-blue-300/50 border-r-0 rounded-l-[7px]"
                         style={{
                           width: `${carryInPct}%`,
                           minWidth: '20px',
