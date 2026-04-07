@@ -904,10 +904,14 @@ export default function TrackerPage() {
             {/* Actual bar */}
             {(() => {
               const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
-              const showCarryOut = budgetMonthsLinked && toNextMonth > 0 && totalActualWithCarryIn > 0;
+              const showCarryOutPositive = budgetMonthsLinked && toNextMonth > 0 && totalActualWithCarryIn > 0;
+              const showCarryOutNegative = budgetMonthsLinked && toNextMonth < 0;
               const availableSpacePct = Math.max(incomeReceivedPct - expenseSpentPct - fundSpentPct, 0);
-              const carryOutPct = showCarryOut
+              const carryOutPct = showCarryOutPositive
                 ? Math.min(Math.max((toNextMonth / totalActualWithCarryIn) * incomeReceivedPct, 1.5), availableSpacePct)
+                : 0;
+              const negativeCarryOutPct = showCarryOutNegative
+                ? Math.min(Math.max((Math.abs(toNextMonth) / maxBarValue) * 100, 1.5), 20)
                 : 0;
               // Carry-in on actual bar — same percentage as budget bar
               const actualCarryInPct = budgetMonthsLinked && carryForward > 0
@@ -957,8 +961,8 @@ export default function TrackerPage() {
                         )}
                       </div>
                     )}
-                    {/* Carry-out dashed zone (inside green income border, after spending) */}
-                    {showCarryOut && carryOutPct > 0 && (
+                    {/* Carry-out positive: dashed green zone (inside green income border) */}
+                    {showCarryOutPositive && carryOutPct > 0 && (
                       <div
                         className="absolute rounded-[3px] border-2 border-dashed border-green-600 dark:border-green-500 bg-green-500/[0.08]"
                         style={{
@@ -967,6 +971,20 @@ export default function TrackerPage() {
                           bottom: '3px',
                           width: `${Math.min(carryOutPct, availableSpacePct)}%`,
                           maxWidth: `calc(${incomeReceivedPct}% - ${expenseSpentPct + fundSpentPct}% - 6px)`,
+                          minWidth: '16px',
+                          zIndex: 2,
+                        }}
+                      />
+                    )}
+                    {/* Carry-out negative: dashed red zone (extends beyond green income border) */}
+                    {showCarryOutNegative && (
+                      <div
+                        className="absolute rounded-[3px] border-2 border-dashed border-red-500 dark:border-red-400 bg-red-500/[0.08]"
+                        style={{
+                          left: `calc(${incomeReceivedPct}% + 3px)`,
+                          top: '3px',
+                          bottom: '3px',
+                          width: `${negativeCarryOutPct}%`,
                           minWidth: '16px',
                           zIndex: 2,
                         }}
