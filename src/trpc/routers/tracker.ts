@@ -399,22 +399,23 @@ export const trackerRouter = router({
       const effectiveCarryForward = tracker.carryForward ?? autoCarryForward;
 
       // Compute and persist "to next month"
-      // Same formula as frontend: readyToAssign + incomeAvailable + expenseAvailable
-      const incomeAllocated = tracker.allocations
-        .filter((a) => incomeCategoryIdSet.has(a.categoryId))
-        .reduce((sum, a) => sum + a.amount, 0);
-      const expenseAllocated = tracker.allocations
-        .filter((a) => expenseCategoryIdSet.has(a.categoryId))
-        .reduce((sum, a) => sum + a.amount, 0);
-      const fundAllocated = await ctx.prisma.fundTrackerAllocation.aggregate({
-        where: { trackerId: tracker.id },
+      // Formula: carryForward + actualIncome - actualExpenses - actualFundSpending
+      // Uses actuals (not allocations) so carry-out reflects what's actually left
+      const totalFundActualForMonth = await ctx.prisma.transaction.aggregate({
+        where: {
+          AND: [
+            visibilityFilter,
+            liquidFilter,
+            effectiveDateFilter(start, end),
+            { type: { not: "TRANSFER" } },
+            { isInitialBalance: false },
+            { fundId: { not: null } },
+          ],
+        },
         _sum: { amount: true },
-      }).then((r) => r._sum.amount ?? 0);
+      }).then((r) => Math.abs(r._sum.amount ?? 0));
 
-      const readyToAssign = effectiveCarryForward + incomeAllocated - expenseAllocated - fundAllocated;
-      const incomeAvail = actualIncome - incomeAllocated;
-      const expenseAvail = expenseAllocated - totalActualExpenses;
-      const toNextMonth = readyToAssign + incomeAvail + expenseAvail;
+      const toNextMonth = effectiveCarryForward + actualIncome - totalActualExpenses - totalFundActualForMonth;
 
       // Persist toNextMonth
       await ctx.prisma.tracker.update({

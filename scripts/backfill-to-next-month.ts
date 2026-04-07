@@ -83,10 +83,29 @@ async function computeToNextMonth(tracker: {
     }
   }
 
-  const readyToAssign = carryForward + incomeAllocated - expenseAllocated - fundAllocated;
-  const incomeAvail = actualIncome - incomeAllocated;
-  const expenseAvail = expenseAllocated - totalActualExpenses;
-  return readyToAssign + incomeAvail + expenseAvail;
+  // Get actual fund spending (not fund allocations)
+  const fundTxns = await prisma.transaction.findMany({
+    where: {
+      AND: [
+        visFilter,
+        { account: { type: { in: [...LIQUID_TYPES] } } },
+        {
+          OR: [
+            { accrualDate: { gte: start, lte: end } },
+            { accrualDate: null, date: { gte: start, lte: end } },
+          ],
+        },
+        { type: { not: "TRANSFER" } },
+        { isInitialBalance: false },
+        { fundId: { not: null } },
+      ],
+    },
+    select: { amount: true },
+  });
+  const totalFundActual = fundTxns.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+  // Carry-out = carryIn + actualIncome - actualExpenses - actualFundSpending
+  return carryForward + actualIncome - totalActualExpenses - totalFundActual;
 }
 
 async function main() {
