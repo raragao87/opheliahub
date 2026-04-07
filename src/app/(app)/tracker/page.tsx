@@ -857,30 +857,27 @@ export default function TrackerPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Budget</span>
                   <div className="flex-1 relative h-[18px]">
-                    {/* Carry-in border (left of green income border) */}
+                    {/* Carry-in rectangle */}
                     {carryInPct > 0 && (
                       <div
-                        className="absolute border-2 border-blue-400/60 dark:border-blue-300/50 border-r-0 rounded-l-[7px]"
+                        className="absolute border-2 border-blue-400/60 dark:border-blue-300/50 rounded-md"
                         style={{
                           width: `${carryInPct}%`,
                           minWidth: '20px',
-                          top: '-3px',
-                          bottom: '-3px',
+                          top: '-1px',
                           left: '-1px',
+                          height: 'calc(100% + 2px)',
                         }}
                       />
                     )}
-                    {/* Green income border (adjusted for carry-in) */}
-                    {totalIncome > 0 && (
+                    {/* Green income rectangle */}
+                    {incomeAssigned > 0 && (
                       <div
-                        className={cn(
-                          "absolute border-2 border-green-600 dark:border-green-500",
-                          carryInPct > 0 ? "rounded-r-md border-l-0" : "rounded-md -left-px"
-                        )}
+                        className="absolute border-2 border-green-600 dark:border-green-500 rounded-md"
                         style={{
-                          left: carryInPct > 0 ? `max(${carryInPct}%, 20px)` : undefined,
+                          left: carryInPct > 0 ? `max(${carryInPct}%, 20px)` : '-1px',
                           width: carryInPct > 0
-                            ? `calc(${incomeOnlyPct}% + 2px - max(0px, 20px - ${carryInPct}%))`
+                            ? `calc(${incomeOnlyPct}% + 2px)`
                             : `calc(${incomeBudgetPct}% + 2px)`,
                           top: '-1px',
                           height: 'calc(100% + 2px)',
@@ -921,30 +918,27 @@ export default function TrackerPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
                   <div className="flex-1 relative h-[18px]">
-                    {/* Carry-in border (left of green income border) */}
+                    {/* Carry-in rectangle */}
                     {actualCarryInPct > 0 && (
                       <div
-                        className="absolute border-2 border-blue-400/60 dark:border-blue-300/50 border-r-0 rounded-l-[7px]"
+                        className="absolute border-2 border-blue-400/60 dark:border-blue-300/50 rounded-md"
                         style={{
                           width: `${actualCarryInPct}%`,
                           minWidth: '20px',
-                          top: '-3px',
-                          bottom: '-3px',
+                          top: '-1px',
                           left: '-1px',
+                          height: 'calc(100% + 2px)',
                         }}
                       />
                     )}
-                    {/* Green income border (adjusted for carry-in) */}
-                    {totalActualWithCarryIn > 0 && (
+                    {/* Green income rectangle */}
+                    {totalIncomeActual > 0 && (
                       <div
-                        className={cn(
-                          "absolute border-2 border-green-600 dark:border-green-500",
-                          actualCarryInPct > 0 ? "rounded-r-md border-l-0" : "rounded-md -left-px"
-                        )}
+                        className="absolute border-2 border-green-600 dark:border-green-500 rounded-md"
                         style={{
-                          left: actualCarryInPct > 0 ? `max(${actualCarryInPct}%, 20px)` : undefined,
+                          left: actualCarryInPct > 0 ? `max(${actualCarryInPct}%, 20px)` : '-1px',
                           width: actualCarryInPct > 0
-                            ? `calc(${actualIncomeOnlyPct}% + 2px - max(0px, 20px - ${actualCarryInPct}%))`
+                            ? `calc(${actualIncomeOnlyPct}% + 2px)`
                             : `calc(${incomeReceivedPct}% + 2px)`,
                           top: '-1px',
                           height: 'calc(100% + 2px)',
