@@ -845,55 +845,116 @@ export default function TrackerPage() {
             onMouseLeave={() => setShowBarTooltip(false)}
           >
             {/* Budget bar */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Budget</span>
-              <div className="flex-1 relative h-[18px]">
-                {totalIncome > 0 && (
-                  <div
-                    className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
-                    style={{ width: `calc(${incomeBudgetPct}% + 2px)`, height: 'calc(100% + 2px)' }}
-                  />
-                )}
-                {(expenseAssigned > 0 || totalFundContributions > 0) && (
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-[4px] overflow-hidden flex"
-                    style={{ width: `${expenseBudgetPct + fundsBudgetPct}%` }}
-                  >
-                    <div style={{ flex: expenseAssigned || 1 }} className="bg-red-500/75" />
-                    {totalFundContributions > 0 && (
-                      <div style={{ flex: totalFundContributions }} className="bg-amber-500/75" />
+            {(() => {
+              const carryInPct = budgetMonthsLinked && carryForward > 0 && totalIncome > 0
+                ? Math.min(Math.max((carryForward / totalIncome) * incomeBudgetPct, 1.5), incomeBudgetPct * 0.4)
+                : 0;
+              const incomeOnlyPct = incomeBudgetPct - carryInPct;
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Budget</span>
+                  <div className="flex-1 relative h-[18px]">
+                    {/* Carry-in border (left of green income border) */}
+                    {carryInPct > 0 && (
+                      <div
+                        className="absolute border-2 border-border/45 border-r-0 rounded-l-[7px]"
+                        style={{
+                          width: `${carryInPct}%`,
+                          minWidth: '20px',
+                          top: '-3px',
+                          bottom: '-3px',
+                          left: '-1px',
+                        }}
+                      />
+                    )}
+                    {/* Green income border (adjusted for carry-in) */}
+                    {totalIncome > 0 && (
+                      <div
+                        className={cn(
+                          "absolute border-2 border-green-600 dark:border-green-500",
+                          carryInPct > 0 ? "rounded-r-md border-l-0" : "rounded-md -left-px"
+                        )}
+                        style={{
+                          left: carryInPct > 0 ? `max(${carryInPct}%, 20px)` : undefined,
+                          width: carryInPct > 0
+                            ? `calc(${incomeOnlyPct}% + 2px - max(0px, 20px - ${carryInPct}%))`
+                            : `calc(${incomeBudgetPct}% + 2px)`,
+                          top: '-1px',
+                          height: 'calc(100% + 2px)',
+                        }}
+                      />
+                    )}
+                    {/* Budget fill segments */}
+                    {(expenseAssigned > 0 || totalFundContributions > 0) && (
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-[4px] overflow-hidden flex"
+                        style={{ width: `${expenseBudgetPct + fundsBudgetPct}%` }}
+                      >
+                        <div style={{ flex: expenseAssigned || 1 }} className="bg-red-500/75" />
+                        {totalFundContributions > 0 && (
+                          <div style={{ flex: totalFundContributions }} className="bg-amber-500/75" />
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
 
             {/* Actual bar */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
-              <div className="flex-1 relative h-[18px]">
-                {totalIncomeActual > 0 && (
-                  <div
-                    className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
-                    style={{ width: `calc(${incomeReceivedPct}% + 2px)`, height: 'calc(100% + 2px)' }}
-                  />
-                )}
-                {(totalSpentExpenses > 0 || totalFundActual > 0) && (
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-[4px] overflow-hidden flex"
-                    style={{ width: `${expenseSpentPct + fundSpentPct}%` }}
-                  >
-                    <div style={{ flex: totalSpentExpenses || 1 }} className="bg-red-500/45" />
-                    {totalFundActual > 0 && (
-                      <div style={{ flex: totalFundActual }} className="bg-amber-500/40" />
+            {(() => {
+              const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
+              const showCarryOut = budgetMonthsLinked && toNextMonth > 0 && totalIncomeActual > 0;
+              const carryOutPct = showCarryOut
+                ? Math.min(Math.max((toNextMonth / totalIncomeActual) * incomeReceivedPct, 1.5), incomeReceivedPct * 0.4)
+                : 0;
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-11 shrink-0 font-medium">Actual</span>
+                  <div className="flex-1 relative h-[18px]">
+                    {/* Green income border */}
+                    {totalIncomeActual > 0 && (
+                      <div
+                        className="absolute -top-px -left-px rounded-md border-2 border-green-600 dark:border-green-500"
+                        style={{ width: `calc(${incomeReceivedPct}% + 2px)`, height: 'calc(100% + 2px)' }}
+                      />
+                    )}
+                    {/* Actual fill segments */}
+                    {(totalSpentExpenses > 0 || totalFundActual > 0) && (
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-[4px] overflow-hidden flex"
+                        style={{ width: `${expenseSpentPct + fundSpentPct}%` }}
+                      >
+                        <div style={{ flex: totalSpentExpenses || 1 }} className="bg-red-500/45" />
+                        {totalFundActual > 0 && (
+                          <div style={{ flex: totalFundActual }} className="bg-amber-500/40" />
+                        )}
+                      </div>
+                    )}
+                    {/* Carry-out dashed zone (right side, inside green border) */}
+                    {showCarryOut && (
+                      <div
+                        className="absolute rounded-r-[3px] border-2 border-dashed border-green-600 dark:border-green-500 bg-green-500/[0.08]"
+                        style={{
+                          right: '3px',
+                          top: '3px',
+                          bottom: '3px',
+                          width: `${carryOutPct}%`,
+                          minWidth: '20px',
+                          maxWidth: `calc(${incomeReceivedPct}% - 10px)`,
+                          zIndex: 2,
+                        }}
+                      />
                     )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
 
             {/* Combined hover tooltip */}
-            {showBarTooltip && (
+            {showBarTooltip && (() => {
+              const tooltipToNextMonth = summaryQuery.data?.toNextMonth ?? 0;
+              return (
               <div className="absolute left-12 top-full mt-1.5 z-50 rounded-lg border bg-card shadow-lg p-3 min-w-[280px]">
                 <table className="w-full text-xs">
                   <thead>
@@ -905,6 +966,22 @@ export default function TrackerPage() {
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Carry-in row */}
+                    {budgetMonthsLinked && carryForward > 0 && (
+                      <tr className="border-b border-border/50">
+                        <td className="py-0.5 pb-1.5">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm border-[1.5px] border-border/60 inline-block" />
+                            Carry-in
+                          </span>
+                        </td>
+                        <td className="text-right py-0.5 pb-1.5 px-2 tabular-nums">
+                          <MoneyDisplay amount={carryForward} colorize={false} className="text-xs inline" />
+                        </td>
+                        <td className="text-right py-0.5 pb-1.5 px-2 tabular-nums text-muted-foreground">—</td>
+                        <td className="text-right py-0.5 pb-1.5 pl-2 tabular-nums text-muted-foreground">—</td>
+                      </tr>
+                    )}
                     <tr>
                       <td className="py-0.5">
                         <span className="flex items-center gap-1.5">
@@ -913,13 +990,13 @@ export default function TrackerPage() {
                         </span>
                       </td>
                       <td className="text-right py-0.5 px-2 tabular-nums">
-                        <MoneyDisplay amount={totalIncome} colorize={false} className="text-xs inline" />
+                        <MoneyDisplay amount={incomeAssigned} colorize={false} className="text-xs inline" />
                       </td>
                       <td className="text-right py-0.5 px-2 tabular-nums text-green-600 dark:text-green-400">
                         <MoneyDisplay amount={totalIncomeActual} colorize={false} className="text-xs inline" />
                       </td>
                       <td className="text-right py-0.5 pl-2 tabular-nums text-muted-foreground">
-                        <MoneyDisplay amount={totalIncomeActual - totalIncome} colorize={false} className="text-xs inline" />
+                        <MoneyDisplay amount={totalIncomeActual - incomeAssigned} colorize={false} className="text-xs inline" />
                       </td>
                     </tr>
                     <tr>
@@ -966,10 +1043,34 @@ export default function TrackerPage() {
                         </div>
                       </td>
                     </tr>
+                    {/* Carry-out row */}
+                    {budgetMonthsLinked && (
+                      <tr className="text-muted-foreground">
+                        <td className="pt-0.5" colSpan={4}>
+                          <div className="flex justify-between items-center">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-0 border-t-2 border-dashed border-green-600 dark:border-green-500 inline-block" />
+                              Carry-out
+                            </span>
+                            <MoneyDisplay
+                              amount={tooltipToNextMonth}
+                              colorize={false}
+                              className={cn(
+                                "text-xs inline",
+                                tooltipToNextMonth > 0 ? "text-green-600 dark:text-green-400"
+                                  : tooltipToNextMonth < 0 ? "text-red-500"
+                                  : ""
+                              )}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </tfoot>
                 </table>
               </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* ── RIGHT: Month + Actions top, Gauge + Amount bottom ── */}
@@ -1192,48 +1293,6 @@ export default function TrackerPage() {
         onDragStart={isEditing ? undefined : handleDragStart}
         onDragEnd={isEditing ? undefined : handleDragEnd}
       >
-      {budgetMonthsLinked && (
-        <>
-          {/* ── From Previous Month ── */}
-          <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              ↪ From previous month
-            </span>
-            <MoneyDisplay
-              amount={carryForward}
-              colorize={false}
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                carryForward > 0 ? "text-green-600 dark:text-green-400"
-                  : carryForward < 0 ? "text-red-600 dark:text-red-400"
-                  : "text-muted-foreground"
-              )}
-            />
-          </div>
-
-          {/* ── To Next Month ── */}
-          {(() => {
-            const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
-            return (
-              <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-card mb-2">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  ↗ To next month
-                </span>
-                <MoneyDisplay
-                  amount={toNextMonth}
-                  colorize={false}
-                  className={cn(
-                    "text-sm font-semibold tabular-nums",
-                    toNextMonth > 0 ? "text-green-600 dark:text-green-400"
-                      : toNextMonth < 0 ? "text-red-600 dark:text-red-400"
-                      : "text-muted-foreground"
-                  )}
-                />
-              </div>
-            );
-          })()}
-        </>
-      )}
 
       {(["INCOME", "EXPENSE"] as const).map((tableType) => {
         const groups = tableType === "INCOME" ? incomeGroups : expenseGroups;
