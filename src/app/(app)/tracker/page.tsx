@@ -1045,6 +1045,30 @@ export default function TrackerPage() {
                         <MoneyDisplay amount={totalIncomeActual - incomeAssigned} colorize={false} className="text-xs inline" />
                       </td>
                     </tr>
+                    {/* Investment row */}
+                    {(investmentAssigned !== 0 || (summaryQuery.data?.actualInvestment ?? 0) !== 0) && (
+                      <tr>
+                        <td className="py-0.5">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" />
+                            Investment
+                          </span>
+                        </td>
+                        <td className="text-right py-0.5 px-2 tabular-nums">
+                          <MoneyDisplay amount={investmentAssigned} colorize={false} className="text-xs inline" />
+                        </td>
+                        <td className="text-right py-0.5 px-2 tabular-nums">
+                          <MoneyDisplay amount={summaryQuery.data?.actualInvestment ?? 0} colorize className="text-xs inline" />
+                        </td>
+                        <td className="text-right py-0.5 pl-2 tabular-nums">
+                          <MoneyDisplay
+                            amount={(summaryQuery.data?.actualInvestment ?? 0) - investmentAssigned}
+                            colorize
+                            className="text-xs inline"
+                          />
+                        </td>
+                      </tr>
+                    )}
                     <tr>
                       <td className="py-0.5">
                         <span className="flex items-center gap-1.5">
@@ -2104,6 +2128,110 @@ export default function TrackerPage() {
                 </tfoot>
               )}
             </table>
+
+            {/* Investment section — only in the income table */}
+            {isIncome && (() => {
+              const investmentData = summaryQuery.data?.investmentSummary ?? [];
+              const hasInvestment = investmentData.length > 0 || investmentAssigned !== 0;
+              if (!hasInvestment) return null;
+
+              const investmentActualTotal = summaryQuery.data?.actualInvestment ?? 0;
+              const investmentDiff = investmentActualTotal - investmentAssigned;
+
+              return (
+                <table className="w-full text-sm min-w-[600px] border-t-2 border-blue-400/60 dark:border-blue-500/40" style={{ tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col /><col style={{ width: '130px' }} /><col style={{ width: '130px' }} /><col style={{ width: '150px' }} />
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-blue-50/50 dark:bg-blue-950/20 border-b">
+                      <th className="text-left py-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+                            📈 Investment
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300">
+                            account level
+                          </span>
+                        </div>
+                      </th>
+                      <th className="text-right py-2 px-3 text-xs text-blue-600/60 dark:text-blue-400/60 font-medium">
+                        Budgeted
+                      </th>
+                      <th className="text-right py-2 px-3 text-xs text-blue-600/60 dark:text-blue-400/60 font-medium">
+                        Actual
+                      </th>
+                      <th className="text-right py-2 px-3 text-xs text-blue-600/60 dark:text-blue-400/60 font-medium">
+                        Diff
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {investmentData.map((inv) => (
+                      <tr key={inv.accountId} className="bg-blue-50/30 dark:bg-blue-950/10 border-b border-border/50">
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2 pl-4">
+                            <div className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-[10px] text-blue-700 dark:text-blue-300 font-medium">
+                              {inv.accountName.charAt(0)}
+                            </div>
+                            <span className="text-sm">{inv.accountName}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className="text-sm text-muted-foreground/40">—</span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <MoneyDisplay amount={inv.actual} colorize className="text-sm" />
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className="text-sm text-muted-foreground/40">—</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Investment total */}
+                    <tr className="bg-muted/30 border-b">
+                      <td className="py-2 px-3 text-sm font-medium text-muted-foreground">
+                        Investment net
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {investmentAssigned !== 0
+                          ? <MoneyDisplay amount={investmentAssigned} colorize={false} className="text-sm font-medium" />
+                          : <span className="text-sm text-muted-foreground/40">—</span>
+                        }
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <MoneyDisplay amount={investmentActualTotal} colorize className="text-sm font-medium" />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {investmentAssigned !== 0
+                          ? <MoneyDisplay amount={investmentDiff} colorize className="text-sm font-medium" />
+                          : <span className="text-sm text-muted-foreground/40">—</span>
+                        }
+                      </td>
+                    </tr>
+                    {/* Available to spend footer */}
+                    <tr className="border-t-2 border-border/60 bg-muted/50">
+                      <td className="py-2.5 px-3 text-sm font-medium">
+                        Available to spend
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <MoneyDisplay amount={carryIn + incomeAssigned + investmentAssigned} colorize={false} className="text-sm font-medium" />
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <MoneyDisplay amount={carryIn + totalIncomeActual + investmentActualTotal} colorize className="text-sm font-medium" />
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <MoneyDisplay
+                          amount={(totalIncomeActual + investmentActualTotal) - (incomeAssigned + investmentAssigned)}
+                          colorize
+                          className="text-sm font-medium"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              );
+            })()}
 
             {/* Error display for category mutations */}
             {(createCategoryMutation.error ||

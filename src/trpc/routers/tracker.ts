@@ -224,6 +224,39 @@ export const trackerRouter = router({
         }
       }
 
+      // Per-account investment breakdown for the tracker UI
+      const investmentByAccount = await ctx.prisma.transaction.groupBy({
+        by: ["accountId"],
+        where: {
+          AND: [
+            visibilityFilter,
+            effectiveDateFilter(start, end),
+            { type: "INVESTMENT" },
+            { isInitialBalance: false },
+          ],
+        },
+        _sum: { amount: true },
+      });
+
+      const investmentAccountIds = investmentByAccount.map(g => g.accountId);
+      const investmentAccounts = investmentAccountIds.length > 0
+        ? await ctx.prisma.financialAccount.findMany({
+            where: { id: { in: investmentAccountIds } },
+            select: { id: true, name: true, icon: true, type: true },
+          })
+        : [];
+
+      const investmentAccountMap = new Map(investmentAccounts.map(a => [a.id, a]));
+
+      const investmentSummary = investmentByAccount
+        .map(g => ({
+          accountId: g.accountId,
+          accountName: investmentAccountMap.get(g.accountId)?.name ?? "Unknown",
+          accountIcon: investmentAccountMap.get(g.accountId)?.icon ?? null,
+          actual: g._sum.amount ?? 0,
+        }))
+        .sort((a, b) => a.actual - b.actual);
+
       // spendingMap / incomeMap: per-category breakdown for the UI
       const spendingMap = new Map<string | null, number>();
       const incomeMap = new Map<string | null, number>();
@@ -300,6 +333,7 @@ export const trackerRouter = router({
           totalAllocated: 0,
           totalActualExpenses,
           categories,
+          investmentSummary,
           carryIn: 0,
           toNextMonth: null as number | null,
         };
@@ -399,6 +433,7 @@ export const trackerRouter = router({
         totalAllocated,
         totalActualExpenses,
         categories,
+        investmentSummary,
         carryIn,
         toNextMonth,
       };
