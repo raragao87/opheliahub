@@ -265,7 +265,7 @@ function TransactionsContent() {
       accountIds: filters.accountIds.length ? filters.accountIds : undefined,
       categoryIds: !filters.uncategorized && !filters.opheliaUnconfirmed && filters.categoryIds.length ? filters.categoryIds : undefined,
       fundIds: !filters.uncategorized && !filters.opheliaUnconfirmed && filters.fundIds.length ? filters.fundIds : undefined,
-      type: (filters.type as "INCOME" | "EXPENSE" | "TRANSFER") || undefined,
+      type: (filters.type as "INCOME" | "EXPENSE" | "FUND" | "TRANSFER" | "INVESTMENT") || undefined,
       transferType: (filters.transferType as "INTERNAL" | "EXTERNAL") || undefined,
       dateFrom: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
       dateTo: filters.dateTo ? new Date(filters.dateTo) : undefined,

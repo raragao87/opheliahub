@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
-  ArrowLeftRight, Trash2, X,
+  ArrowLeftRight, Trash2, X, Wallet,
   ChevronDown, ChevronLeft, ChevronRight,
   CircleSlash, Search, MessageSquare, Sparkles,
 } from "lucide-react";
@@ -933,6 +933,12 @@ export function TransactionTable({
                             active: cf.opheliaUnconfirmed,
                             onToggle: () => { setCf("opheliaUnconfirmed", !cf.opheliaUnconfirmed); setCf("uncategorized", false); setCf("categoryIds", []); setCf("fundIds", []); },
                             icon: <Sparkles className={cn("h-3.5 w-3.5 shrink-0", cf.opheliaUnconfirmed ? "text-amber-500" : "text-muted-foreground")} />,
+                          },
+                          {
+                            label: "Fund",
+                            active: cf.type === "FUND",
+                            onToggle: () => onTypeChange(cf.type === "FUND" ? "" : "FUND", ""),
+                            icon: <Wallet className={cn("h-3.5 w-3.5 shrink-0", cf.type === "FUND" ? "text-amber-500" : "text-muted-foreground")} />,
                           },
                           {
                             label: "Transfer",

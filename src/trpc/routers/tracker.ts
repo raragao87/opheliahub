@@ -198,7 +198,7 @@ export const trackerRouter = router({
             visibilityFilter,
             liquidFilter,
             effectiveDateFilter(start, end),
-            { type: { not: "TRANSFER" } },
+            { type: { in: ["INCOME", "EXPENSE"] } },
             { isInitialBalance: false },
           ],
         },
@@ -208,7 +208,6 @@ export const trackerRouter = router({
           categoryId: true,
           opheliaCategoryId: true,
           effectiveCategoryId: true,
-          fundId: true,
         },
       });
 
@@ -216,13 +215,10 @@ export const trackerRouter = router({
       const expenseCategoryIdSet = new Set(expenseCategoryIds);
 
       // Build unified actual map using effectiveCategoryId column
-      // Fund transactions are excluded (tracked separately in fund table)
       const categoryActualMap = new Map<string | null, number>();
       let actualIncome = 0;
 
       for (const tx of allMonthTxs) {
-        if (tx.fundId) continue; // fund transactions tracked separately
-
         const effectiveCatId = tx.effectiveCategoryId;
 
         categoryActualMap.set(effectiveCatId, (categoryActualMap.get(effectiveCatId) ?? 0) + tx.amount);

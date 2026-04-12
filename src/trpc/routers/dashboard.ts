@@ -134,7 +134,7 @@ export const dashboardRouter = router({
           visibility: input.visibility,
           date: { gte: start, lte: end },
           isInitialBalance: false,
-          type: { not: "TRANSFER" as const },
+          type: { in: ["INCOME", "EXPENSE"] as ("INCOME" | "EXPENSE")[] },
         };
 
         const txns = await ctx.prisma.transaction.findMany({
@@ -239,7 +239,7 @@ export const dashboardRouter = router({
             visibility: input.visibility,
             date: { gte: start, lte: end },
             isInitialBalance: false,
-            type: { not: "TRANSFER" },
+            type: { in: ["INCOME", "EXPENSE"] },
           },
           _sum: { amount: true },
         });
@@ -351,7 +351,7 @@ export const dashboardRouter = router({
         const { end: monthEnd } = getMonthRange(y, m);
         const spending = await ctx.prisma.transaction.aggregate({
           where: {
-            fundId: { not: null },
+            type: "FUND",
             fund: {
               householdId: ctx.householdId,
               userId: ctx.userId,
@@ -361,7 +361,6 @@ export const dashboardRouter = router({
             ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
             account: { type: { in: LIQUID_ACCOUNT_TYPES } },
             isInitialBalance: false,
-            type: { not: "TRANSFER" },
             OR: [
               { accrualDate: { lte: monthEnd } },
               { accrualDate: null, date: { lte: monthEnd } },
@@ -467,7 +466,7 @@ export const dashboardRouter = router({
                 liquidFilter,
                 { fundId: fund.id },
                 { isInitialBalance: false },
-                { type: { not: "TRANSFER" } },
+                { type: "FUND" },
                 {
                   OR: [
                     { accrualDate: { lte: monthEnd } },
@@ -488,7 +487,7 @@ export const dashboardRouter = router({
                 liquidFilter,
                 { fundId: fund.id },
                 { isInitialBalance: false },
-                { type: { not: "TRANSFER" } },
+                { type: "FUND" },
                 {
                   OR: [
                     { accrualDate: { gte: monthStart, lte: monthEnd } },

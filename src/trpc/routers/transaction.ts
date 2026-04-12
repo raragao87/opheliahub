@@ -15,7 +15,7 @@ export const transactionRouter = router({
         accountIds: z.array(z.string()).optional(),
         categoryId: z.string().optional(),
         categoryIds: z.array(z.string()).optional(),
-        type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]).optional(),
+        type: z.enum(["INCOME", "EXPENSE", "FUND", "TRANSFER", "INVESTMENT"]).optional(),
         transferType: z.enum(["INTERNAL", "EXTERNAL"]).optional(),
         visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
         tagId: z.string().optional(),
@@ -104,7 +104,7 @@ export const transactionRouter = router({
           ...(input.opheliaUnconfirmed
             ? [{ categoryId: { equals: null }, fundId: { equals: null },
                  opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null },
-                 type: { not: "TRANSFER" as const } }]
+                 type: { in: ["INCOME", "EXPENSE"] as ("INCOME" | "EXPENSE")[] } }]
             : input.uncategorized
               ? [{ effectiveCategoryId: { equals: null }, fundId: { equals: null } }]
               : input.categoryIds?.length && input.fundIds?.length
@@ -247,7 +247,7 @@ export const transactionRouter = router({
     .input(
       z.object({
         amount: z.number().int(),
-        type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+        type: z.enum(["INCOME", "EXPENSE", "FUND", "TRANSFER", "INVESTMENT"]),
         description: z.string().min(1).max(500),
         date: z.coerce.date(),
         accountId: z.string(),
@@ -401,7 +401,7 @@ export const transactionRouter = router({
       z.object({
         id: z.string(),
         amount: z.number().int().optional(),
-        type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]).optional(),
+        type: z.enum(["INCOME", "EXPENSE", "FUND", "TRANSFER", "INVESTMENT"]).optional(),
         description: z.string().min(1).max(500).optional(),
         displayName: z.string().max(100).nullable().optional(),
         date: z.coerce.date().optional(),
@@ -532,6 +532,17 @@ export const transactionRouter = router({
 
       // ── Non-transfer: existing logic ────────────────────────────────
       const { id, tagIds, ...data } = input;
+
+      // Auto-set type based on fund assignment
+      if (data.fundId !== undefined) {
+        if (data.fundId) {
+          data.type = "FUND";
+          data.categoryId = null;
+        } else if (existing.type === "FUND") {
+          // Clearing fund — revert to EXPENSE
+          data.type = "EXPENSE";
+        }
+      }
 
       // Auto-recompute displayName if description changed but displayName not explicitly set
       if (data.description !== undefined && data.displayName === undefined) {
@@ -711,14 +722,20 @@ export const transactionRouter = router({
       }
 
       // Category and fund are mutually exclusive
-      const data: { categoryId: string | null; fundId?: string | null; effectiveCategoryId?: string | null } = {
+      const data: { categoryId: string | null; fundId?: string | null; effectiveCategoryId?: string | null; type?: "INCOME" | "EXPENSE" | "FUND" | "TRANSFER" | "INVESTMENT" } = {
         categoryId: input.categoryId,
       };
       if (input.fundId !== undefined) {
         data.fundId = input.fundId;
-        if (input.fundId) data.categoryId = null; // fund clears category
+        if (input.fundId) {
+          data.categoryId = null; // fund clears category
+          data.type = "FUND";
+        }
       }
-      if (input.categoryId) data.fundId = null; // category clears fund
+      if (input.categoryId) {
+        data.fundId = null; // category clears fund
+        data.type = "EXPENSE"; // revert to EXPENSE when assigning category
+      }
       // Confirmed category always wins for effectiveCategoryId
       data.effectiveCategoryId = data.categoryId;
 

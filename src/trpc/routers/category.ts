@@ -75,7 +75,7 @@ export const categoryRouter = router({
         color: z.string().optional(),
         parentId: z.string().nullable().optional(),
         visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
-        type: z.enum(["INCOME", "EXPENSE"]).default("EXPENSE"),
+        type: z.enum(["INCOME", "EXPENSE", "INVESTMENT"]).default("EXPENSE"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -123,7 +123,7 @@ export const categoryRouter = router({
         name: z.string().min(1).max(50).optional(),
         icon: z.string().optional(),
         color: z.string().optional(),
-        type: z.enum(["INCOME", "EXPENSE"]).optional(),
+        type: z.enum(["INCOME", "EXPENSE", "INVESTMENT"]).optional(),
         sortOrder: z.number().int().optional(),
         parentId: z.string().nullable().optional(),
       })
@@ -325,7 +325,7 @@ export const categoryRouter = router({
           visibility: input.visibility,
           categoryId: { in: input.categoryIds },
           isInitialBalance: false,
-          type: { not: "TRANSFER" },
+          type: { in: ["INCOME", "EXPENSE"] },
           ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
         },
         select: {

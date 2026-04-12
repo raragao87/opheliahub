@@ -156,7 +156,7 @@ export const opheliaRouter = router({
           visibility: input.visibility,
           opheliaProcessedAt: null,
           isInitialBalance: false,
-          type: { not: "TRANSFER" },
+          type: { in: ["INCOME", "EXPENSE"] },
         },
       });
       return { pending, enabled: true };
@@ -177,7 +177,7 @@ export const opheliaRouter = router({
           visibility: input.visibility,
           opheliaProcessedAt: null,
           isInitialBalance: false,
-          type: { not: "TRANSFER" },
+          type: { in: ["INCOME", "EXPENSE"] },
         },
         _count: { _all: true },
       });

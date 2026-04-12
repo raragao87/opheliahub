@@ -221,7 +221,9 @@ model FinancialAccount {
 enum TransactionType {
   INCOME
   EXPENSE
+  FUND        // spending from / contributing to fund balance
   TRANSFER
+  INVESTMENT  // money flowing to/from investment accounts
 }
 
 enum Visibility {
@@ -302,6 +304,7 @@ model TransactionTag {
 enum CategoryType {
   INCOME
   EXPENSE
+  INVESTMENT  // flat categories for investment tracking
 }
 
 model Category {

@@ -502,7 +502,7 @@ export const tagRouter = router({
           visibility: input.visibility,
           tags: { some: { tagId: { in: tagIds } } },
           isInitialBalance: false,
-          type: { not: "TRANSFER" },
+          type: { in: ["INCOME", "EXPENSE"] },
           ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
         },
         select: {

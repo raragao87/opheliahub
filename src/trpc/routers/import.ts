@@ -13,7 +13,7 @@ const parsedTransactionSchema = z.object({
   date: z.coerce.date(),
   description: z.string(),
   amount: z.number().int(), // cents
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+  type: z.enum(["INCOME", "EXPENSE", "FUND", "TRANSFER", "INVESTMENT"]),
   externalId: z.string().optional(),
 });
 
@@ -187,7 +187,7 @@ export const importRouter = router({
             description: z.string(),
             displayName: z.string().optional(),
             amount: z.number().int(),
-            type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+            type: z.enum(["INCOME", "EXPENSE", "FUND", "TRANSFER", "INVESTMENT"]),
             visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
             categoryId: z.string().optional(),
             tagIds: z.array(z.string()).default([]),
