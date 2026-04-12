@@ -116,6 +116,9 @@ model Household {
   opheliaFeedback       OpheliaFeedback[]
   netWorthSnapshots     NetWorthSnapshot[]
   funds                 Fund[]
+  assets                Asset[]
+  debts                 Debt[]
+  goals                 Goal[]
 
   @@map("households")
 }
@@ -487,18 +490,21 @@ model FundTrackerAllocation {
 // ─── NET WORTH: ASSETS & DEBTS ──────────────────────────────────────
 
 model Asset {
-  id          String     @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
   value       Int // cents
-  currency    String     @default("EUR")
+  currency    String        @default("EUR")
   category    AssetCategory
   userId      String
-  visibility  Visibility @default(PERSONAL)
-  lastUpdated DateTime   @default(now())
-  notes       String?    @db.Text
+  householdId String
+  visibility  Visibility    @default(PERSONAL)
+  lastUpdated DateTime      @default(now())
+  notes       String?       @db.Text
 
-  user User @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  household Household @relation(fields: [householdId], references: [id])
 
+  @@index([householdId])
   @@map("assets")
 }
 
@@ -510,12 +516,15 @@ model Debt {
   monthlyPayment Int? // cents
   currency       String     @default("EUR")
   userId         String
+  householdId    String
   visibility     Visibility @default(PERSONAL)
   lastUpdated    DateTime   @default(now())
   notes          String?    @db.Text
 
-  user User @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  household Household @relation(fields: [householdId], references: [id])
 
+  @@index([householdId])
   @@map("debts")
 }
 
@@ -529,12 +538,15 @@ model Goal {
   currency      String     @default("EUR")
   deadline      DateTime?
   userId        String
+  householdId   String
   visibility    Visibility @default(SHARED)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  household Household @relation(fields: [householdId], references: [id])
 
+  @@index([householdId])
   @@map("goals")
 }
 
