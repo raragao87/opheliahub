@@ -112,7 +112,7 @@ export default function EditTransactionPage({
   const tags = tagsQuery.data ?? [];
   const txn = txnQuery.data!;
   const isTransfer = txn.type === "TRANSFER";
-  const isIlliquid = ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup === "ILLIQUID";
+  const isIlliquid = ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup !== "SPENDING";
   const linkedPartner = (txn as Record<string, unknown>).linkedTransaction ?? (txn as Record<string, unknown>).linkedBy;
   const partnerAccount = linkedPartner ? (linkedPartner as { account?: { name: string } }).account : null;
   const isOutflow = txn.amount < 0;

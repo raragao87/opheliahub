@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere, visibleAccountsWhere } from "@/lib/privacy";
 import { getMonthRange } from "@/lib/date";
-import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
+import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
 export const dashboardRouter = router({
   monthlySummary: householdProcedure
@@ -366,7 +366,7 @@ export const dashboardRouter = router({
               isArchived: false,
             },
             ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-            account: { type: { in: LIQUID_ACCOUNT_TYPES } },
+            account: { type: { in: SPENDING_ACCOUNT_TYPES } },
             isInitialBalance: false,
             OR: [
               { accrualDate: { lte: monthEnd } },
@@ -444,7 +444,7 @@ export const dashboardRouter = router({
       const trackerDateMap = new Map(trackers.map((t) => [t.id, t]));
 
       const visibilityFilter = visibleTransactionsWhere(ctx.userId, ctx.householdId);
-      const liquidFilter = { account: { type: { in: LIQUID_ACCOUNT_TYPES } } };
+      const liquidFilter = { account: { type: { in: SPENDING_ACCOUNT_TYPES } } };
 
       let totalAvailable = 0;
       let totalBudgeted = 0;

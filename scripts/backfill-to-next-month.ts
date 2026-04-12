@@ -5,7 +5,7 @@
 import { PrismaClient } from "@prisma/client";
 import { getMonthRange } from "../src/lib/date";
 
-const LIQUID_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"] as const;
+const SPENDING_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"] as const;
 
 const prisma = new PrismaClient();
 
@@ -57,7 +57,7 @@ async function computeToNextMonth(tracker: {
     where: {
       AND: [
         visFilter,
-        { account: { type: { in: [...LIQUID_TYPES] } } },
+        { account: { type: { in: [...SPENDING_TYPES] } } },
         {
           OR: [
             { accrualDate: { gte: start, lte: end } },

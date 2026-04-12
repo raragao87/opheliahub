@@ -1095,7 +1095,7 @@ function TransactionRow({
   const partnerAccount = txn.linkedTransaction?.account ?? txn.linkedBy?.account ?? null;
   const isOutflow  = txn.amount < 0;
   const isIlliquid = txn.account.type
-    ? ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup === "ILLIQUID"
+    ? ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup !== "SPENDING"
     : false;
   const AccountIcon   = isIlliquid ? ACCOUNT_TYPE_META[txn.account.type!]?.icon : null;
   const canEditCategory = !isTransfer && !isIlliquid;

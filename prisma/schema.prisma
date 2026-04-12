@@ -209,7 +209,8 @@ model FinancialAccount {
   owner          User             @relation(fields: [ownerId], references: [id])
   household      Household?       @relation(fields: [householdId], references: [id])
   transactions   Transaction[]
-  importProfiles  ImportProfile[]
+  importProfiles          ImportProfile[]
+  investmentAllocations   InvestmentTrackerAllocation[]
   duplicateAlerts DuplicateAlert[]
   recurringRules  RecurringRule[]
   linkedFunds     Fund[]
@@ -440,9 +441,10 @@ model Tracker {
 
   household      Household              @relation(fields: [householdId], references: [id])
   user           User                   @relation(fields: [userId], references: [id])
-  allocations     TrackerAllocation[]
-  tagAllocations  TagTrackerAllocation[]
-  fundAllocations FundTrackerAllocation[]
+  allocations              TrackerAllocation[]
+  tagAllocations           TagTrackerAllocation[]
+  fundAllocations          FundTrackerAllocation[]
+  investmentAllocations    InvestmentTrackerAllocation[]
 
   @@unique([householdId, userId, month, year, visibility])
   @@map("trackers")
@@ -485,6 +487,19 @@ model FundTrackerAllocation {
 
   @@unique([trackerId, fundId])
   @@map("fund_tracker_allocations")
+}
+
+model InvestmentTrackerAllocation {
+  id        String @id @default(cuid())
+  trackerId String
+  accountId String
+  amount    Int    // cents — monthly budget for this investment account
+
+  tracker Tracker          @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  account FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([trackerId, accountId])
+  @@map("investment_tracker_allocations")
 }
 
 // ─── NET WORTH: ASSETS & DEBTS ──────────────────────────────────────

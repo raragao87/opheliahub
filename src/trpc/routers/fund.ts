@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { getMonthRange } from "@/lib/date";
 import { visibleTransactionsWhere } from "@/lib/privacy";
-import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
+import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
 export const fundRouter = router({
   // List all active funds with transaction-based computation
@@ -49,7 +49,7 @@ export const fundRouter = router({
         ctx.householdId
       );
       const liquidFilter = {
-        account: { type: { in: LIQUID_ACCOUNT_TYPES } },
+        account: { type: { in: SPENDING_ACCOUNT_TYPES } },
       };
 
       // Effective date filter (respects accrualDate)

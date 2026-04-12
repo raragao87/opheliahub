@@ -19,7 +19,7 @@ import {
 } from "@/lib/recurring";
 import { subMonths } from "date-fns";
 import type { PrismaClient, RecurringRule } from "@prisma/client";
-import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
+import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
 /**
  * Propagates a category change to all matching transactions.
@@ -109,7 +109,7 @@ export const recurringRouter = router({
       const transactions = await ctx.prisma.transaction.findMany({
         where: {
           ...visibilityFilter,
-          account: { type: { in: LIQUID_ACCOUNT_TYPES } },
+          account: { type: { in: SPENDING_ACCOUNT_TYPES } },
           date: { gte: since },
         },
         select: {
@@ -258,7 +258,7 @@ export const recurringRouter = router({
           ...visibleRecurringRulesWhere(ctx.userId, ctx.householdId),
           ...(input.visibility && { visibility: input.visibility }),
           ...(!input.includeInactive && { isActive: true }),
-          account: { type: { in: LIQUID_ACCOUNT_TYPES } },
+          account: { type: { in: SPENDING_ACCOUNT_TYPES } },
         },
         orderBy: { nextDueDate: "asc" },
         include: {
@@ -284,7 +284,7 @@ export const recurringRouter = router({
           ...visibleRecurringRulesWhere(ctx.userId, ctx.householdId),
           visibility: input.visibility,
           isActive: true,
-          account: { type: { in: LIQUID_ACCOUNT_TYPES } },
+          account: { type: { in: SPENDING_ACCOUNT_TYPES } },
         },
         include: {
           account: { select: { id: true, name: true, type: true } },

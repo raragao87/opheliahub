@@ -44,7 +44,7 @@ export default function NewTransactionPage() {
 
   const selectedAccount = (accountsQuery.data ?? []).find((a) => a.id === form.accountId);
   const isIlliquidAccount = selectedAccount
-    ? ACCOUNT_TYPE_META[selectedAccount.type]?.sidebarGroup === "ILLIQUID"
+    ? ACCOUNT_TYPE_META[selectedAccount.type]?.sidebarGroup !== "SPENDING"
     : false;
 
   const handleSubmit = (e: React.FormEvent) => {

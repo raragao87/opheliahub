@@ -347,6 +347,12 @@ export default function TrackerPage() {
     })
   );
 
+  const setInvestmentAllocationMutation = useMutation(
+    trpc.tracker.setInvestmentAllocation.mutationOptions({
+      onSuccess: () => queryClient.invalidateQueries(),
+    })
+  );
+
   const createFundMutation = useMutation(
     trpc.fund.create.mutationOptions({
       onSuccess: () => {
@@ -775,9 +781,7 @@ export default function TrackerPage() {
   const budgetMonthsLinked = preferences.budgetMonthsLinked;
   const carryIn = budgetMonthsLinked ? (summaryQuery.data?.carryIn ?? 0) : 0;
   // Investment categories are flat (no subcategories/groups), so get from summaryCategories
-  const investmentAssigned = summaryCategories
-    .filter((c) => c.category && (c.category as any).type === "INVESTMENT")
-    .reduce((sum, c) => sum + c.allocated, 0);
+  const investmentAssigned = summaryQuery.data?.investmentBudgeted ?? 0;
   const readyToAssign = carryIn + incomeAssigned + investmentAssigned - expenseAssigned - totalFundContributions;
   const totalIncomeActual = incomeGroups.reduce((s, g) => s + g.totalIncomeActual - g.totalExpenseActual, 0);
   const actualInvestment = summaryQuery.data?.actualInvestment ?? 0;
@@ -2113,7 +2117,7 @@ export default function TrackerPage() {
                       <td className="text-right py-2 px-3 text-xs text-blue-600/60 dark:text-blue-400/60 font-medium">Actual</td>
                       <td className="text-right py-2 px-3 text-xs text-blue-600/60 dark:text-blue-400/60 font-medium">Diff</td>
                     </tr>
-                    {/* Per-account rows */}
+                    {/* Per-account rows with editable budgets */}
                     {investmentData.map((inv) => (
                       <tr key={inv.accountId} className="bg-blue-50/30 dark:bg-blue-950/10 border-b border-border/50">
                         <td className="py-2 px-3">
@@ -2124,9 +2128,28 @@ export default function TrackerPage() {
                             <span className="text-sm">{inv.accountName}</span>
                           </div>
                         </td>
-                        <td className="py-2 px-3 text-right"><span className="text-sm text-muted-foreground/40">—</span></td>
+                        <td className="py-2 px-3 text-right">
+                          <InlineMoneyEdit
+                            value={inv.budgeted}
+                            onSave={(newValue) => {
+                              const trackerId = trackerQuery.data?.id;
+                              if (trackerId) {
+                                setInvestmentAllocationMutation.mutate({
+                                  trackerId,
+                                  accountId: inv.accountId,
+                                  amount: newValue,
+                                });
+                              }
+                            }}
+                            className="text-sm font-mono tabular-nums"
+                          />
+                        </td>
                         <td className="py-2 px-3 text-right"><MoneyDisplay amount={inv.actual} colorize className="text-sm" /></td>
-                        <td className="py-2 px-3 text-right"><span className="text-sm text-muted-foreground/40">—</span></td>
+                        <td className="py-2 px-3 text-right">
+                          {inv.budgeted !== 0
+                            ? <MoneyDisplay amount={inv.actual - inv.budgeted} colorize className="text-sm" />
+                            : <span className="text-sm text-muted-foreground/40">—</span>}
+                        </td>
                       </tr>
                     ))}
                     {/* Investment total */}

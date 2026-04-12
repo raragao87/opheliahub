@@ -88,7 +88,7 @@ export function UpcomingTab({ month, year, visibility }: UpcomingTabProps) {
   const liquidBalance = useMemo(() => {
     const accounts = accountsQuery.data ?? [];
     return accounts
-      .filter((a) => a.ownership === visibility && ACCOUNT_TYPE_META[a.type]?.sidebarGroup === "LIQUID")
+      .filter((a) => a.ownership === visibility && ACCOUNT_TYPE_META[a.type]?.sidebarGroup === "SPENDING")
       .reduce((s, a) => s + a.balance, 0);
   }, [accountsQuery.data, visibility]);
 

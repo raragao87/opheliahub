@@ -15,8 +15,9 @@ const translations = {
 
     // Sidebar
     "sidebar.showing": "Showing",
-    "sidebar.liquid": "Liquid",
-    "sidebar.illiquid": "Illiquid",
+    "sidebar.spending": "Spending",
+    "sidebar.investment": "Investment",
+    "sidebar.assetsDebts": "Assets & Debts",
 
     // Settings
     "settings.title": "Settings",
@@ -362,8 +363,9 @@ const translations = {
 
     // Sidebar
     "sidebar.showing": "Mostrando",
-    "sidebar.liquid": "Líquido",
-    "sidebar.illiquid": "Ilíquido",
+    "sidebar.spending": "Gastos",
+    "sidebar.investment": "Investimentos",
+    "sidebar.assetsDebts": "Ativos e Dívidas",
 
     // Settings
     "settings.title": "Configurações",
@@ -709,8 +711,9 @@ const translations = {
 
     // Sidebar
     "sidebar.showing": "Se afișează",
-    "sidebar.liquid": "Lichid",
-    "sidebar.illiquid": "Nelichid",
+    "sidebar.spending": "Cheltuieli",
+    "sidebar.investment": "Investiții",
+    "sidebar.assetsDebts": "Active și Datorii",
 
     // Settings
     "settings.title": "Setări",
@@ -1056,8 +1059,9 @@ const translations = {
 
     // Sidebar
     "sidebar.showing": "Tonen",
-    "sidebar.liquid": "Liquide",
-    "sidebar.illiquid": "Niet-liquide",
+    "sidebar.spending": "Uitgaven",
+    "sidebar.investment": "Investeringen",
+    "sidebar.assetsDebts": "Bezittingen & Schulden",
 
     // Settings
     "settings.title": "Instellingen",

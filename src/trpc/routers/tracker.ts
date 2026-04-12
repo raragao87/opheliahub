@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere } from "@/lib/privacy";
 import { getMonthRange, getPreviousMonth } from "@/lib/date";
-import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
+import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
 /**
  * Get the auto carry-forward from the previous month.
@@ -155,7 +155,7 @@ export const trackerRouter = router({
           : { userId: ctx.userId, visibility: "PERSONAL" as const };
 
       // Only consider liquid account transactions for budgeting
-      const liquidFilter = { account: { type: { in: LIQUID_ACCOUNT_TYPES } } };
+      const liquidFilter = { account: { type: { in: SPENDING_ACCOUNT_TYPES } } };
 
       // Effective date filter: use accrualDate when set, otherwise fall back to date.
       // This allows transactions to be moved to a different budget month without
@@ -238,24 +238,49 @@ export const trackerRouter = router({
         _sum: { amount: true },
       });
 
-      const investmentAccountIds = investmentByAccount.map(g => g.accountId);
-      const investmentAccounts = investmentAccountIds.length > 0
-        ? await ctx.prisma.financialAccount.findMany({
-            where: { id: { in: investmentAccountIds } },
-            select: { id: true, name: true, icon: true, type: true },
+      const investmentActualByAccount = new Map(
+        investmentByAccount.map(g => [g.accountId, g._sum.amount ?? 0])
+      );
+
+      // Fetch investment allocations (per-account budgets) from tracker
+      const investmentAllocations = tracker
+        ? await ctx.prisma.investmentTrackerAllocation.findMany({
+            where: { trackerId: tracker.id },
+            include: { account: { select: { id: true, name: true, icon: true, type: true } } },
           })
         : [];
 
-      const investmentAccountMap = new Map(investmentAccounts.map(a => [a.id, a]));
+      const investmentBudgeted = investmentAllocations.reduce((sum, a) => sum + a.amount, 0);
 
-      const investmentSummary = investmentByAccount
-        .map(g => ({
-          accountId: g.accountId,
-          accountName: investmentAccountMap.get(g.accountId)?.name ?? "Unknown",
-          accountIcon: investmentAccountMap.get(g.accountId)?.icon ?? null,
-          actual: g._sum.amount ?? 0,
-        }))
-        .sort((a, b) => a.actual - b.actual);
+      // Merge allocations with actuals — all unique account IDs
+      const allInvestmentAccountIds = new Set([
+        ...investmentAllocations.map(a => a.accountId),
+        ...investmentByAccount.map(g => g.accountId),
+      ]);
+
+      // Fetch account names for any actuals-only accounts
+      const missingIds = [...allInvestmentAccountIds].filter(
+        id => !investmentAllocations.some(a => a.accountId === id)
+      );
+      const extraAccounts = missingIds.length > 0
+        ? await ctx.prisma.financialAccount.findMany({
+            where: { id: { in: missingIds } },
+            select: { id: true, name: true, icon: true, type: true },
+          })
+        : [];
+      const extraAccountMap = new Map(extraAccounts.map(a => [a.id, a]));
+
+      const investmentSummary = [...allInvestmentAccountIds].map(accountId => {
+        const allocation = investmentAllocations.find(a => a.accountId === accountId);
+        const account = allocation?.account ?? extraAccountMap.get(accountId);
+        return {
+          accountId,
+          accountName: account?.name ?? "Unknown",
+          accountIcon: account?.icon ?? null,
+          budgeted: allocation?.amount ?? 0,
+          actual: investmentActualByAccount.get(accountId) ?? 0,
+        };
+      }).sort((a, b) => a.budgeted - b.budgeted);
 
       // spendingMap / incomeMap: per-category breakdown for the UI
       const spendingMap = new Map<string | null, number>();
@@ -330,6 +355,7 @@ export const trackerRouter = router({
         return {
           actualIncome,
           actualInvestment,
+          investmentBudgeted,
           totalAllocated: 0,
           totalActualExpenses,
           categories,
@@ -430,6 +456,7 @@ export const trackerRouter = router({
       return {
         actualIncome,
         actualInvestment,
+        investmentBudgeted,
         totalAllocated,
         totalActualExpenses,
         categories,
@@ -459,6 +486,31 @@ export const trackerRouter = router({
         create: {
           trackerId: input.trackerId,
           fundId: input.fundId,
+          amount: input.amount,
+        },
+      });
+    }),
+
+  setInvestmentAllocation: householdProcedure
+    .input(
+      z.object({
+        trackerId: z.string(),
+        accountId: z.string(),
+        amount: z.number().int(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.investmentTrackerAllocation.upsert({
+        where: {
+          trackerId_accountId: {
+            trackerId: input.trackerId,
+            accountId: input.accountId,
+          },
+        },
+        update: { amount: input.amount },
+        create: {
+          trackerId: input.trackerId,
+          accountId: input.accountId,
           amount: input.amount,
         },
       });
@@ -537,7 +589,7 @@ export const trackerRouter = router({
       const transactionsWithTags = await ctx.prisma.transaction.findMany({
         where: {
           ...visibilityFilter,
-          account: { type: { in: LIQUID_ACCOUNT_TYPES } },
+          account: { type: { in: SPENDING_ACCOUNT_TYPES } },
           date: { gte: start, lte: end },
           type: "EXPENSE",
           tags: { some: {} },
@@ -732,6 +784,33 @@ export const trackerRouter = router({
               create: {
                 trackerId: currentTracker.id,
                 fundId: alloc.fundId,
+                amount: alloc.amount,
+              },
+            })
+          )
+        );
+      }
+
+      // Copy investment allocations
+      const prevInvestmentAllocations =
+        await ctx.prisma.investmentTrackerAllocation.findMany({
+          where: { trackerId: prevTracker.id },
+        });
+
+      if (prevInvestmentAllocations.length > 0) {
+        await ctx.prisma.$transaction(
+          prevInvestmentAllocations.map((alloc) =>
+            ctx.prisma.investmentTrackerAllocation.upsert({
+              where: {
+                trackerId_accountId: {
+                  trackerId: currentTracker.id,
+                  accountId: alloc.accountId,
+                },
+              },
+              update: { amount: alloc.amount },
+              create: {
+                trackerId: currentTracker.id,
+                accountId: alloc.accountId,
                 amount: alloc.amount,
               },
             })

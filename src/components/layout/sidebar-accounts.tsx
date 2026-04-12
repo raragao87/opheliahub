@@ -114,7 +114,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
       });
 
       const groupAccountIds = items.map((i) => i.id).join(",");
-      const labelKey = ag.key === "LIQUID" ? "sidebar.liquid" : "sidebar.illiquid";
+      const labelKey = ag.key === "SPENDING" ? "sidebar.spending" : ag.key === "INVESTMENT" ? "sidebar.investment" : "sidebar.assetsDebts";
       return {
         key: ag.key,
         label: t(lang, labelKey),
@@ -129,8 +129,9 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const [collapsed, setCollapsed] = useState<
     Record<SidebarGroupKey, boolean>
   >({
-    LIQUID: false,
-    ILLIQUID: false,
+    SPENDING: false,
+    INVESTMENT: false,
+    ASSETS_DEBTS: false,
   });
 
   const toggleGroup = (key: SidebarGroupKey) => {
@@ -192,7 +193,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   };
 
   const isEditable = (groupKey: SidebarGroupKey) =>
-    groupKey === "ILLIQUID";
+    groupKey === "ASSETS_DEBTS";
 
   // ── Drag-and-drop import ──────────────────────────────────
   const { setPendingImport } = useImportDrop();
@@ -260,8 +261,8 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
     onNavigate?.();
   }, [setPendingImport, router, onNavigate]);
 
-  /** Only LIQUID accounts (checking, savings, credit card, cash) are drop targets */
-  const isDroppable = (groupKey: SidebarGroupKey) => groupKey === "LIQUID";
+  /** Only SPENDING accounts (checking, savings, credit card, cash) are drop targets */
+  const isDroppable = (groupKey: SidebarGroupKey) => groupKey === "SPENDING";
 
   const isLoading = accountsQuery.isLoading;
   const totalPending = Object.values(pendingByAccount).reduce((sum, n) => sum + n, 0);

@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@prisma/client";
 import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere, visibleAccountsWhere } from "@/lib/privacy";
-import { LIQUID_ACCOUNT_TYPES } from "@/lib/account-types";
+import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
 import { computeEffectiveCategoryId } from "@/lib/effective-category";
 
@@ -155,7 +155,7 @@ export const transactionRouter = router({
 
           // Liquid-only
           ...(input.liquidOnly
-            ? [{ account: { type: { in: LIQUID_ACCOUNT_TYPES } } }]
+            ? [{ account: { type: { in: SPENDING_ACCOUNT_TYPES } } }]
             : []),
 
           // Exclude transfers
