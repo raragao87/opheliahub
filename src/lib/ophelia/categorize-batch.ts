@@ -83,7 +83,7 @@ export async function categorizeTransactionBatch(
       const transactions = await prisma.transaction.findMany({
         where: {
           isInitialBalance: false,
-          type: { in: ["INCOME", "EXPENSE"] },
+          type: { not: "TRANSFER" },
           OR: [
             { opheliaProcessedAt: null },                    // 1. never processed
             { opheliaProcessedAt: { lt: reprocessBefore } }, // 2. processed > 7 days ago

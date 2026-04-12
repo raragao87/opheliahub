@@ -11,7 +11,8 @@ async function main() {
     UPDATE transactions
     SET type = 'FUND'
     WHERE "fundId" IS NOT NULL
-      AND type = 'EXPENSE'
+      AND type != 'FUND'
+      AND type != 'TRANSFER'
   `);
   console.log(`Reclassified ${result} fund transactions from EXPENSE to FUND`);
   await prisma.$disconnect();

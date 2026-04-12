@@ -466,7 +466,6 @@ export const dashboardRouter = router({
                 liquidFilter,
                 { fundId: fund.id },
                 { isInitialBalance: false },
-                { type: "FUND" },
                 {
                   OR: [
                     { accrualDate: { lte: monthEnd } },
@@ -487,7 +486,6 @@ export const dashboardRouter = router({
                 liquidFilter,
                 { fundId: fund.id },
                 { isInitialBalance: false },
-                { type: "FUND" },
                 {
                   OR: [
                     { accrualDate: { gte: monthStart, lte: monthEnd } },
