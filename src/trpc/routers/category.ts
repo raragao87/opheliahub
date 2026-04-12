@@ -89,9 +89,16 @@ export const categoryRouter = router({
         if (!parent) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Parent group not found." });
         }
+        // INCOME and INVESTMENT categories are flat — no subcategories allowed
+        if (parent.type === "INCOME" || parent.type === "INVESTMENT") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${parent.type} categories cannot have subcategories.`,
+          });
+        }
         // Children inherit parent visibility and type
         visibility = parent.visibility as "SHARED" | "PERSONAL";
-        type = parent.type as "INCOME" | "EXPENSE";
+        type = parent.type as "INCOME" | "EXPENSE" | "INVESTMENT";
       }
 
       const maxSort = await ctx.prisma.category.aggregate({
@@ -291,6 +298,23 @@ export const categoryRouter = router({
           code: "NOT_FOUND",
           message: "Some categories not found.",
         });
+      }
+
+      // Enforce: can't reparent under INCOME or INVESTMENT
+      const parentIds = [...new Set(input.items.map(i => i.parentId).filter((id): id is string => id !== null))];
+      if (parentIds.length > 0) {
+        const parents = await ctx.prisma.category.findMany({
+          where: { id: { in: parentIds }, householdId: ctx.householdId },
+          select: { id: true, type: true },
+        });
+        for (const parent of parents) {
+          if (parent.type === "INCOME" || parent.type === "INVESTMENT") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `${parent.type} categories cannot have subcategories.`,
+            });
+          }
+        }
       }
 
       await ctx.prisma.$transaction(

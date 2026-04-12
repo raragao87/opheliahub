@@ -445,12 +445,12 @@ model Tracker {
   fundAllocations FundTrackerAllocation[]
 
   @@unique([householdId, userId, month, year, visibility])
-  @@map("budgets")
+  @@map("trackers")
 }
 
 model TrackerAllocation {
   id         String @id @default(cuid())
-  trackerId  String @map("budgetId")
+  trackerId  String
   categoryId String
   amount     Int // cents allocated to this category
 
@@ -458,12 +458,12 @@ model TrackerAllocation {
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([trackerId, categoryId])
-  @@map("budget_allocations")
+  @@map("tracker_allocations")
 }
 
 model TagTrackerAllocation {
   id        String @id @default(cuid())
-  trackerId String @map("budgetId")
+  trackerId String
   tagId     String
   amount    Int // cents allocated to this tag
 
@@ -471,7 +471,7 @@ model TagTrackerAllocation {
   tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([trackerId, tagId])
-  @@map("tag_budget_allocations")
+  @@map("tag_tracker_allocations")
 }
 
 model FundTrackerAllocation {
@@ -484,7 +484,7 @@ model FundTrackerAllocation {
   fund    Fund    @relation(fields: [fundId], references: [id], onDelete: Cascade)
 
   @@unique([trackerId, fundId])
-  @@map("fund_budget_allocations")
+  @@map("fund_tracker_allocations")
 }
 
 // ─── NET WORTH: ASSETS & DEBTS ──────────────────────────────────────
