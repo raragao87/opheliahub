@@ -75,7 +75,7 @@ export const transactionRouter = router({
               : input.type
                 ? { type: input.type }
                 : {}),
-            ...(input.visibility && { visibility: input.visibility }),
+            ...(input.visibility && { account: { ownership: input.visibility } }),
             ...(!input.fundIds?.length && input.fundId && { fundId: input.fundId }),
             ...(input.noTags
               ? { tags: { none: {} } }
@@ -916,7 +916,7 @@ export const transactionRouter = router({
         AND: [
           baseWhere,
           {
-            visibility: input.visibility,
+            account: { ownership: input.visibility },
             categoryId: null,
             fundId: null,
             opheliaCategoryId: { not: null },

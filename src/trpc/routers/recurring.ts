@@ -4,6 +4,7 @@ import { router, householdProcedure } from "../init";
 import {
   visibleRecurringRulesWhere,
   visibleTransactionsWhere,
+  transactionOwnershipFilter,
 } from "@/lib/privacy";
 import { getMonthRange } from "@/lib/date";
 import {
@@ -100,12 +101,11 @@ export const recurringRouter = router({
       const lookbackMonths = 12;
       const since = subMonths(new Date(), lookbackMonths);
 
-      const visibilityFilter =
-        input.visibility === "SHARED"
-          ? visibleTransactionsWhere(ctx.userId, ctx.householdId)
-          : { userId: ctx.userId, visibility: "PERSONAL" as const };
+      const visibilityFilter = transactionOwnershipFilter(
+        ctx.userId, ctx.householdId, input.visibility
+      );
 
-      // Fetch transactions from the last 12 months (liquid accounts only)
+      // Fetch transactions from the last 12 months (spending accounts only)
       const transactions = await ctx.prisma.transaction.findMany({
         where: {
           ...visibilityFilter,
@@ -309,9 +309,7 @@ export const recurringRouter = router({
       const bufferedEnd = new Date(end.getTime() + BUFFER_MS);
 
       const visibilityFilter =
-        input.visibility === "SHARED"
-          ? visibleTransactionsWhere(ctx.userId, ctx.householdId)
-          : { userId: ctx.userId, visibility: "PERSONAL" as const };
+        transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility);
 
       const monthTransactions = await ctx.prisma.transaction.findMany({
         where: {

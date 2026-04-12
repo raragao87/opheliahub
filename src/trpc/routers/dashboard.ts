@@ -19,7 +19,7 @@ export const dashboardRouter = router({
       const baseWhere = {
         ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
         date: { gte: start, lte: end },
-        ...(input.visibility && { visibility: input.visibility }),
+        ...(input.visibility && { account: { ownership: input.visibility } }),
       };
 
       // Income total
@@ -112,7 +112,7 @@ export const dashboardRouter = router({
       return ctx.prisma.transaction.findMany({
         where: {
           ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          ...(input.visibility && { visibility: input.visibility }),
+          ...(input.visibility && { account: { ownership: input.visibility } }),
         },
         orderBy: { date: "desc" },
         take: input.limit,
@@ -138,7 +138,7 @@ export const dashboardRouter = router({
         const { start, end } = getMonthRange(year, month);
         const baseWhere = {
           ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          visibility: input.visibility,
+          account: { ownership: input.visibility },
           date: { gte: start, lte: end },
           isInitialBalance: false,
           type: { in: ["INCOME", "EXPENSE"] as ("INCOME" | "EXPENSE")[] },
@@ -243,7 +243,7 @@ export const dashboardRouter = router({
           by: ["type"],
           where: {
             ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-            visibility: input.visibility,
+            account: { ownership: input.visibility },
             date: { gte: start, lte: end },
             isInitialBalance: false,
             type: { in: ["INCOME", "EXPENSE"] },
@@ -296,7 +296,7 @@ export const dashboardRouter = router({
         const txns = await ctx.prisma.transaction.findMany({
           where: {
             ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-            visibility: input.visibility,
+            account: { ownership: input.visibility },
             date: { gte: start, lte: end },
             isInitialBalance: false,
             type: "EXPENSE",

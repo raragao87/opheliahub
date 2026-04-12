@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
-import { visibleTagsWhere, visibleTransactionsWhere } from "@/lib/privacy";
+import { visibleTagsWhere, visibleTransactionsWhere, transactionOwnershipFilter } from "@/lib/privacy";
 
 export const tagRouter = router({
   list: householdProcedure
@@ -266,8 +266,7 @@ export const tagRouter = router({
       // Fetch all transactions with any tag from this group (deduplicated)
       const txns = await ctx.prisma.transaction.findMany({
         where: {
-          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          visibility: input.visibility,
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           tags: { some: { tagId: { in: tagIds } } },
           isInitialBalance: false,
           ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
@@ -498,8 +497,7 @@ export const tagRouter = router({
 
       const txns = await ctx.prisma.transaction.findMany({
         where: {
-          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          visibility: input.visibility,
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           tags: { some: { tagId: { in: tagIds } } },
           isInitialBalance: false,
           type: { in: ["INCOME", "EXPENSE"] },

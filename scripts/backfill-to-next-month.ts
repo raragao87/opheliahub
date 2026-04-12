@@ -42,15 +42,17 @@ async function computeToNextMonth(tracker: {
   });
   const fundAllocated = fundAgg._sum.amount ?? 0;
 
-  // Visibility filter
+  // Ownership filter — derived from account ownership
   const visFilter = tracker.visibility === "SHARED"
     ? {
-        OR: [
-          { visibility: "SHARED" as const, account: { householdId: tracker.householdId } },
-          { visibility: "PERSONAL" as const, userId: tracker.userId },
-        ],
+        account: {
+          OR: [
+            { householdId: tracker.householdId, ownership: "SHARED" as const },
+            { ownerId: tracker.userId, ownership: "SHARED" as const },
+          ],
+        },
       }
-    : { userId: tracker.userId, visibility: "PERSONAL" as const };
+    : { account: { ownerId: tracker.userId, ownership: "PERSONAL" as const } };
 
   // Get actual transactions
   const txns = await prisma.transaction.findMany({

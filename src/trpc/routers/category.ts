@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { chatCompletion, extractJSON, isOpheliaEnabled } from "@/lib/ophelia";
-import { visibleTransactionsWhere } from "@/lib/privacy";
+import { visibleTransactionsWhere, transactionOwnershipFilter } from "@/lib/privacy";
 
 export const categoryRouter = router({
   /** Flat list of leaf categories (for dropdowns — grouped by parent) */
@@ -345,8 +345,7 @@ export const categoryRouter = router({
 
       const txns = await ctx.prisma.transaction.findMany({
         where: {
-          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          visibility: input.visibility,
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           categoryId: { in: input.categoryIds },
           isInitialBalance: false,
           type: { in: ["INCOME", "EXPENSE"] },

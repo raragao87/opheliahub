@@ -21,37 +21,45 @@ export function visibleAccountsWhere(
 }
 
 /**
- * Transactions visible to a user:
- * - All own transactions (any visibility)
- * - Other users' SHARED transactions within the same household
+ * Transactions visible to a user — derived from account ownership:
+ * - All transactions on accounts the user owns
+ * - All transactions on shared accounts in the household
  */
 export function visibleTransactionsWhere(
   userId: string,
   householdId: string
 ): Prisma.TransactionWhereInput {
   return {
-    OR: [
-      // All own transactions (personal + shared)
-      { userId },
-      // Other users' SHARED transactions within the household
-      {
-        visibility: "SHARED",
-        account: {
-          OR: [
-            // From shared/joint accounts
-            { householdId, ownership: "SHARED" },
-            // From personal accounts but marked as SHARED visibility
-            {
-              owner: {
-                householdMembers: {
-                  some: { householdId, inviteStatus: "ACCEPTED" },
-                },
-              },
-            },
-          ],
-        },
+    account: {
+      OR: [
+        { ownerId: userId },
+        { householdId, ownership: "SHARED" },
+      ],
+    },
+  };
+}
+
+/**
+ * Filter transactions by account ownership (SHARED or PERSONAL).
+ * Used by tracker, fund, dashboard to separate shared vs personal budgets.
+ */
+export function transactionOwnershipFilter(
+  userId: string,
+  householdId: string,
+  ownership: "SHARED" | "PERSONAL"
+): Prisma.TransactionWhereInput {
+  if (ownership === "SHARED") {
+    return {
+      account: {
+        OR: [
+          { householdId, ownership: "SHARED" },
+          { ownerId: userId, ownership: "SHARED" },
+        ],
       },
-    ],
+    };
+  }
+  return {
+    account: { ownerId: userId, ownership: "PERSONAL" },
   };
 }
 
@@ -100,4 +108,3 @@ export function visibleRecurringRulesWhere(
     ],
   };
 }
-

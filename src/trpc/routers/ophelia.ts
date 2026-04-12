@@ -3,7 +3,7 @@ import { householdProcedure, router } from "../init";
 import { analyzeFileStructure, enrichTransactions, isOpheliaEnabled } from "@/lib/ophelia";
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
 import { extractFromUnknown } from "@/lib/ophelia/extractFromUnknown";
-import { visibleTransactionsWhere } from "@/lib/privacy";
+import { visibleTransactionsWhere, transactionOwnershipFilter } from "@/lib/privacy";
 import { extractDisplayName } from "@/lib/recurring";
 
 export const opheliaRouter = router({
@@ -85,12 +85,12 @@ export const opheliaRouter = router({
         orderBy: { sortOrder: "asc" },
       });
 
-      // Fetch 20 recent categorized transactions as few-shot examples (same visibility)
+      // Fetch 20 recent categorized transactions as few-shot examples (same ownership)
       const recentTxns = await ctx.prisma.transaction.findMany({
-        where:
-          input.visibility === "SHARED"
-            ? { visibility: "SHARED", account: { householdId: ctx.householdId }, categoryId: { not: null } }
-            : { visibility: "PERSONAL", userId: ctx.userId, categoryId: { not: null } },
+        where: {
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          categoryId: { not: null },
+        },
         orderBy: { date: "desc" },
         take: 20,
         select: {
@@ -152,8 +152,7 @@ export const opheliaRouter = router({
       if (!isOpheliaEnabled()) return { pending: 0, enabled: false };
       const pending = await ctx.prisma.transaction.count({
         where: {
-          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          visibility: input.visibility,
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           opheliaProcessedAt: null,
           isInitialBalance: false,
           type: { not: "TRANSFER" },
@@ -173,8 +172,7 @@ export const opheliaRouter = router({
       const groups = await ctx.prisma.transaction.groupBy({
         by: ["accountId"],
         where: {
-          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          visibility: input.visibility,
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           opheliaProcessedAt: null,
           isInitialBalance: false,
           type: { not: "TRANSFER" },

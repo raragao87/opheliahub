@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
-import { visibleTransactionsWhere } from "@/lib/privacy";
+import { visibleTransactionsWhere, transactionOwnershipFilter } from "@/lib/privacy";
 import { getMonthRange, getPreviousMonth } from "@/lib/date";
 import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
@@ -148,13 +148,12 @@ export const trackerRouter = router({
 
       const { start, end } = getMonthRange(input.year, input.month);
 
-      // Visibility filter for transactions
-      const visibilityFilter =
-        input.visibility === "SHARED"
-          ? visibleTransactionsWhere(ctx.userId, ctx.householdId)
-          : { userId: ctx.userId, visibility: "PERSONAL" as const };
+      // Visibility filter for transactions — derived from account ownership
+      const visibilityFilter = transactionOwnershipFilter(
+        ctx.userId, ctx.householdId, input.visibility
+      );
 
-      // Only consider liquid account transactions for budgeting
+      // Only consider spending account transactions for budgeting
       const liquidFilter = { account: { type: { in: SPENDING_ACCOUNT_TYPES } } };
 
       // Effective date filter: use accrualDate when set, otherwise fall back to date.
@@ -580,12 +579,11 @@ export const trackerRouter = router({
 
       const { start, end } = getMonthRange(input.year, input.month);
 
-      const visibilityFilter =
-        input.visibility === "SHARED"
-          ? visibleTransactionsWhere(ctx.userId, ctx.householdId)
-          : { userId: ctx.userId, visibility: "PERSONAL" as const };
+      const visibilityFilter = transactionOwnershipFilter(
+        ctx.userId, ctx.householdId, input.visibility
+      );
 
-      // Fetch expense transactions with tags for this month (liquid accounts only)
+      // Fetch expense transactions with tags for this month (spending accounts only)
       const transactionsWithTags = await ctx.prisma.transaction.findMany({
         where: {
           ...visibilityFilter,
