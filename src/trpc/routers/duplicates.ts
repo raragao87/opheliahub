@@ -25,7 +25,7 @@ export const duplicatesRouter = router({
         where: {
           userId: ctx.userId,
           accountId: { in: accountIds },
-          status: "pending",
+          status: "PENDING",
         },
         _count: { _all: true },
       });
@@ -44,7 +44,7 @@ export const duplicatesRouter = router({
   listAlerts: householdProcedure
     .input(z.object({
       accountId: z.string().optional(),
-      status: z.enum(["pending", "dismissed", "resolved"]).default("pending"),
+      status: z.enum(["PENDING", "DISMISSED", "RESOLVED"]).default("PENDING"),
       limit: z.number().int().min(1).max(50).default(20),
     }))
     .query(async ({ ctx, input }) => {
@@ -98,7 +98,7 @@ export const duplicatesRouter = router({
     .mutation(async ({ ctx, input }) => {
       await ctx.prisma.duplicateAlert.updateMany({
         where: { id: input.alertId, userId: ctx.userId },
-        data: { status: "dismissed" },
+        data: { status: "DISMISSED" },
       });
       return { success: true };
     }),
@@ -113,7 +113,7 @@ export const duplicatesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const alert = await ctx.prisma.duplicateAlert.findFirst({
-        where: { id: input.alertId, userId: ctx.userId, status: "pending" },
+        where: { id: input.alertId, userId: ctx.userId, status: "PENDING" },
       });
       if (!alert) return { success: false };
 
@@ -136,7 +136,7 @@ export const duplicatesRouter = router({
         }
         await tx.duplicateAlert.update({
           where: { id: input.alertId },
-          data: { status: "resolved" },
+          data: { status: "RESOLVED" },
         });
       });
 
@@ -152,10 +152,10 @@ export const duplicatesRouter = router({
       const result = await ctx.prisma.duplicateAlert.updateMany({
         where: {
           userId: ctx.userId,
-          status: "pending",
+          status: "PENDING",
           ...(input.accountId ? { accountId: input.accountId } : {}),
         },
-        data: { status: "dismissed" },
+        data: { status: "DISMISSED" },
       });
       return { dismissed: result.count };
     }),

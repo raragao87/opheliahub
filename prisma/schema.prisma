@@ -217,6 +217,43 @@ model FinancialAccount {
   @@map("financial_accounts")
 }
 
+// ─── ENUMS ─────────────────────────────────────────────────────────
+
+enum FeedbackType {
+  BUG
+  FEEDBACK
+  IDEA
+}
+
+enum FeedbackStatus {
+  NEW
+  SEEN
+  RESOLVED
+}
+
+enum DuplicateAlertStatus {
+  PENDING
+  DISMISSED
+  RESOLVED
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+enum AssetCategory {
+  REAL_ESTATE
+  VEHICLE
+  VALUABLE
+  OTHER
+}
+
+enum AmountMode {
+  SINGLE
+  SPLIT
+}
+
 // ─── TRANSACTIONS ───────────────────────────────────────────────────
 
 enum TransactionType {
@@ -256,7 +293,7 @@ model Transaction {
 
   // Ophelia AI fields — populated by background categorization (Session 8+)
   opheliaCategoryId  String?   // Ophelia's suggested category (FK to Category)
-  opheliaConfidence  Float?    // 0.0 - 1.0
+  opheliaConfidence  Int?      // 0–1000 milli-confidence
   opheliaDisplayName String?   // Ophelia's suggested clean merchant name
   opheliaProcessedAt  DateTime? // when Ophelia last processed this transaction
   effectiveCategoryId String?   // denormalized: categoryId ?? opheliaCategoryId — kept in sync at write-time
@@ -454,7 +491,7 @@ model Asset {
   name        String
   value       Int // cents
   currency    String     @default("EUR")
-  category    String // "real_estate", "vehicle", "valuable", "other"
+  category    AssetCategory
   userId      String
   visibility  Visibility @default(PERSONAL)
   lastUpdated DateTime   @default(now())
@@ -469,7 +506,7 @@ model Debt {
   id             String     @id @default(cuid())
   name           String
   balance        Int // cents outstanding
-  interestRate   Float?
+  interestRate   Int?   // basis points (425 = 4.25%)
   monthlyPayment Int? // cents
   currency       String     @default("EUR")
   userId         String
@@ -548,7 +585,7 @@ model ImportProfile {
   skipRows      Int         @default(0)
 
   // Import settings memory
-  amountMode    String      @default("single") // "single" | "split"
+  amountMode    AmountMode  @default(SINGLE)
   invertAmounts Boolean     @default(false)
 
   // Filter step memory
@@ -571,9 +608,9 @@ model DuplicateAlert {
   importBatchId   String
   transactionIdA  String   // the imported transaction
   transactionIdB  String   // the existing transaction it might duplicate
-  confidence      Float    // 0-1
+  confidence      Int      // 0–1000 milli-confidence
   reasoning       String?
-  status          String   @default("pending") // "pending" | "dismissed" | "resolved"
+  status          DuplicateAlertStatus @default(PENDING)
   createdAt       DateTime @default(now())
 
   user    User             @relation(fields: [userId], references: [id])
@@ -743,7 +780,7 @@ model OpheliaFeedback {
   userCategoryName       String?  // denormalized for prompt
   opheliaDisplayName     String?
   userDisplayName        String?
-  opheliaConfidence      Float?
+  opheliaConfidence      Int?   // 0–1000 milli-confidence
   wasCorrection          Boolean  @default(false) // true = Ophelia was wrong
   createdAt              DateTime @default(now())
 
@@ -757,10 +794,10 @@ model OpheliaFeedback {
 
 model Feedback {
   id          String   @id @default(cuid())
-  type        String   // "bug" | "feedback" | "idea"
+  type        FeedbackType
   title       String
   description String   @db.Text
-  status      String   @default("new") // "new" | "seen" | "resolved"
+  status      FeedbackStatus @default(NEW)
 
   // Automatic context
   pageUrl    String?
@@ -803,7 +840,7 @@ model ChatConversation {
 model ChatMessage {
   id             String   @id @default(cuid())
   conversationId String
-  role           String   // "user" | "assistant"
+  role           ChatRole
   content        String   @db.Text
   pageContext    String?  @db.Text
   createdAt      DateTime @default(now())

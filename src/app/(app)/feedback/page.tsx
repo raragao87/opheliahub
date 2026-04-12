@@ -12,19 +12,19 @@ import { formatDate } from "@/lib/date";
 
 const ADMIN_EMAIL = "roberto.b.a.aragao@gmail.com";
 
-type FeedbackStatus = "new" | "seen" | "resolved";
-type FeedbackType = "bug" | "feedback" | "idea" | "all";
+type FeedbackStatus = "NEW" | "SEEN" | "RESOLVED";
+type FeedbackType = "BUG" | "FEEDBACK" | "IDEA" | "all";
 
 const TYPE_CONFIG = {
-  bug: { label: "Bug", icon: Bug, badge: "bg-red-100 text-red-700 border-red-200" },
-  feedback: { label: "Feedback", icon: MessageSquare, badge: "bg-blue-100 text-blue-700 border-blue-200" },
-  idea: { label: "Idea", icon: Lightbulb, badge: "bg-amber-100 text-amber-700 border-amber-200" },
+  BUG: { label: "Bug", icon: Bug, badge: "bg-red-100 text-red-700 border-red-200" },
+  FEEDBACK: { label: "Feedback", icon: MessageSquare, badge: "bg-blue-100 text-blue-700 border-blue-200" },
+  IDEA: { label: "Idea", icon: Lightbulb, badge: "bg-amber-100 text-amber-700 border-amber-200" },
 };
 
 const STATUS_CONFIG: Record<FeedbackStatus, { label: string; badge: string }> = {
-  new: { label: "New", badge: "bg-orange-100 text-orange-700 border-orange-200" },
-  seen: { label: "Seen", badge: "bg-slate-100 text-slate-700 border-slate-200" },
-  resolved: { label: "Resolved", badge: "bg-green-100 text-green-700 border-green-200" },
+  NEW: { label: "New", badge: "bg-orange-100 text-orange-700 border-orange-200" },
+  SEEN: { label: "Seen", badge: "bg-slate-100 text-slate-700 border-slate-200" },
+  RESOLVED: { label: "Resolved", badge: "bg-green-100 text-green-700 border-green-200" },
 };
 
 export default function FeedbackAdminPage() {
@@ -83,9 +83,9 @@ export default function FeedbackAdminPage() {
 
   const tabs: Array<{ key: FeedbackType; label: string; count?: number }> = [
     { key: "all", label: "All", count: counts?.total },
-    { key: "bug", label: "Bugs", count: counts?.bugs },
-    { key: "feedback", label: "Feedback", count: counts?.feedbacks },
-    { key: "idea", label: "Ideas", count: counts?.ideas },
+    { key: "BUG", label: "Bugs", count: counts?.bugs },
+    { key: "FEEDBACK", label: "Feedback", count: counts?.feedbacks },
+    { key: "IDEA", label: "Ideas", count: counts?.ideas },
   ];
 
   return (
@@ -138,12 +138,12 @@ export default function FeedbackAdminPage() {
         <div className="space-y-3">
           {items.map((item) => {
             const typeConf = TYPE_CONFIG[item.type as keyof typeof TYPE_CONFIG];
-            const statusConf = STATUS_CONFIG[item.status as FeedbackStatus] ?? STATUS_CONFIG.new;
+            const statusConf = STATUS_CONFIG[item.status as FeedbackStatus] ?? STATUS_CONFIG.NEW;
             const isExpanded = expandedId === item.id;
             const Icon = typeConf?.icon ?? MessageSquare;
 
             return (
-              <Card key={item.id} className={cn(item.status === "new" && "border-orange-200")}>
+              <Card key={item.id} className={cn(item.status === "NEW" && "border-orange-200")}>
                 <CardContent className="p-4">
                   {/* Row */}
                   <div className="flex items-start gap-3">
@@ -250,7 +250,7 @@ export default function FeedbackAdminPage() {
                       {/* Status actions */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-xs text-muted-foreground mr-1">Mark as:</p>
-                        {(["new", "seen", "resolved"] as FeedbackStatus[]).map((s) => (
+                        {(["NEW", "SEEN", "RESOLVED"] as FeedbackStatus[]).map((s) => (
                           <Button
                             key={s}
                             variant="outline"

@@ -117,7 +117,7 @@ export const chatRouter = router({
       await ctx.prisma.chatMessage.create({
         data: {
           conversationId,
-          role: "user",
+          role: "USER",
           content: input.message,
           pageContext: JSON.stringify(input.pageContext),
         },
@@ -133,7 +133,7 @@ export const chatRouter = router({
 
       // Build messages array for AI
       const messages = history.map((m) => ({
-        role: m.role as "user" | "assistant",
+        role: (m.role === "USER" ? "user" : "assistant") as "user" | "assistant",
         content: m.content,
       }));
 
@@ -161,7 +161,7 @@ export const chatRouter = router({
       await ctx.prisma.chatMessage.create({
         data: {
           conversationId,
-          role: "assistant",
+          role: "ASSISTANT",
           content: response,
         },
       });

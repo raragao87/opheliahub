@@ -14,7 +14,7 @@ export const feedbackRouter = router({
   submit: protectedProcedure
     .input(
       z.object({
-        type: z.enum(["bug", "feedback", "idea"]),
+        type: z.enum(["BUG", "FEEDBACK", "IDEA"]),
         title: z.string().min(1).max(200),
         description: z.string().min(1).max(5000),
         pageUrl: z.string().optional(),
@@ -42,8 +42,8 @@ export const feedbackRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        status: z.string().optional(),
-        type: z.string().optional(),
+        status: z.enum(["NEW", "SEEN", "RESOLVED"]).optional(),
+        type: z.enum(["BUG", "FEEDBACK", "IDEA"]).optional(),
         limit: z.number().min(1).max(100).default(50),
         cursor: z.string().optional(),
       })
@@ -75,10 +75,10 @@ export const feedbackRouter = router({
 
     const [total, bugs, feedbacks, ideas, newCount] = await Promise.all([
       ctx.prisma.feedback.count(),
-      ctx.prisma.feedback.count({ where: { type: "bug" } }),
-      ctx.prisma.feedback.count({ where: { type: "feedback" } }),
-      ctx.prisma.feedback.count({ where: { type: "idea" } }),
-      ctx.prisma.feedback.count({ where: { status: "new" } }),
+      ctx.prisma.feedback.count({ where: { type: "BUG" } }),
+      ctx.prisma.feedback.count({ where: { type: "FEEDBACK" } }),
+      ctx.prisma.feedback.count({ where: { type: "IDEA" } }),
+      ctx.prisma.feedback.count({ where: { status: "NEW" } }),
     ]);
 
     return { total, bugs, feedbacks, ideas, newCount };
@@ -88,7 +88,7 @@ export const feedbackRouter = router({
     .input(
       z.object({
         id: z.string(),
-        status: z.enum(["new", "seen", "resolved"]),
+        status: z.enum(["NEW", "SEEN", "RESOLVED"]),
       })
     )
     .mutation(async ({ ctx, input }) => {

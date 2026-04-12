@@ -23,7 +23,7 @@ export function DuplicateReviewPanel({ accountId }: DuplicateReviewPanelProps) {
   const alertsQuery = useQuery({
     ...trpc.duplicates.listAlerts.queryOptions({
       accountId,
-      status: "pending",
+      status: "PENDING",
     }),
   });
 

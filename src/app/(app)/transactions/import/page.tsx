@@ -83,7 +83,7 @@ export default function ImportPage() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [mapping, setMapping] = useState<ColumnMapping>({ date: "", description: "", amount: "" });
-  const [amountMode, setAmountMode] = useState<"single" | "split">("single");
+  const [amountMode, setAmountMode] = useState<"SINGLE" | "SPLIT">("SINGLE");
   const [invertAmounts, setInvertAmounts] = useState(false);
   const [delimiter, setDelimiter] = useState(",");
 
@@ -266,7 +266,7 @@ export default function ImportPage() {
         const creditF = byMapped("credit");
 
         if (debitF && creditF) {
-          setAmountMode("split");
+          setAmountMode("SPLIT");
           setMapping({
             date: dateF ? String(dateF.sourceColumn) : "",
             description: descF ? String(descF.sourceColumn) : "",
@@ -275,7 +275,7 @@ export default function ImportPage() {
             credit: String(creditF.sourceColumn),
           });
         } else {
-          setAmountMode("single");
+          setAmountMode("SINGLE");
           setMapping({
             date: dateF ? String(dateF.sourceColumn) : "",
             description: descF ? String(descF.sourceColumn) : "",
@@ -629,7 +629,7 @@ export default function ImportPage() {
             debit: savedMapping.debit,
             credit: savedMapping.credit,
           });
-          setAmountMode(profile.amountMode as "single" | "split");
+          setAmountMode(profile.amountMode as "SINGLE" | "SPLIT");
           setInvertAmounts(profile.invertAmounts);
           setDelimiter(profile.delimiter);
           setSavedProfileLoaded(true);
@@ -1130,7 +1130,7 @@ export default function ImportPage() {
                       {opheliaAnalysis && !opheliaLoading && (
                         <ConfidenceDot
                           confidence={
-                            amountMode === "split"
+                            amountMode === "SPLIT"
                               ? opheliaConf("debit") ?? opheliaConf("credit")
                               : opheliaConf("amount")
                           }
@@ -1140,21 +1140,21 @@ export default function ImportPage() {
                     <Select
                       value={amountMode}
                       onChange={(e) => {
-                        const mode = e.target.value as "single" | "split";
+                        const mode = e.target.value as "SINGLE" | "SPLIT";
                         setAmountMode(mode);
-                        if (mode === "single") {
+                        if (mode === "SINGLE") {
                           setMapping({ ...mapping, debit: undefined, credit: undefined });
                         } else {
                           setMapping({ ...mapping, amount: "" });
                         }
                       }}
                     >
-                      <option value="single">Single amount column</option>
-                      <option value="split">Separate debit / credit columns</option>
+                      <option value="SINGLE">Single amount column</option>
+                      <option value="SPLIT">Separate debit / credit columns</option>
                     </Select>
                   </div>
 
-                  {amountMode === "single" ? (
+                  {amountMode === "SINGLE" ? (
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1.5">
                         Amount Column
@@ -1274,7 +1274,7 @@ export default function ImportPage() {
                   (format === "CSV" &&
                     (!mapping.date ||
                       !mapping.description ||
-                      (amountMode === "single" ? !mapping.amount : !mapping.debit || !mapping.credit)))
+                      (amountMode === "SINGLE" ? !mapping.amount : !mapping.debit || !mapping.credit)))
                 }
                 className="flex-1"
               >

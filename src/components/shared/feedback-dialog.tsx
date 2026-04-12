@@ -19,12 +19,12 @@ import { getRecentErrors } from "@/lib/error-capture";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
 
-type FeedbackType = "bug" | "feedback" | "idea";
+type FeedbackType = "BUG" | "FEEDBACK" | "IDEA";
 
 const TYPE_STYLE = {
-  bug: { activeBg: "bg-red-100 border-red-400 text-red-700", icon: Bug },
-  feedback: { activeBg: "bg-blue-100 border-blue-400 text-blue-700", icon: MessageSquare },
-  idea: { activeBg: "bg-amber-100 border-amber-400 text-amber-700", icon: Lightbulb },
+  BUG: { activeBg: "bg-red-100 border-red-400 text-red-700", icon: Bug },
+  FEEDBACK: { activeBg: "bg-blue-100 border-blue-400 text-blue-700", icon: MessageSquare },
+  IDEA: { activeBg: "bg-amber-100 border-amber-400 text-amber-700", icon: Lightbulb },
 } as const;
 
 export interface FeedbackDialogProps {
@@ -37,7 +37,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
-  const [type, setType] = useState<FeedbackType>("feedback");
+  const [type, setType] = useState<FeedbackType>("FEEDBACK");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -57,7 +57,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   );
 
   function resetForm() {
-    setType("feedback");
+    setType("FEEDBACK");
     setTitle("");
     setDescription("");
     setSubmitted(false);
@@ -90,20 +90,20 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         typeof window !== "undefined"
           ? `${window.innerWidth}x${window.innerHeight}`
           : undefined,
-      errorLogs: type === "bug" ? getRecentErrors() : undefined,
+      errorLogs: type === "BUG" ? getRecentErrors() : undefined,
     });
   }
 
   const typeLabels: Record<FeedbackType, string> = {
-    bug: t(lang, "feedback.bug"),
-    feedback: t(lang, "feedback.feedback"),
-    idea: t(lang, "feedback.idea"),
+    BUG: t(lang, "feedback.bug"),
+    FEEDBACK: t(lang, "feedback.feedback"),
+    IDEA: t(lang, "feedback.idea"),
   };
 
   const typePlaceholders: Record<FeedbackType, string> = {
-    bug: t(lang, "feedback.bugPlaceholder"),
-    feedback: t(lang, "feedback.feedbackPlaceholder"),
-    idea: t(lang, "feedback.ideaPlaceholder"),
+    BUG: t(lang, "feedback.bugPlaceholder"),
+    FEEDBACK: t(lang, "feedback.feedbackPlaceholder"),
+    IDEA: t(lang, "feedback.ideaPlaceholder"),
   };
 
   return (
@@ -124,7 +124,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Type selector */}
             <div className="flex gap-2">
-              {(["bug", "feedback", "idea"] as FeedbackType[]).map((ftype) => {
+              {(["BUG", "FEEDBACK", "IDEA"] as FeedbackType[]).map((ftype) => {
                 const style = TYPE_STYLE[ftype];
                 const Icon = style.icon;
                 const isActive = type === ftype;
@@ -178,7 +178,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
             {/* Note */}
             <p className="text-xs text-muted-foreground">
-              {type === "bug"
+              {type === "BUG"
                 ? t(lang, "feedback.techNoteWithErrors")
                 : t(lang, "feedback.techNote")}
             </p>

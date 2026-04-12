@@ -54,7 +54,7 @@ export function OpheliaChat() {
       setMessages(
         convQuery.data.messages.map((m) => ({
           id: m.id,
-          role: m.role as "user" | "assistant",
+          role: (m.role === "USER" ? "user" : "assistant") as "user" | "assistant",
           content: m.content,
         }))
       );

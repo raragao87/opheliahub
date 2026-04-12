@@ -1135,8 +1135,8 @@ function TransactionRow({
   const opheliaConf = txn.opheliaConfidence ?? null;
   const opheliaConfColor =
     opheliaConf == null ? "text-violet-400"
-    : opheliaConf >= 0.8 ? "text-green-500"
-    : opheliaConf >= 0.5 ? "text-yellow-500"
+    : opheliaConf >= 800 ? "text-green-500"
+    : opheliaConf >= 500 ? "text-yellow-500"
     : "text-red-400";
 
   return (

@@ -103,9 +103,9 @@ export async function checkPostImportDuplicates(
         importBatchId: batchId,
         transactionIdA: candidate.importedTx.id,
         transactionIdB: candidate.existingTx.id,
-        confidence: r.confidence,
+        confidence: Math.round(r.confidence * 1000),
         reasoning: r.reasoning,
-        status: "pending",
+        status: "PENDING" as const,
       };
     });
 

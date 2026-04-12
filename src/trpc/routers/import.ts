@@ -293,7 +293,7 @@ export const importRouter = router({
         dateFormat: z.string().default("dd/MM/yyyy"),
         delimiter: z.string().default(","),
         skipRows: z.number().int().min(0).default(0),
-        amountMode: z.enum(["single", "split"]).default("single"),
+        amountMode: z.enum(["SINGLE", "SPLIT"]).default("SINGLE"),
         invertAmounts: z.boolean().default(false),
         columnFilters: z.record(z.string(), z.array(z.string())).optional(),
       })
@@ -398,12 +398,12 @@ export const importRouter = router({
   dismissDuplicateAlerts: householdProcedure
     .input(z.object({ alertIds: z.array(z.string()).optional(), accountId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const where: Record<string, unknown> = { userId: ctx.userId, status: "pending" };
+      const where: Record<string, unknown> = { userId: ctx.userId, status: "PENDING" };
       if (input.alertIds) where.id = { in: input.alertIds };
       if (input.accountId) where.accountId = input.accountId;
       return ctx.prisma.duplicateAlert.updateMany({
         where,
-        data: { status: "dismissed" },
+        data: { status: "DISMISSED" },
       });
     }),
 
@@ -411,7 +411,7 @@ export const importRouter = router({
   getDuplicateAlerts: householdProcedure
     .query(async ({ ctx }) => {
       return ctx.prisma.duplicateAlert.findMany({
-        where: { userId: ctx.userId, status: "pending" },
+        where: { userId: ctx.userId, status: "PENDING" },
         orderBy: { createdAt: "desc" },
         take: 50,
       });
