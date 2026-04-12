@@ -103,7 +103,7 @@ export async function checkPostImportDuplicates(
         importBatchId: batchId,
         transactionIdA: candidate.importedTx.id,
         transactionIdB: candidate.existingTx.id,
-        confidence: Math.round(r.confidence * 1000),
+        confidence: r.confidence,
         reasoning: r.reasoning,
         status: "PENDING" as const,
       };

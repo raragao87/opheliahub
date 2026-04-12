@@ -332,7 +332,7 @@ export async function categorizeTransactionBatch(
             where: { id: tx.id },
             data: {
               opheliaCategoryId: safeCategoryId,
-              opheliaConfidence: safeCategoryId && result?.categoryConfidence != null ? Math.round(result.categoryConfidence * 1000) : null,
+              opheliaConfidence: safeCategoryId ? (result?.categoryConfidence ?? null) : null,
               opheliaDisplayName: result?.suggestedDisplayName ?? null,
               opheliaProcessedAt: now,
               effectiveCategoryId: computeEffectiveCategoryId(tx.categoryId, safeCategoryId),
@@ -409,7 +409,7 @@ export async function categorizeTransactionBatch(
                   where: { id: tx.id },
                   data: {
                     opheliaCategoryId: retryId,
-                    opheliaConfidence: retryResult?.categoryConfidence != null ? Math.round(retryResult.categoryConfidence * 1000) : null,
+                    opheliaConfidence: retryResult?.categoryConfidence ?? null,
                     effectiveCategoryId: computeEffectiveCategoryId(tx.categoryId, retryId),
                   },
                 });

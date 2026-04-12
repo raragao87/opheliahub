@@ -273,7 +273,7 @@ export default function EditTransactionPage({
                         {txn.opheliaCategory.name}
                         {txn.opheliaConfidence != null && (
                           <span className="ml-1 text-xs text-violet-600 dark:text-violet-400">
-                            ({Math.round(txn.opheliaConfidence / 10)}% confidence)
+                            ({Math.round(txn.opheliaConfidence * 100)}% confidence)
                           </span>
                         )}
                       </p>

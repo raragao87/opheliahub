@@ -293,7 +293,7 @@ model Transaction {
 
   // Ophelia AI fields — populated by background categorization (Session 8+)
   opheliaCategoryId  String?   // Ophelia's suggested category (FK to Category)
-  opheliaConfidence  Int?      // 0–1000 milli-confidence
+  opheliaConfidence  Float?    // 0.0–1.0 AI confidence score
   opheliaDisplayName String?   // Ophelia's suggested clean merchant name
   opheliaProcessedAt  DateTime? // when Ophelia last processed this transaction
   effectiveCategoryId String?   // denormalized: categoryId ?? opheliaCategoryId — kept in sync at write-time
@@ -608,7 +608,7 @@ model DuplicateAlert {
   importBatchId   String
   transactionIdA  String   // the imported transaction
   transactionIdB  String   // the existing transaction it might duplicate
-  confidence      Int      // 0–1000 milli-confidence
+  confidence      Float    // 0.0–1.0 AI similarity score
   reasoning       String?
   status          DuplicateAlertStatus @default(PENDING)
   createdAt       DateTime @default(now())
@@ -780,7 +780,7 @@ model OpheliaFeedback {
   userCategoryName       String?  // denormalized for prompt
   opheliaDisplayName     String?
   userDisplayName        String?
-  opheliaConfidence      Int?   // 0–1000 milli-confidence
+  opheliaConfidence      Float?
   wasCorrection          Boolean  @default(false) // true = Ophelia was wrong
   createdAt              DateTime @default(now())
 
