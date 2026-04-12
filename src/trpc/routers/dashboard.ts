@@ -34,6 +34,12 @@ export const dashboardRouter = router({
         _sum: { amount: true },
       });
 
+      // Investment total
+      const investment = await ctx.prisma.transaction.aggregate({
+        where: { ...baseWhere, type: "INVESTMENT" },
+        _sum: { amount: true },
+      });
+
       // By category
       const byCategory = await ctx.prisma.transaction.groupBy({
         by: ["categoryId"],
@@ -58,7 +64,8 @@ export const dashboardRouter = router({
       return {
         totalIncome: income._sum.amount ?? 0,
         totalExpenses: Math.abs(expenses._sum.amount ?? 0),
-        netFlow: (income._sum.amount ?? 0) + (expenses._sum.amount ?? 0),
+        totalInvestment: investment._sum.amount ?? 0,
+        netFlow: (income._sum.amount ?? 0) + (expenses._sum.amount ?? 0) + (investment._sum.amount ?? 0),
         byCategory: byCategory.map((c) => ({
           category: c.categoryId ? categoryMap.get(c.categoryId) : null,
           amount: Math.abs(c._sum.amount ?? 0),

@@ -773,13 +773,18 @@ export default function TrackerPage() {
   const historicalAccountBalance = fundsQuery.data?.historicalAccountBalance ?? null;
   const totalFundContributions = fundsData.reduce((sum, f) => sum + f.budget, 0);
   const budgetMonthsLinked = preferences.budgetMonthsLinked;
-  const carryForward = budgetMonthsLinked ? (summaryQuery.data?.carryForward ?? 0) : 0;
-  const readyToAssign = carryForward + incomeAssigned - expenseAssigned - totalFundContributions;
+  const carryIn = budgetMonthsLinked ? (summaryQuery.data?.carryIn ?? 0) : 0;
+  // Investment categories are flat (no subcategories/groups), so get from summaryCategories
+  const investmentAssigned = summaryCategories
+    .filter((c) => c.category && (c.category as any).type === "INVESTMENT")
+    .reduce((sum, c) => sum + c.allocated, 0);
+  const readyToAssign = carryIn + incomeAssigned + investmentAssigned - expenseAssigned - totalFundContributions;
   const totalIncomeActual = incomeGroups.reduce((s, g) => s + g.totalIncomeActual - g.totalExpenseActual, 0);
+  const actualInvestment = summaryQuery.data?.actualInvestment ?? 0;
 
   const uncategorizedEntry = summaryCategories.find((c) => !c.categoryId);
 
-  const totalIncome = carryForward + incomeAssigned;
+  const totalIncome = carryIn + incomeAssigned + investmentAssigned;
 
   const totalSpentExpenses = groupsWithData
     .filter((g) => g.type === "EXPENSE")
@@ -806,8 +811,8 @@ export default function TrackerPage() {
       ? 0
       : daysInMonth;
 
-  // Actual income including carry-in (mirrors how totalIncome includes carryForward on budget side)
-  const totalActualWithCarryIn = carryForward + totalIncomeActual;
+  // Actual income including carry-in + investment (mirrors how totalIncome includes carryIn on budget side)
+  const totalActualWithCarryIn = carryIn + totalIncomeActual + actualInvestment;
 
   // Shared bar scale — both bars use the same denominator
   const maxBarValue = Math.max(
@@ -849,8 +854,8 @@ export default function TrackerPage() {
           >
             {/* Budget bar */}
             {(() => {
-              const carryInPct = budgetMonthsLinked && carryForward > 0
-                ? Math.max((carryForward / maxBarValue) * 100, 1.5)
+              const carryInPct = budgetMonthsLinked && carryIn > 0
+                ? Math.max((carryIn / maxBarValue) * 100, 1.5)
                 : 0;
               const incomeOnlyPct = Math.max(incomeBudgetPct - carryInPct, 0);
               return (
@@ -913,8 +918,8 @@ export default function TrackerPage() {
                 ? Math.min(Math.max((Math.abs(toNextMonth) / maxBarValue) * 100, 1.5), 20)
                 : 0;
               // Carry-in on actual bar — same percentage as budget bar
-              const actualCarryInPct = budgetMonthsLinked && carryForward > 0
-                ? Math.max((carryForward / maxBarValue) * 100, 1.5)
+              const actualCarryInPct = budgetMonthsLinked && carryIn > 0
+                ? Math.max((carryIn / maxBarValue) * 100, 1.5)
                 : 0;
               const actualIncomeOnlyPct = Math.max(incomeReceivedPct - actualCarryInPct, 0);
               return (
@@ -1008,7 +1013,7 @@ export default function TrackerPage() {
                   </thead>
                   <tbody>
                     {/* Carry-in row */}
-                    {budgetMonthsLinked && carryForward > 0 && (
+                    {budgetMonthsLinked && carryIn > 0 && (
                       <tr className="border-b border-border/50">
                         <td className="py-0.5 pb-1.5">
                           <span className="flex items-center gap-1.5">
@@ -1017,7 +1022,7 @@ export default function TrackerPage() {
                           </span>
                         </td>
                         <td className="text-right py-0.5 pb-1.5 px-2 tabular-nums">
-                          <MoneyDisplay amount={carryForward} colorize={false} className="text-xs inline" />
+                          <MoneyDisplay amount={carryIn} colorize={false} className="text-xs inline" />
                         </td>
                         <td className="text-right py-0.5 pb-1.5 px-2 tabular-nums text-muted-foreground">—</td>
                         <td className="text-right py-0.5 pb-1.5 pl-2 tabular-nums text-muted-foreground">—</td>

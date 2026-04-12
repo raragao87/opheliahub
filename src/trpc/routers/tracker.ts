@@ -64,7 +64,7 @@ export const trackerRouter = router({
         include: {
           allocations: {
             include: {
-              category: { select: { id: true, name: true, icon: true, color: true } },
+              category: { select: { id: true, name: true, icon: true, color: true, type: true } },
             },
             orderBy: { category: { sortOrder: "asc" } },
           },
@@ -83,7 +83,7 @@ export const trackerRouter = router({
           include: {
             allocations: {
               include: {
-                category: { select: { id: true, name: true, icon: true, color: true } },
+                category: { select: { id: true, name: true, icon: true, color: true, type: true } },
               },
             },
           },
@@ -91,20 +91,6 @@ export const trackerRouter = router({
       }
 
       return tracker;
-    }),
-
-  setIncome: householdProcedure
-    .input(
-      z.object({
-        trackerId: z.string(),
-        totalIncome: z.number().int().min(0),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.tracker.update({
-        where: { id: input.trackerId },
-        data: { totalIncome: input.totalIncome },
-      });
     }),
 
   setAllocation: householdProcedure
@@ -154,7 +140,7 @@ export const trackerRouter = router({
         include: {
           allocations: {
             include: {
-              category: { select: { id: true, name: true, icon: true, color: true } },
+              category: { select: { id: true, name: true, icon: true, color: true, type: true } },
             },
           },
         },
@@ -198,13 +184,14 @@ export const trackerRouter = router({
             visibilityFilter,
             liquidFilter,
             effectiveDateFilter(start, end),
-            { type: { in: ["INCOME", "EXPENSE"] } },
+            { type: { in: ["INCOME", "EXPENSE", "INVESTMENT"] } },
             { isInitialBalance: false },
           ],
         },
         select: {
           id: true,
           amount: true,
+          type: true,
           categoryId: true,
           opheliaCategoryId: true,
           effectiveCategoryId: true,
@@ -214,39 +201,39 @@ export const trackerRouter = router({
       const incomeCategoryIdSet = new Set(incomeCategoryIds);
       const expenseCategoryIdSet = new Set(expenseCategoryIds);
 
-      // Build unified actual map using effectiveCategoryId column
+      // Build category actual maps and aggregate totals by transaction type
       const categoryActualMap = new Map<string | null, number>();
       let actualIncome = 0;
+      let actualInvestment = 0;
+      let totalActualExpenses = 0;
 
       for (const tx of allMonthTxs) {
         const effectiveCatId = tx.effectiveCategoryId;
-
         categoryActualMap.set(effectiveCatId, (categoryActualMap.get(effectiveCatId) ?? 0) + tx.amount);
 
-        if (effectiveCatId && incomeCategoryIdSet.has(effectiveCatId)) {
-          actualIncome += tx.amount; // net income (positive income - deductions)
+        switch (tx.type) {
+          case "INCOME":
+            actualIncome += tx.amount;
+            break;
+          case "INVESTMENT":
+            actualInvestment += tx.amount;
+            break;
+          case "EXPENSE":
+            totalActualExpenses += Math.abs(tx.amount);
+            break;
         }
       }
 
-      // spendingMap: for expense categories, store absolute spending; for income categories, store raw amount
-      // This preserves backward compatibility with the boundary adjustment logic and category building
+      // spendingMap / incomeMap: per-category breakdown for the UI
       const spendingMap = new Map<string | null, number>();
       const incomeMap = new Map<string | null, number>();
 
       for (const [catId, amount] of categoryActualMap) {
         if (catId && incomeCategoryIdSet.has(catId)) {
-          // Income: keep raw amount (positive = received, negative = deductions/corrections)
           incomeMap.set(catId, amount);
         } else {
-          // Expense categories and uncategorized — store as positive (abs)
           spendingMap.set(catId, Math.abs(amount));
         }
-      }
-
-      // Compute total from spending
-      let totalActualExpenses = 0;
-      for (const value of spendingMap.values()) {
-        totalActualExpenses += value;
       }
 
       if (!tracker) {
@@ -308,15 +295,13 @@ export const trackerRouter = router({
         }
 
         return {
-          totalIncome: 0,
           actualIncome,
+          actualInvestment,
           totalAllocated: 0,
           totalActualExpenses,
-          unallocated: 0,
           categories,
-          carryForward: 0,
-          carryForwardIsManual: false,
-          autoCarryForward: 0,
+          carryIn: 0,
+          toNextMonth: null as number | null,
         };
       }
 
@@ -355,7 +340,7 @@ export const trackerRouter = router({
       if (unallocatedCategoryIds.length > 0) {
         const extraCategories = await ctx.prisma.category.findMany({
           where: { id: { in: unallocatedCategoryIds as string[] } },
-          select: { id: true, name: true, icon: true, color: true },
+          select: { id: true, name: true, icon: true, color: true, type: true },
         });
 
         for (const cat of extraCategories) {
@@ -388,22 +373,19 @@ export const trackerRouter = router({
         });
       }
 
-      // Compute carry-forward
-      const autoCarryForward = await computeAutoCarryForward(
+      // Compute carry-in (always auto from previous month's toNextMonth)
+      const carryIn = await computeAutoCarryForward(
         ctx.prisma, ctx.householdId, ctx.userId, input.visibility, input.year, input.month
       );
-      const effectiveCarryForward = tracker.carryForward ?? autoCarryForward;
 
       // Compute and persist "to next month"
-      // Formula: carryIn + actualIncome - actualExpenses - fundAllocations
-      // Fund allocations (not actuals) because fund budget = money actually set aside from income.
-      // Fund actual = usage from fund balance, not a cash outflow from this month.
+      // Formula: carryIn + actualIncome + actualInvestment - actualExpenses - fundAllocations
       const fundAllocated = await ctx.prisma.fundTrackerAllocation.aggregate({
         where: { trackerId: tracker.id },
         _sum: { amount: true },
       }).then((r) => r._sum.amount ?? 0);
 
-      const toNextMonth = effectiveCarryForward + actualIncome - totalActualExpenses - fundAllocated;
+      const toNextMonth = carryIn + actualIncome + actualInvestment - totalActualExpenses - fundAllocated;
 
       // Persist toNextMonth
       await ctx.prisma.tracker.update({
@@ -412,15 +394,12 @@ export const trackerRouter = router({
       });
 
       return {
-        totalIncome: tracker.totalIncome,
         actualIncome,
+        actualInvestment,
         totalAllocated,
         totalActualExpenses,
-        unallocated: tracker.totalIncome - totalAllocated,
         categories,
-        carryForward: effectiveCarryForward,
-        carryForwardIsManual: tracker.carryForward !== null,
-        autoCarryForward,
+        carryIn,
         toNextMonth,
       };
     }),
@@ -447,20 +426,6 @@ export const trackerRouter = router({
           fundId: input.fundId,
           amount: input.amount,
         },
-      });
-    }),
-
-  setCarryForward: householdProcedure
-    .input(
-      z.object({
-        trackerId: z.string(),
-        amount: z.number().int().nullable(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.tracker.update({
-        where: { id: input.trackerId },
-        data: { carryForward: input.amount },
       });
     }),
 
@@ -745,7 +710,7 @@ export const trackerRouter = router({
         include: {
           allocations: {
             include: {
-              category: { select: { id: true, name: true, icon: true, color: true } },
+              category: { select: { id: true, name: true, icon: true, color: true, type: true } },
             },
             orderBy: { category: { sortOrder: "asc" } },
           },
@@ -787,12 +752,6 @@ export const trackerRouter = router({
           where: { trackerId: tracker.id },
         }),
       ]);
-
-      // Also clear carry-forward override
-      await ctx.prisma.tracker.update({
-        where: { id: tracker.id },
-        data: { carryForward: null },
-      });
 
       return { reset: catDeleted.count + fundDeleted.count + tagDeleted.count };
     }),

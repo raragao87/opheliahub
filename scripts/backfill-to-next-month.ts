@@ -16,10 +16,9 @@ async function computeToNextMonth(tracker: {
   householdId: string;
   userId: string;
   visibility: string;
-  carryForward: number | null;
 }, prevToNextMonth: number): Promise<number> {
   const { start, end } = getMonthRange(tracker.year, tracker.month);
-  const carryForward = tracker.carryForward ?? prevToNextMonth;
+  const carryForward = prevToNextMonth;
 
   // Get leaf categories by type
   const leafCats = await prisma.category.findMany({
@@ -65,26 +64,32 @@ async function computeToNextMonth(tracker: {
             { accrualDate: null, date: { gte: start, lte: end } },
           ],
         },
-        { type: { in: ["INCOME", "EXPENSE"] as const } },
+        { type: { in: ["INCOME", "EXPENSE", "INVESTMENT"] as const } },
         { isInitialBalance: false },
       ],
     },
-    select: { amount: true, effectiveCategoryId: true },
+    select: { amount: true, type: true, effectiveCategoryId: true },
   });
 
   let actualIncome = 0;
+  let actualInvestment = 0;
   let totalActualExpenses = 0;
   for (const tx of txns) {
-    if (tx.effectiveCategoryId && incomeCatIds.has(tx.effectiveCategoryId)) {
-      actualIncome += tx.amount;
-    } else {
-      totalActualExpenses += Math.abs(tx.amount);
+    switch (tx.type) {
+      case "INCOME":
+        actualIncome += tx.amount;
+        break;
+      case "INVESTMENT":
+        actualInvestment += tx.amount;
+        break;
+      case "EXPENSE":
+        totalActualExpenses += Math.abs(tx.amount);
+        break;
     }
   }
 
-  // Carry-out = carryIn + actualIncome - actualExpenses - fundAllocations
-  // Fund allocations = money set aside from income (not fund usage/spending)
-  return carryForward + actualIncome - totalActualExpenses - fundAllocated;
+  // Carry-out = carryIn + actualIncome + actualInvestment - actualExpenses - fundAllocations
+  return carryForward + actualIncome + actualInvestment - totalActualExpenses - fundAllocated;
 }
 
 async function main() {
