@@ -68,6 +68,7 @@ model User {
   theme             String     @default("system")
   colorTheme        String     @default("luminous")
   budgetMonthsLinked  Boolean    @default(true)
+  showInvestment      Boolean    @default(true)
 
   // Auth.js relations
   oauthAccounts Account[]

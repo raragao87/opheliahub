@@ -65,6 +65,10 @@ const translations = {
     "settings.budgetMonthsDesc": "Choose whether unspent budget carries forward between months.",
     "budgetMonths.independent": "Independent",
     "budgetMonths.linked": "Linked",
+    "settings.showInvestment": "Investment tracking",
+    "settings.showInvestmentDesc": "Show the investment section in the tracker, even when there are no investment transactions.",
+    "common.show": "Show",
+    "common.hide": "Hide",
 
     // Household
     "household.setupTitle": "Set Up Your Household",
@@ -408,6 +412,10 @@ const translations = {
     "settings.budgetMonthsDesc": "Escolha se o orçamento não utilizado é transferido entre meses.",
     "budgetMonths.independent": "Independente",
     "budgetMonths.linked": "Vinculado",
+    "settings.showInvestment": "Acompanhamento de investimentos",
+    "settings.showInvestmentDesc": "Mostrar a secção de investimentos no tracker, mesmo sem transações de investimento.",
+    "common.show": "Mostrar",
+    "common.hide": "Ocultar",
 
     // Household
     "household.setupTitle": "Configure Sua Família",
@@ -751,6 +759,10 @@ const translations = {
     "settings.budgetMonthsDesc": "Alegeți dacă bugetul neutilizat se transferă între luni.",
     "budgetMonths.independent": "Independent",
     "budgetMonths.linked": "Legat",
+    "settings.showInvestment": "Urmărire investiții",
+    "settings.showInvestmentDesc": "Afișează secțiunea de investiții în tracker, chiar și fără tranzacții de investiții.",
+    "common.show": "Afișare",
+    "common.hide": "Ascundere",
 
     // Household
     "household.setupTitle": "Configurează Gospodăria Ta",
@@ -1094,6 +1106,10 @@ const translations = {
     "settings.budgetMonthsDesc": "Kies of ongebruikt budget wordt overgedragen naar volgende maanden.",
     "budgetMonths.independent": "Onafhankelijk",
     "budgetMonths.linked": "Gekoppeld",
+    "settings.showInvestment": "Investeringen bijhouden",
+    "settings.showInvestmentDesc": "Toon de investeringssectie in de tracker, ook als er geen investeringstransacties zijn.",
+    "common.show": "Tonen",
+    "common.hide": "Verbergen",
 
     // Household
     "household.setupTitle": "Stel Uw Huishouden In",

@@ -12,6 +12,7 @@ interface UserPreferences {
   theme: string;
   colorTheme: "classic" | "luminous";
   budgetMonthsLinked: boolean;
+  showInvestment: boolean;
 }
 
 interface UserPreferencesContextValue {
@@ -27,6 +28,7 @@ const defaultPreferences: UserPreferences = {
   theme: "system",
   colorTheme: "luminous",
   budgetMonthsLinked: true,
+  showInvestment: true,
 };
 
 const UserPreferencesContext = createContext<UserPreferencesContextValue>({
@@ -60,6 +62,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     theme: data?.theme ?? "system",
     colorTheme: (data?.colorTheme ?? "luminous") as "classic" | "luminous",
     budgetMonthsLinked: data?.budgetMonthsLinked ?? true,
+    showInvestment: data?.showInvestment ?? true,
   };
 
   // Sync theme with next-themes whenever it changes

@@ -2090,7 +2090,7 @@ export default function TrackerPage() {
               {isIncome && (() => {
                 const investmentData = summaryQuery.data?.investmentSummary ?? [];
                 const hasInvestment = investmentData.length > 0 || investmentAssigned !== 0;
-                if (!hasInvestment) return null;
+                if (!hasInvestment && !preferences.showInvestment) return null;
 
                 const investmentActualTotal = summaryQuery.data?.actualInvestment ?? 0;
                 const investmentDiff = investmentActualTotal - investmentAssigned;

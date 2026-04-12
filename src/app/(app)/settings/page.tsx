@@ -338,6 +338,28 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
+
+            {/* Show Investment */}
+            <div className="space-y-2">
+              <Label>{t(language, "settings.showInvestment" as any)}</Label>
+              <p className="text-xs text-muted-foreground">{t(language, "settings.showInvestmentDesc" as any)}</p>
+              <div className="flex gap-2">
+                {([true, false] as const).map((show) => (
+                  <Button
+                    key={String(show)}
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      preferences.showInvestment === show &&
+                        "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
+                    )}
+                    onClick={() => updatePreferences({ showInvestment: show })}
+                  >
+                    {t(language, show ? "common.show" as any : "common.hide" as any)}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
