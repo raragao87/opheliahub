@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,12 +20,13 @@ const LIABILITY_TYPES = new Set(
 
 export default function NewAccountPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
 
   const [form, setForm] = useState({
     name: "",
-    type: "CHECKING",
+    type: searchParams.get("type") ?? "CHECKING",
     ownership: "PERSONAL" as const,
     institution: "",
     currency: "EUR",
@@ -88,20 +89,20 @@ export default function NewAccountPage() {
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                 >
-                  <optgroup label="Budget">
+                  <optgroup label="Spending">
                     <option value="CHECKING">Checking</option>
                     <option value="SAVINGS">Savings</option>
                     <option value="CREDIT_CARD">Credit Card</option>
                     <option value="CASH">Cash</option>
                   </optgroup>
-                  <optgroup label="Tracking">
+                  <optgroup label="Investment">
                     <option value="INVESTMENT">Investment</option>
                     <option value="CRYPTO">Crypto</option>
+                  </optgroup>
+                  <optgroup label="Assets & Debts">
                     <option value="PROPERTY">Property</option>
                     <option value="VEHICLE">Vehicle</option>
                     <option value="OTHER_ASSET">Other Asset</option>
-                  </optgroup>
-                  <optgroup label="Loans">
                     <option value="LOAN">Loan</option>
                     <option value="MORTGAGE">Mortgage</option>
                     <option value="OTHER_DEBT">Other Debt</option>

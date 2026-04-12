@@ -188,20 +188,20 @@ export function AccountEditDialog({ accountId, open, onClose }: AccountEditDialo
                 value={editForm.type}
                 onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
               >
-                <optgroup label="Budget">
+                <optgroup label="Spending">
                   <option value="CHECKING">Checking</option>
                   <option value="SAVINGS">Savings</option>
                   <option value="CREDIT_CARD">Credit Card</option>
                   <option value="CASH">Cash</option>
                 </optgroup>
-                <optgroup label="Tracking">
+                <optgroup label="Investment">
                   <option value="INVESTMENT">Investment</option>
                   <option value="CRYPTO">Crypto</option>
+                </optgroup>
+                <optgroup label="Assets & Debts">
                   <option value="PROPERTY">Property</option>
                   <option value="VEHICLE">Vehicle</option>
                   <option value="OTHER_ASSET">Other Asset</option>
-                </optgroup>
-                <optgroup label="Loans">
                   <option value="LOAN">Loan</option>
                   <option value="MORTGAGE">Mortgage</option>
                   <option value="OTHER_DEBT">Other Debt</option>
