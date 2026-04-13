@@ -8,7 +8,6 @@ import type { Language } from "./translations";
 interface UserPreferences {
   locale: string;
   language: Language;
-  defaultVisibility: "SHARED" | "PERSONAL";
   theme: string;
   colorTheme: "classic" | "luminous";
   budgetMonthsLinked: boolean;
@@ -24,7 +23,6 @@ interface UserPreferencesContextValue {
 const defaultPreferences: UserPreferences = {
   locale: "nl-NL",
   language: "en",
-  defaultVisibility: "SHARED",
   theme: "system",
   colorTheme: "luminous",
   budgetMonthsLinked: true,
@@ -58,7 +56,6 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   const preferences: UserPreferences = {
     locale: data?.locale ?? "nl-NL",
     language: (data?.language ?? "en") as Language,
-    defaultVisibility: (data?.defaultVisibility ?? "SHARED") as "SHARED" | "PERSONAL",
     theme: data?.theme ?? "system",
     colorTheme: (data?.colorTheme ?? "luminous") as "classic" | "luminous",
     budgetMonthsLinked: data?.budgetMonthsLinked ?? true,

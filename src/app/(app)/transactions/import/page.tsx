@@ -810,7 +810,6 @@ export default function ImportPage() {
         displayName: displayNameOverrides[originalIdx],
         amount: tx.amount,
         type: tx.type,
-        visibility: defaultVisibility,
         categoryId: categoryOverrides[originalIdx] || undefined,
         tagIds: tagOverrides[originalIdx] ?? [],
         externalId: tx.externalId,

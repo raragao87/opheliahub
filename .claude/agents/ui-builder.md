@@ -48,9 +48,9 @@ You are a senior frontend engineer building OpheliaHub, a couples' finance app, 
 
 ### Import Review
 - Full-width preview table after parsing a bank file
-- Per-row controls: category dropdown, visibility toggle (shared/personal), tag multi-select
+- Per-row controls: category dropdown, tag multi-select
 - Duplicate warning badges on flagged rows
-- "Select all" for bulk visibility assignment
+- Visibility derived from account ownership (no per-transaction toggle)
 - Clear summary header: "42 transactions found, 3 potential duplicates"
 - Confirm button with clear count: "Import 39 transactions"
 

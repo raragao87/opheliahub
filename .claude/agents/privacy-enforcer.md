@@ -9,13 +9,13 @@ You are a security and privacy specialist for OpheliaHub, a couples' finance app
 
 ## The Privacy Model
 
-- Transactions have a `visibility` field: `'shared'` or `'personal'`
-- **Personal** transactions are ONLY visible to their `created_by` user
-- **Shared** transactions are visible to all members of the same household
-- A single account (e.g., a personal credit card) can contain BOTH shared and personal transactions
+- Transaction visibility is derived from **account ownership** (`FinancialAccount.ownership`)
+- All transactions on a SHARED account are visible to all household members
+- All transactions on a PERSONAL account are visible only to the account owner
+- There is NO per-transaction visibility field — it was removed
 - Tags cross all boundaries but RESPECT privacy: tag-based views only return transactions the current user has permission to see
 - Net worth calculations must respect visibility rules — never sum accounts or transactions the user shouldn't see
-- Only the transaction creator can change its visibility
+- Use `visibleTransactionsWhere()` for general visibility and `transactionOwnershipFilter()` for budget scoping
 
 ## Your Responsibilities
 
@@ -33,10 +33,10 @@ For EVERY data-access code path you review, verify all of the following:
 
 - [ ] User authentication is checked (session exists and is valid)
 - [ ] Household membership is verified (user belongs to the household they're querying)
-- [ ] Transaction queries include the standard privacy filter:
-      `WHERE (visibility = 'shared' AND account.household_id = ?) OR (created_by = ?)`
-- [ ] Account queries include ownership check:
-      `WHERE (owner_type = 'household' AND owner_id = ?) OR (owner_type = 'user' AND owner_id = ?)`
+- [ ] Transaction queries use `visibleTransactionsWhere()` or `transactionOwnershipFilter()` from `@/lib/privacy`
+- [ ] No code references `Transaction.visibility` (field doesn't exist)
+- [ ] Budget-scoped queries filter by `account.ownership`, not transaction-level field
+- [ ] Account queries use `visibleAccountsWhere()` from `@/lib/privacy`
 - [ ] Aggregate queries (SUM, COUNT) apply privacy filters BEFORE aggregation
 - [ ] API responses don't include `created_by` user details on other users' personal items
 - [ ] Visibility changes are logged in AuditLog with before/after values

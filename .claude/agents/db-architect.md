@@ -30,7 +30,7 @@ Every query that touches user data must consider:
 
 1. **Who** is the requesting user? (authenticated session)
 2. **What household** do they belong to?
-3. **Transaction queries**: always filter by `(visibility = 'shared' AND account belongs to household) OR (visibility = 'personal' AND created_by = current_user)`
+3. **Transaction queries**: always use `visibleTransactionsWhere()` — visibility is derived from account ownership, not a per-transaction field
 4. **Account queries**: filter by `(owner_type = 'household' AND owner_id = household_id) OR (owner_type = 'user' AND owner_id = current_user_id)`
 5. **Aggregate queries** (SUM, COUNT, AVG): must apply the same privacy filter before aggregation
 

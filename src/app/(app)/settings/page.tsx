@@ -85,9 +85,6 @@ export default function SettingsPage() {
     updatePreferences({ language: lang });
   }
 
-  function handleVisibilityChange(vis: "SHARED" | "PERSONAL") {
-    updatePreferences({ defaultVisibility: vis });
-  }
 
   function handleThemeChange(theme: "light" | "dark" | "system") {
     setTheme(theme);
@@ -243,35 +240,6 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            {/* Default Visibility */}
-            <div className="space-y-2">
-              <Label>{t(language, "settings.defaultVisibility")}</Label>
-              <p className="text-xs text-muted-foreground">{t(language, "settings.defaultVisibilityDesc")}</p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    preferences.defaultVisibility === "SHARED" &&
-                      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
-                  )}
-                  onClick={() => handleVisibilityChange("SHARED")}
-                >
-                  {t(language, "common.shared")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    preferences.defaultVisibility === "PERSONAL" &&
-                      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground border-primary"
-                  )}
-                  onClick={() => handleVisibilityChange("PERSONAL")}
-                >
-                  {t(language, "common.personal")}
-                </Button>
-              </div>
-            </div>
 
             {/* Theme */}
             <div className="space-y-2">

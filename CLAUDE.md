@@ -20,15 +20,16 @@ OpheliaHub is a personal & family finance management app for couples. It unifies
 - All monetary values are **integers (cents/minor units)**. Never use floats for money.
 - Multi-currency: every transaction and account stores its currency code (EUR default).
 - Privacy is enforced at the **database query level**, not just UI. Every Prisma query involving transactions, accounts, or balances must be scoped by user permissions.
-- Visibility model: transactions are either `shared` or `personal`. Personal transactions are NEVER returned to non-owners, even via API.
-- Zero-based budgeting: income − allocated = 0. Track allocated vs spent per category.
+- Transaction visibility is derived from **account ownership** — all transactions on a SHARED account are shared, all on a PERSONAL account are personal. There is no per-transaction visibility field.
+- **Transaction types**: INCOME, EXPENSE, FUND, TRANSFER, INVESTMENT — each type has distinct budget semantics.
+- Zero-based budgeting: availableToSpend − allocated = 0. Track allocated vs spent per category.
 
 ## Code Conventions
 
 - Use `src/` directory structure
 - Server components by default, `"use client"` only when needed
 - Prisma schema in `prisma/schema.prisma`
-- tRPC routers in `src/server/routers/`
+- tRPC routers in `src/trpc/routers/`
 - Shared types in `src/types/`
 - Financial calculations in `src/lib/finance/` — always with unit tests
 - Import parsers in `src/lib/parsers/`
@@ -37,45 +38,57 @@ OpheliaHub is a personal & family finance management app for couples. It unifies
 
 ## Key Entities
 
-User, Household, HouseholdMember, Account, Transaction, TransactionTag,
-Category, Tag, TagGroup, Budget, Asset, Debt, Goal, ImportBatch, ImportProfile,
+User, Household, HouseholdMember, FinancialAccount, Transaction, TransactionTag,
+Category, Tag, TagGroup, Tracker, TrackerAllocation, InvestmentTrackerAllocation,
+FundTrackerAllocation, TagTrackerAllocation, Fund, ImportBatch, ImportProfile,
 RecurringRule, AuditLog
+
+## Account Groups
+
+Accounts are organized into three sidebar groups:
+- **SPENDING** (CHECKING, SAVINGS, CREDIT_CARD, CASH) — budgetable transactions
+- **INVESTMENT** (INVESTMENT, CRYPTO) — monthly allocations per account
+- **ASSETS_DEBTS** (PROPERTY, VEHICLE, OTHER_ASSET, LOAN, MORTGAGE, OTHER_DEBT) — net worth only
+
+Use `SPENDING_ACCOUNT_TYPES` constant for budget/tracker queries.
 
 ## Privacy Rules (CRITICAL — read before writing ANY data-access code)
 
 1. Partner A **NEVER** sees Partner B's personal transactions, accounts, or balances (and vice versa).
 2. Both partners see all shared/household transactions and accounts.
-3. A single account (e.g., a personal credit card) can contain a **mix** of shared and personal transactions. The account owner controls visibility per transaction.
+3. Transaction visibility is determined by account ownership (`FinancialAccount.ownership`). There is no per-transaction visibility field.
 4. Tags respect privacy: filtering by a tag only returns transactions the current user has permission to see.
 5. Net worth views:
-   - **"My Net Worth"** = my personal accounts + shared accounts + my assets − my debt
-   - **"Family Net Worth"** = all shared accounts + combined assets − combined debt (personal balances included only if both partners explicitly opt in)
-6. A transaction's visibility is set at creation or during import review, and can be changed later **only by its creator**.
-7. Visibility changes must be logged in AuditLog.
+   - **"My Net Worth"** = my personal accounts + shared accounts
+   - **"Family Net Worth"** = all shared accounts (personal included only if both partners opt in)
 
 ## Standard Privacy Query Pattern
 
-Every query that returns transactions must include a visibility filter:
+Transaction visibility is derived from account ownership:
 
 ```typescript
-// Always scope transaction queries like this:
-where: {
-  OR: [
-    { visibility: 'shared', account: { household_id: userHouseholdId } },
-    { visibility: 'personal', created_by: currentUserId },
-  ],
-}
+import { visibleTransactionsWhere, transactionOwnershipFilter } from "@/lib/privacy";
+
+// See all visible transactions (own + shared household):
+where: visibleTransactionsWhere(userId, householdId)
+
+// Scope to SHARED or PERSONAL budget context:
+where: transactionOwnershipFilter(userId, householdId, "SHARED")
 ```
 
 For accounts:
 ```typescript
-where: {
-  OR: [
-    { owner_type: 'household', owner_id: userHouseholdId },
-    { owner_type: 'user', owner_id: currentUserId },
-  ],
-}
+import { visibleAccountsWhere } from "@/lib/privacy";
+where: visibleAccountsWhere(userId, householdId)
 ```
+
+## Tracker Model
+
+- Income budget is derived from the sum of INCOME category allocations (no `totalIncome` field)
+- Carry-in is auto-computed from previous month's `toNextMonth` (no manual override)
+- Investment budgets are per-account via `InvestmentTrackerAllocation`
+- `toNextMonth = carryIn + actualIncome + actualInvestment - actualExpenses - fundAllocations`
+- `readyToAssign = carryIn + incomeBudgeted + investmentBudgeted - expenseBudgeted - fundContributions`
 
 ## Money Utilities
 

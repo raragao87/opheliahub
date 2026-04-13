@@ -64,7 +64,6 @@ model User {
   // User preferences
   locale            String     @default("nl-NL")
   language          String     @default("en")
-  defaultVisibility Visibility @default(SHARED)
   theme             String     @default("system")
   colorTheme        String     @default("luminous")
   budgetMonthsLinked  Boolean    @default(true)
