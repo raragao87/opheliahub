@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
+import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 
 export const accountRouter = router({
   list: householdProcedure.query(async ({ ctx }) => {
@@ -84,7 +85,9 @@ export const accountRouter = router({
           data: {
             amount: balance,
             currency: input.currency ?? "EUR",
-            type: balance >= 0 ? "INCOME" : "EXPENSE",
+            type: ACCOUNT_TYPE_META[input.type]?.sidebarGroup === "INVESTMENT"
+              ? "INVESTMENT"
+              : balance >= 0 ? "INCOME" : "EXPENSE",
             description: "Initial Balance",
             date: new Date(),
             isInitialBalance: true,

@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@prisma/client";
 import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere, visibleAccountsWhere } from "@/lib/privacy";
-import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
+import { SPENDING_ACCOUNT_TYPES, ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
 import { computeEffectiveCategoryId } from "@/lib/effective-category";
 
@@ -361,6 +361,12 @@ export const transactionRouter = router({
       }
 
       // ── Non-transfer: existing logic ────────────────────────────────
+      // Auto-type INVESTMENT for investment accounts
+      const isInvestmentAccount = ACCOUNT_TYPE_META[account.type]?.sidebarGroup === "INVESTMENT";
+      if (isInvestmentAccount) {
+        input.type = "INVESTMENT";
+      }
+
       const { tagIds, toAccountId: _toAccountId, ...data } = input;
 
       const transaction = await ctx.prisma.transaction.create({

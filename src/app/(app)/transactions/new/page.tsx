@@ -185,6 +185,7 @@ export default function NewTransactionPage() {
                   value={form.categoryId}
                   onChange={(val) => setForm({ ...form, categoryId: val })}
                   visibility={selectedAccount.ownership as "SHARED" | "PERSONAL"}
+                  categoryType={ACCOUNT_TYPE_META[selectedAccount.type]?.sidebarGroup === "INVESTMENT" ? "INVESTMENT" : undefined}
                 />
               </div>
             )}

@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
+import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
 import { computeEffectiveCategoryId } from "@/lib/effective-category";
 import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
@@ -226,8 +227,15 @@ export const importRouter = router({
         let importedRows = 0;
         let balanceChange = 0;
 
+        const isInvestmentAccount = ACCOUNT_TYPE_META[account.type]?.sidebarGroup === "INVESTMENT";
+
         for (const txData of input.transactions) {
           const { tagIds, displayName: clientDisplayName, ...transactionData } = txData;
+
+          // Auto-type INVESTMENT for investment accounts (except transfers)
+          if (isInvestmentAccount && transactionData.type !== "TRANSFER") {
+            transactionData.type = "INVESTMENT";
+          }
 
           const created = await tx.transaction.create({
             data: {

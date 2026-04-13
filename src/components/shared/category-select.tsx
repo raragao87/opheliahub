@@ -10,12 +10,16 @@ interface CategorySelectProps {
   id?: string;
   className?: string;
   visibility?: "SHARED" | "PERSONAL";
+  categoryType?: "INCOME" | "EXPENSE" | "INVESTMENT";
 }
 
-export function CategorySelect({ value, onChange, id, className, visibility }: CategorySelectProps) {
+export function CategorySelect({ value, onChange, id, className, visibility, categoryType }: CategorySelectProps) {
   const trpc = useTRPC();
+  const queryInput = (visibility || categoryType)
+    ? { ...(visibility && { visibility }), ...(categoryType && { type: categoryType }) }
+    : undefined;
   const treeQuery = useQuery(
-    trpc.category.tree.queryOptions(visibility ? { visibility } : undefined)
+    trpc.category.tree.queryOptions(queryInput)
   );
   const groups = treeQuery.data ?? [];
 

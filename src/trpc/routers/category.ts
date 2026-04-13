@@ -39,6 +39,7 @@ export const categoryRouter = router({
       z
         .object({
           visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+          type: z.enum(["INCOME", "EXPENSE", "INVESTMENT"]).optional(),
         })
         .optional()
     )
@@ -46,12 +47,16 @@ export const categoryRouter = router({
       const visibilityFilter = input?.visibility
         ? { visibility: input.visibility }
         : {};
+      const typeFilter = input?.type
+        ? { type: input.type }
+        : {};
 
       return ctx.prisma.category.findMany({
         where: {
           householdId: ctx.householdId,
           parentId: null,
           ...visibilityFilter,
+          ...typeFilter,
         },
         orderBy: { sortOrder: "asc" },
         include: {

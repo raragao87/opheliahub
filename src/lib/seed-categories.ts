@@ -1,4 +1,4 @@
-import { PrismaClient, Visibility } from "@prisma/client";
+import { PrismaClient, Visibility, CategoryType } from "@prisma/client";
 
 interface CategoryChild {
   name: string;
@@ -12,6 +12,7 @@ interface CategoryGroup {
   icon: string;
   color: string;
   sortOrder: number;
+  type?: CategoryType;
   children?: CategoryChild[];
 }
 
@@ -85,6 +86,42 @@ const SHARED_CATEGORY_GROUPS: CategoryGroup[] = [
   },
 ];
 
+const SHARED_INVESTMENT_GROUPS: CategoryGroup[] = [
+  {
+    name: "Investment",
+    icon: "📈",
+    color: "#3b82f6",
+    sortOrder: 0,
+    type: "INVESTMENT",
+    children: [
+      { name: "Buy", icon: "📈", color: "#3b82f6", sortOrder: 0 },
+      { name: "Sell", icon: "📉", color: "#3b82f6", sortOrder: 1 },
+      { name: "Dividend", icon: "💰", color: "#3b82f6", sortOrder: 2 },
+      { name: "Interest", icon: "🏦", color: "#3b82f6", sortOrder: 3 },
+      { name: "Fee", icon: "💸", color: "#3b82f6", sortOrder: 4 },
+      { name: "Other", icon: "📋", color: "#3b82f6", sortOrder: 5 },
+    ],
+  },
+];
+
+const PERSONAL_INVESTMENT_GROUPS: CategoryGroup[] = [
+  {
+    name: "Investment",
+    icon: "📈",
+    color: "#3b82f6",
+    sortOrder: 0,
+    type: "INVESTMENT",
+    children: [
+      { name: "Buy", icon: "📈", color: "#3b82f6", sortOrder: 0 },
+      { name: "Sell", icon: "📉", color: "#3b82f6", sortOrder: 1 },
+      { name: "Dividend", icon: "💰", color: "#3b82f6", sortOrder: 2 },
+      { name: "Interest", icon: "🏦", color: "#3b82f6", sortOrder: 3 },
+      { name: "Fee", icon: "💸", color: "#3b82f6", sortOrder: 4 },
+      { name: "Other", icon: "📋", color: "#3b82f6", sortOrder: 5 },
+    ],
+  },
+];
+
 const PERSONAL_CATEGORY_GROUPS: CategoryGroup[] = [
   {
     name: "Personal Income",
@@ -147,7 +184,7 @@ async function seedCategoryGroups(
   visibility: Visibility
 ) {
   for (const group of groups) {
-    const { children, ...groupData } = group;
+    const { children, type: groupType, ...groupData } = group;
 
     let parent = await prisma.category.findFirst({
       where: { householdId, name: groupData.name, parentId: null, visibility },
@@ -155,7 +192,12 @@ async function seedCategoryGroups(
 
     if (!parent) {
       parent = await prisma.category.create({
-        data: { ...groupData, householdId, visibility },
+        data: {
+          ...groupData,
+          householdId,
+          visibility,
+          ...(groupType && { type: groupType }),
+        },
       });
     }
 
@@ -166,7 +208,13 @@ async function seedCategoryGroups(
         });
         if (!existing) {
           await prisma.category.create({
-            data: { ...child, parentId: parent.id, householdId, visibility },
+            data: {
+              ...child,
+              parentId: parent.id,
+              householdId,
+              visibility,
+              ...(groupType && { type: groupType }),
+            },
           });
         }
       }
@@ -177,4 +225,6 @@ async function seedCategoryGroups(
 export async function seedDefaultCategories(prisma: PrismaClient, householdId: string) {
   await seedCategoryGroups(prisma, householdId, SHARED_CATEGORY_GROUPS, "SHARED");
   await seedCategoryGroups(prisma, householdId, PERSONAL_CATEGORY_GROUPS, "PERSONAL");
+  await seedCategoryGroups(prisma, householdId, SHARED_INVESTMENT_GROUPS, "SHARED");
+  await seedCategoryGroups(prisma, householdId, PERSONAL_INVESTMENT_GROUPS, "PERSONAL");
 }
