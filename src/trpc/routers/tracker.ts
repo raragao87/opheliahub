@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere, transactionOwnershipFilter } from "@/lib/privacy";
 import { getMonthRange, getPreviousMonth } from "@/lib/date";
-import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
+import { SPENDING_ACCOUNT_TYPES, INVESTMENT_ACCOUNT_TYPES } from "@/lib/account-types";
 
 /**
  * Get the auto carry-forward from the previous month.
@@ -251,27 +251,32 @@ export const trackerRouter = router({
 
       const investmentBudgeted = investmentAllocations.reduce((sum, a) => sum + a.amount, 0);
 
-      // Merge allocations with actuals — all unique account IDs
+      // Fetch ALL active investment accounts (SAVINGS, INVESTMENT, CRYPTO) for the summary
+      const allInvestmentAccounts = await ctx.prisma.financialAccount.findMany({
+        where: {
+          type: { in: INVESTMENT_ACCOUNT_TYPES },
+          isActive: true,
+          OR: [
+            { ownerId: ctx.userId },
+            ...(input.visibility === "SHARED" ? [{ householdId: ctx.householdId, ownership: "SHARED" as const }] : []),
+          ],
+          ...(input.visibility === "PERSONAL" ? { ownership: "PERSONAL" } : {}),
+        },
+        select: { id: true, name: true, icon: true, type: true },
+      });
+
+      // Merge allocations + actuals + all accounts
       const allInvestmentAccountIds = new Set([
+        ...allInvestmentAccounts.map(a => a.id),
         ...investmentAllocations.map(a => a.accountId),
         ...investmentByAccount.map(g => g.accountId),
       ]);
 
-      // Fetch account names for any actuals-only accounts
-      const missingIds = [...allInvestmentAccountIds].filter(
-        id => !investmentAllocations.some(a => a.accountId === id)
-      );
-      const extraAccounts = missingIds.length > 0
-        ? await ctx.prisma.financialAccount.findMany({
-            where: { id: { in: missingIds } },
-            select: { id: true, name: true, icon: true, type: true },
-          })
-        : [];
-      const extraAccountMap = new Map(extraAccounts.map(a => [a.id, a]));
+      const allAccountMap = new Map(allInvestmentAccounts.map(a => [a.id, a]));
 
       const investmentSummary = [...allInvestmentAccountIds].map(accountId => {
         const allocation = investmentAllocations.find(a => a.accountId === accountId);
-        const account = allocation?.account ?? extraAccountMap.get(accountId);
+        const account = allocation?.account ?? allAccountMap.get(accountId);
         return {
           accountId,
           accountName: account?.name ?? "Unknown",

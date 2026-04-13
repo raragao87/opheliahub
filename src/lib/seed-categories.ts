@@ -59,7 +59,7 @@ const SHARED_CATEGORY_GROUPS: CategoryGroup[] = [
     ],
   },
   {
-    name: "Savings & Funds",
+    name: "Savings Goals",
     icon: "🐷",
     color: "#2563eb",
     sortOrder: 30,

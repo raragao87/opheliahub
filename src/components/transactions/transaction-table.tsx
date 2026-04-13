@@ -1128,15 +1128,14 @@ function TransactionRow({
 
   const effectiveCategoryOptions = isInvestmentAccount
     ? categoryOptions.filter((o) => investmentCatIds.has(o.value))
-    : categoryOptions;
+    : categoryOptions.filter((o) => !investmentCatIds.has(o.value));
   const effectiveCategoryOptionGroups = isInvestmentAccount
     ? categoryOptionGroups
-        .map((g) => ({
-          ...g,
-          options: g.options.filter((o) => investmentCatIds.has(o.value)),
-        }))
+        .map((g) => ({ ...g, options: g.options.filter((o) => investmentCatIds.has(o.value)) }))
         .filter((g) => g.options.length > 0)
-    : categoryOptionGroups;
+    : categoryOptionGroups
+        .map((g) => ({ ...g, options: g.options.filter((o) => !investmentCatIds.has(o.value)) }))
+        .filter((g) => g.options.length > 0);
 
   const displayDesc = txn.displayName || txn.description;
 
