@@ -82,9 +82,6 @@ model User {
   trackers              Tracker[]
   tags                  Tag[]
   tagGroups             TagGroup[]
-  assets                Asset[]
-  debts                 Debt[]
-  goals                 Goal[]
   importBatches         ImportBatch[]
   auditLogs             AuditLog[]
   recurringRules        RecurringRule[]
@@ -116,9 +113,6 @@ model Household {
   opheliaFeedback       OpheliaFeedback[]
   netWorthSnapshots     NetWorthSnapshot[]
   funds                 Fund[]
-  assets                Asset[]
-  debts                 Debt[]
-  goals                 Goal[]
 
   @@map("households")
 }
@@ -244,13 +238,6 @@ enum DuplicateAlertStatus {
 enum ChatRole {
   USER
   ASSISTANT
-}
-
-enum AssetCategory {
-  REAL_ESTATE
-  VEHICLE
-  VALUABLE
-  OTHER
 }
 
 enum AmountMode {
@@ -498,69 +485,6 @@ model InvestmentTrackerAllocation {
 
   @@unique([trackerId, accountId])
   @@map("investment_tracker_allocations")
-}
-
-// ─── NET WORTH: ASSETS & DEBTS ──────────────────────────────────────
-
-model Asset {
-  id          String        @id @default(cuid())
-  name        String
-  value       Int // cents
-  currency    String        @default("EUR")
-  category    AssetCategory
-  userId      String
-  householdId String
-  visibility  Visibility    @default(PERSONAL)
-  lastUpdated DateTime      @default(now())
-  notes       String?       @db.Text
-
-  user      User      @relation(fields: [userId], references: [id])
-  household Household @relation(fields: [householdId], references: [id])
-
-  @@index([householdId])
-  @@map("assets")
-}
-
-model Debt {
-  id             String     @id @default(cuid())
-  name           String
-  balance        Int // cents outstanding
-  interestRate   Int?   // basis points (425 = 4.25%)
-  monthlyPayment Int? // cents
-  currency       String     @default("EUR")
-  userId         String
-  householdId    String
-  visibility     Visibility @default(PERSONAL)
-  lastUpdated    DateTime   @default(now())
-  notes          String?    @db.Text
-
-  user      User      @relation(fields: [userId], references: [id])
-  household Household @relation(fields: [householdId], references: [id])
-
-  @@index([householdId])
-  @@map("debts")
-}
-
-// ─── GOALS ──────────────────────────────────────────────────────────
-
-model Goal {
-  id            String     @id @default(cuid())
-  name          String
-  targetAmount  Int // cents
-  currentAmount Int        @default(0) // cents
-  currency      String     @default("EUR")
-  deadline      DateTime?
-  userId        String
-  householdId   String
-  visibility    Visibility @default(SHARED)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-
-  user      User      @relation(fields: [userId], references: [id])
-  household Household @relation(fields: [householdId], references: [id])
-
-  @@index([householdId])
-  @@map("goals")
 }
 
 // ─── IMPORT ─────────────────────────────────────────────────────────

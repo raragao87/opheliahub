@@ -76,8 +76,6 @@ export const authRouter = router({
         })
       : 0;
 
-    const assetsCount = await ctx.prisma.asset.count({ where: { userId } });
-    const debtsCount = await ctx.prisma.debt.count({ where: { userId } });
     const tagsCount = await ctx.prisma.tag.count({ where: { userId } });
 
     const memberCount = membership
@@ -91,8 +89,6 @@ export const authRouter = router({
       sharedAccounts: sharedAccountsCount,
       personalTransactions: personalTxnCount,
       sharedTransactions: sharedTxnCount,
-      assets: assetsCount,
-      debts: debtsCount,
       tags: tagsCount,
       isHouseholdOwner: membership?.role === "OWNER",
       householdName: membership?.household.name ?? null,
@@ -297,10 +293,6 @@ export const authRouter = router({
           await tx.tagGroup.deleteMany({ where: { userId } });
 
           // Assets, Debts, Goals
-          await tx.asset.deleteMany({ where: { userId } });
-          await tx.debt.deleteMany({ where: { userId } });
-          await tx.goal.deleteMany({ where: { userId } });
-
           // DismissedRecurringPattern (also has cascade on User, but explicit is safer)
           await tx.dismissedRecurringPattern.deleteMany({ where: { userId } });
 

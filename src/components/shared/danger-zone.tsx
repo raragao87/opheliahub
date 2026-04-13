@@ -121,20 +121,7 @@ export function DangerZone({ userEmail }: { userEmail: string }) {
                           {stats.personalTransactions !== 1 ? "s" : ""}
                         </li>
                       )}
-                      {stats.assets > 0 && (
-                        <li>
-                          {stats.assets} asset{stats.assets !== 1 ? "s" : ""}
-                        </li>
-                      )}
-                      {stats.debts > 0 && (
-                        <li>
-                          {stats.debts} debt record
-                          {stats.debts !== 1 ? "s" : ""}
-                        </li>
-                      )}
-                      {stats.personalAccounts === 0 &&
-                        stats.assets === 0 &&
-                        stats.debts === 0 && (
+                      {stats.personalAccounts === 0 && (
                           <li>Your account and all associated data</li>
                         )}
                     </ul>
