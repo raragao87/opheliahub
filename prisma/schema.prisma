@@ -112,6 +112,7 @@ model Household {
   opheliaFeedback       OpheliaFeedback[]
   netWorthSnapshots     NetWorthSnapshot[]
   funds                 Fund[]
+  investmentAssets      InvestmentAsset[]
 
   @@map("households")
 }
@@ -244,6 +245,16 @@ enum AmountMode {
   SPLIT
 }
 
+enum AssetType {
+  STOCK
+  ETF
+  BOND
+  CRYPTO
+  COMMODITY
+  FUND
+  OTHER
+}
+
 // ─── TRANSACTIONS ───────────────────────────────────────────────────
 
 enum TransactionType {
@@ -292,10 +303,16 @@ model Transaction {
   linkedTransaction   Transaction?  @relation("TransferLink", fields: [linkedTransactionId], references: [id])
   linkedBy            Transaction?  @relation("TransferLink")
 
+  // Investment-specific (null for non-investment transactions)
+  investmentAssetId String?
+  quantity          Decimal?  @db.Decimal(18, 8) // shares/units — 8 decimal places for crypto
+  unitPrice         Int?      // price per unit in transaction currency (cents)
+
   account         FinancialAccount @relation(fields: [accountId], references: [id])
   category        Category?        @relation("UserCategory", fields: [categoryId], references: [id])
   fund            Fund?            @relation(fields: [fundId], references: [id])
   opheliaCategory Category?        @relation("OpheliaCategory", fields: [opheliaCategoryId], references: [id])
+  investmentAsset InvestmentAsset? @relation(fields: [investmentAssetId], references: [id])
   user            User             @relation(fields: [userId], references: [id])
   importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id])
   tags            TransactionTag[]
@@ -310,6 +327,7 @@ model Transaction {
   @@index([categoryId, date])
   @@index([fundId, date])
   @@index([effectiveCategoryId])
+  @@index([investmentAssetId])
   @@map("transactions")
 }
 
@@ -484,6 +502,40 @@ model InvestmentTrackerAllocation {
 
   @@unique([trackerId, accountId])
   @@map("investment_tracker_allocations")
+}
+
+// ─── INVESTMENT ASSETS ──────────────────────────────────────────────
+
+model InvestmentAsset {
+  id          String    @id @default(cuid())
+  ticker      String?   // "AAPL", "VWRL", "BTC" — null for unlisted assets
+  name        String    // "Apple Inc", "Vanguard FTSE All-World"
+  currency    String    // native trading currency: "USD", "EUR", "BRL"
+  type        AssetType
+  isin        String?   // International Securities ID (optional)
+  householdId String
+
+  household    Household     @relation(fields: [householdId], references: [id])
+  transactions Transaction[]
+
+  @@unique([householdId, ticker])
+  @@unique([householdId, isin])
+  @@index([householdId])
+  @@map("investment_assets")
+}
+
+// ─── CURRENCY RATES ─────────────────────────────────────────────────
+
+model CurrencyRate {
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  baseCurrency String   @default("EUR")
+  currency     String   // "USD", "BRL"
+  rate         Int      // micro-rate (6 decimals): 1.0842 → 1084200
+
+  @@unique([date, baseCurrency, currency])
+  @@index([date])
+  @@map("currency_rates")
 }
 
 // ─── IMPORT ─────────────────────────────────────────────────────────
