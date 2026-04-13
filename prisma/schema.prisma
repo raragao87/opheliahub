@@ -593,7 +593,6 @@ model RecurringRule {
   accountId         String
   householdId       String
   userId            String
-  visibility        Visibility          @default(SHARED)
   nextDueDate       DateTime
   isActive          Boolean             @default(true)
   createdAt         DateTime            @default(now())

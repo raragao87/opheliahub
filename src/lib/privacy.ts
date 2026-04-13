@@ -96,15 +96,40 @@ export function visibleTrackersWhere(
   };
 }
 
-/** Recurring rules visible to a user: own + shared in household */
+/** Recurring rules visible to a user — derived from account ownership */
 export function visibleRecurringRulesWhere(
   userId: string,
   householdId: string
 ): Prisma.RecurringRuleWhereInput {
   return {
-    OR: [
-      { userId },
-      { visibility: "SHARED", householdId },
-    ],
+    account: {
+      OR: [
+        { ownerId: userId },
+        { householdId, ownership: "SHARED" },
+      ],
+    },
+  };
+}
+
+/**
+ * Filter recurring rules by account ownership (SHARED or PERSONAL).
+ */
+export function recurringRuleOwnershipFilter(
+  userId: string,
+  householdId: string,
+  ownership: "SHARED" | "PERSONAL"
+): Prisma.RecurringRuleWhereInput {
+  if (ownership === "SHARED") {
+    return {
+      account: {
+        OR: [
+          { householdId, ownership: "SHARED" },
+          { ownerId: userId, ownership: "SHARED" },
+        ],
+      },
+    };
+  }
+  return {
+    account: { ownerId: userId, ownership: "PERSONAL" },
   };
 }
