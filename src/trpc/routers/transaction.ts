@@ -75,7 +75,6 @@ export const transactionRouter = router({
               : input.type
                 ? { type: input.type }
                 : {}),
-            ...(input.visibility && { account: { ownership: input.visibility } }),
             ...(!input.fundIds?.length && input.fundId && { fundId: input.fundId }),
             ...(input.noTags
               ? { tags: { none: {} } }
@@ -161,6 +160,11 @@ export const transactionRouter = router({
           // Exclude transfers
           ...(input.excludeTransfers
             ? [{ type: { not: "TRANSFER" as const } }]
+            : []),
+
+          // Ownership filter (separate AND to avoid account key collision)
+          ...(input.visibility
+            ? [{ account: { ownership: input.visibility } }]
             : []),
 
           // Accrual date filter (uses OR — already separate)
