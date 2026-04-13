@@ -31,7 +31,12 @@ export default function NewTransactionPage() {
     categoryId: "",
     notes: "",
     tagIds: [] as string[],
+    investmentAssetId: "",
+    quantity: "",
+    unitPrice: "",
   });
+
+  const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
 
   const createMutation = useMutation(
     trpc.transaction.create.mutationOptions({
@@ -45,6 +50,9 @@ export default function NewTransactionPage() {
   const selectedAccount = (accountsQuery.data ?? []).find((a) => a.id === form.accountId);
   const isIlliquidAccount = selectedAccount
     ? ACCOUNT_TYPE_META[selectedAccount.type]?.sidebarGroup !== "SPENDING"
+    : false;
+  const isInvestmentAccount = selectedAccount
+    ? ACCOUNT_TYPE_META[selectedAccount.type]?.sidebarGroup === "INVESTMENT"
     : false;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -66,6 +74,15 @@ export default function NewTransactionPage() {
       categoryId: form.type === "TRANSFER" ? undefined : form.categoryId || undefined,
       notes: form.notes || undefined,
       tagIds: form.tagIds,
+      ...(isInvestmentAccount && form.investmentAssetId && {
+        investmentAssetId: form.investmentAssetId,
+      }),
+      ...(isInvestmentAccount && form.quantity && {
+        quantity: parseFloat(form.quantity),
+      }),
+      ...(isInvestmentAccount && form.unitPrice && {
+        unitPrice: Math.round(parseFloat(form.unitPrice) * 100),
+      }),
     });
   };
 
@@ -176,8 +193,8 @@ export default function NewTransactionPage() {
               </div>
             )}
 
-            {/* Category — hidden for transfers and illiquid accounts */}
-            {form.type !== "TRANSFER" && !isIlliquidAccount && selectedAccount && (
+            {/* Category — hidden for transfers and assets/debts accounts */}
+            {form.type !== "TRANSFER" && !(isIlliquidAccount && !isInvestmentAccount) && selectedAccount && (
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <CategorySelect
@@ -187,6 +204,52 @@ export default function NewTransactionPage() {
                   visibility={selectedAccount.ownership as "SHARED" | "PERSONAL"}
                   categoryType={ACCOUNT_TYPE_META[selectedAccount.type]?.sidebarGroup === "INVESTMENT" ? "INVESTMENT" : undefined}
                 />
+              </div>
+            )}
+
+            {/* Investment Details */}
+            {isInvestmentAccount && form.type !== "TRANSFER" && (
+              <div className="space-y-3 border-t pt-4">
+                <h3 className="text-sm font-medium text-blue-600 dark:text-blue-400">Investment Details</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="asset">Asset</Label>
+                  <Select
+                    id="asset"
+                    value={form.investmentAssetId}
+                    onChange={(e) => setForm({ ...form, investmentAssetId: e.target.value })}
+                  >
+                    <option value="">No asset</option>
+                    {(assetsQuery.data ?? []).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.ticker ? `${a.ticker} — ${a.name}` : a.name} ({a.type})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantity</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      step="0.00000001"
+                      placeholder="e.g. 10"
+                      value={form.quantity}
+                      onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="unitPrice">Price per unit</Label>
+                    <Input
+                      id="unitPrice"
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 150.25"
+                      value={form.unitPrice}
+                      onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
