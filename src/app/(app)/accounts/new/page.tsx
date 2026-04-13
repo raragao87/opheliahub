@@ -91,11 +91,11 @@ export default function NewAccountPage() {
                 >
                   <optgroup label="Spending">
                     <option value="CHECKING">Checking</option>
-                    <option value="SAVINGS">Savings</option>
                     <option value="CREDIT_CARD">Credit Card</option>
                     <option value="CASH">Cash</option>
                   </optgroup>
                   <optgroup label="Investment">
+                    <option value="SAVINGS">Savings</option>
                     <option value="INVESTMENT">Investment</option>
                     <option value="CRYPTO">Crypto</option>
                   </optgroup>

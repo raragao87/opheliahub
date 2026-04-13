@@ -27,10 +27,10 @@ export interface AccountTypeMeta {
 export const ACCOUNT_TYPE_META: Record<string, AccountTypeMeta> = {
   // Spending — accounts you spend from
   CHECKING:    { label: "Checking",    icon: Landmark,   isLiability: false, groupOrder: 0, sidebarGroup: "SPENDING" },
-  SAVINGS:     { label: "Savings",     icon: PiggyBank,  isLiability: false, groupOrder: 1, sidebarGroup: "SPENDING" },
-  CREDIT_CARD: { label: "Credit Card", icon: CreditCard, isLiability: true,  groupOrder: 2, sidebarGroup: "SPENDING" },
-  CASH:        { label: "Cash",        icon: Banknote,   isLiability: false, groupOrder: 3, sidebarGroup: "SPENDING" },
-  // Investment — monthly contributions, wealth building
+  CREDIT_CARD: { label: "Credit Card", icon: CreditCard, isLiability: true,  groupOrder: 1, sidebarGroup: "SPENDING" },
+  CASH:        { label: "Cash",        icon: Banknote,   isLiability: false, groupOrder: 2, sidebarGroup: "SPENDING" },
+  // Investment — savings, monthly contributions, wealth building
+  SAVINGS:     { label: "Savings",     icon: PiggyBank,  isLiability: false, groupOrder: 3, sidebarGroup: "INVESTMENT" },
   INVESTMENT:  { label: "Investment",  icon: TrendingUp, isLiability: false, groupOrder: 4, sidebarGroup: "INVESTMENT" },
   CRYPTO:      { label: "Crypto",      icon: Bitcoin,    isLiability: false, groupOrder: 5, sidebarGroup: "INVESTMENT" },
   // Assets & Debts — net worth tracking only
@@ -59,12 +59,12 @@ export type SidebarGroupKey = "SPENDING" | "INVESTMENT" | "ASSETS_DEBTS";
  */
 export const SPENDING_ACCOUNT_TYPES = (Object.entries(ACCOUNT_TYPE_META)
   .filter(([, meta]) => meta.sidebarGroup === "SPENDING")
-  .map(([key]) => key)) as Array<"CHECKING" | "SAVINGS" | "CREDIT_CARD" | "CASH">;
+  .map(([key]) => key)) as Array<"CHECKING" | "CREDIT_CARD" | "CASH">;
 
-/** Account types that represent investment accounts. */
+/** Account types that represent investment accounts (savings, brokers, crypto). */
 export const INVESTMENT_ACCOUNT_TYPES = (Object.entries(ACCOUNT_TYPE_META)
   .filter(([, meta]) => meta.sidebarGroup === "INVESTMENT")
-  .map(([key]) => key)) as Array<"INVESTMENT" | "CRYPTO">;
+  .map(([key]) => key)) as Array<"SAVINGS" | "INVESTMENT" | "CRYPTO">;
 
 /**
  * Group an array of accounts into sidebar groups,
