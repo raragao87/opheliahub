@@ -390,8 +390,7 @@ export const tagRouter = router({
 
         const txns = await ctx.prisma.transaction.findMany({
           where: {
-            ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-            visibility: input.visibility,
+            ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
             tags: { some: { tagId: tag.id } },
             isInitialBalance: false,
             ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),

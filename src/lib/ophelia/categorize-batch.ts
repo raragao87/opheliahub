@@ -101,8 +101,8 @@ export async function categorizeTransactionBatch(
           displayName: true,
           amount: true,
           date: true,
-          visibility: true,
           categoryId: true,
+          account: { select: { ownership: true } },
         },
         take: batchSize,
         orderBy: { opheliaProcessedAt: "asc" }, // null comes first
@@ -192,8 +192,8 @@ export async function categorizeTransactionBatch(
         }));
 
       // Split transactions by visibility and call Ophelia with matching categories
-      const sharedTxns = transactions.filter((t) => t.visibility === "SHARED");
-      const personalTxns = transactions.filter((t) => t.visibility === "PERSONAL");
+      const sharedTxns = transactions.filter((t) => t.account.ownership === "SHARED");
+      const personalTxns = transactions.filter((t) => t.account.ownership === "PERSONAL");
 
       const examples = [
         ...correctionExamples,
@@ -304,7 +304,7 @@ export async function categorizeTransactionBatch(
 
         // Validate the suggested category ID — AI sometimes returns hallucinated IDs.
         // Check against the visibility-scoped set so cross-visibility IDs are rejected.
-        const validIds = validCategoryIdsFor(tx.visibility);
+        const validIds = validCategoryIdsFor(tx.account.ownership);
         const hasInvalidCategory =
           !!result?.suggestedCategoryId && !validIds.has(result.suggestedCategoryId);
         const safeCategoryId = hasInvalidCategory ? null : (result?.suggestedCategoryId ?? null);
@@ -357,8 +357,8 @@ export async function categorizeTransactionBatch(
       if (retryNeeded.length > 0) {
         console.log(`[Ophelia] Retrying categorization for ${retryNeeded.length} transaction(s) with invalid category suggestions`);
         // Split retries by visibility too
-        const retryShared = retryNeeded.filter(({ tx }) => tx.visibility === "SHARED");
-        const retryPersonal = retryNeeded.filter(({ tx }) => tx.visibility === "PERSONAL");
+        const retryShared = retryNeeded.filter(({ tx }) => tx.account.ownership === "SHARED");
+        const retryPersonal = retryNeeded.filter(({ tx }) => tx.account.ownership === "PERSONAL");
 
         const [retrySharedResults, retryPersonalResults] = await Promise.all([
           retryShared.length > 0 ? enrichTransactions({
@@ -403,7 +403,7 @@ export async function categorizeTransactionBatch(
           for (const { tx, localIndex } of retryNeeded) {
             const retryResult = retryResults.get(localIndex);
             const retryId = retryResult?.suggestedCategoryId;
-            if (retryId && validCategoryIdsFor(tx.visibility).has(retryId)) {
+            if (retryId && validCategoryIdsFor(tx.account.ownership).has(retryId)) {
               try {
                 await prisma.transaction.update({
                   where: { id: tx.id },

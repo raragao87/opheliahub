@@ -319,7 +319,6 @@ export const transactionRouter = router({
               date: input.date,
               accountId: input.toAccountId!,
               userId: ctx.userId,
-              visibility: toAccount!.ownership,
               notes: input.notes,
               effectiveCategoryId: null,
             },
@@ -336,7 +335,6 @@ export const transactionRouter = router({
               date: input.date,
               accountId: input.accountId,
               userId: ctx.userId,
-              visibility: account.ownership,
               notes: input.notes,
               linkedTransactionId: inflow.id,
               effectiveCategoryId: null,
@@ -369,7 +367,6 @@ export const transactionRouter = router({
         data: {
           ...data,
           userId: ctx.userId,
-          visibility: account.ownership,
           displayName: extractDisplayName(data.description),
           originalDescription: data.description,
           effectiveCategoryId: computeEffectiveCategoryId(data.categoryId, null),

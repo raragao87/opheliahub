@@ -50,7 +50,6 @@ export interface TransactionItem {
   date: Date | string;
   accrualDate?: Date | string | null;
   isInitialBalance?: boolean;
-  visibility: string;
   account: TransactionAccount;
   category?: TransactionCategory | null;
   fund?: { id: string; name: string; icon?: string | null } | null;

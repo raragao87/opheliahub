@@ -294,7 +294,7 @@ export default function EditTransactionPage({
                   id="category"
                   value={form.categoryId}
                   onChange={(val) => setForm({ ...form, categoryId: val })}
-                  visibility={txn.visibility as "SHARED" | "PERSONAL"}
+                  visibility={txn.account.ownership as "SHARED" | "PERSONAL"}
                 />
               </div>
             )}

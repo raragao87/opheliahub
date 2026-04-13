@@ -36,10 +36,12 @@ export async function checkPostImportDuplicates(
       date: { gte: minDate, lte: maxDate },
       importBatchId: { not: batchId },
       isInitialBalance: false,
-      OR: [
-        { visibility: "SHARED" },
-        { userId },
-      ],
+      account: {
+        OR: [
+          { ownership: "SHARED" },
+          { ownerId: userId },
+        ],
+      },
     },
     select: { id: true, date: true, amount: true, description: true, displayName: true, opheliaDisplayName: true },
   });

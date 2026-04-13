@@ -278,7 +278,6 @@ model Transaction {
   amount              Int // cents — positive for income, negative for expense
   currency            String          @default("EUR")
   type                TransactionType
-  visibility          Visibility      @default(SHARED)
   description         String
   displayName         String? // short human-readable name, parsed from description
   originalDescription String? // preserved from import for AI categorization
@@ -322,7 +321,6 @@ model Transaction {
   @@index([importBatchId])
   @@index([accountId, date])
   @@index([opheliaProcessedAt])
-  @@index([visibility, userId])
   @@index([categoryId, date])
   @@index([fundId, date])
   @@index([effectiveCategoryId])
