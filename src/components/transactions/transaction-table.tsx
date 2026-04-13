@@ -64,6 +64,11 @@ export interface TransactionItem {
   opheliaCategory?: { id: string; name: string } | null;
   opheliaConfidence?: number | null;
   opheliaDisplayName?: string | null;
+  // Investment fields
+  investmentAssetId?: string | null;
+  investmentAsset?: { id: string; ticker: string | null; name: string; type: string } | null;
+  quantity?: unknown; // Prisma Decimal — rendered via toString()
+  unitPrice?: number | null;
 }
 
 interface CategoryOption {
@@ -1093,11 +1098,13 @@ function TransactionRow({
   const isTransfer = txn.type === "TRANSFER";
   const partnerAccount = txn.linkedTransaction?.account ?? txn.linkedBy?.account ?? null;
   const isOutflow  = txn.amount < 0;
-  const isIlliquid = txn.account.type
-    ? ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup !== "SPENDING"
-    : false;
-  const AccountIcon   = isIlliquid ? ACCOUNT_TYPE_META[txn.account.type!]?.icon : null;
-  const canEditCategory = !isTransfer && !isIlliquid;
+  const accountGroup = txn.account.type
+    ? ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup
+    : null;
+  const isAssetsDebts = accountGroup === "ASSETS_DEBTS";
+  const isInvestmentAccount = accountGroup === "INVESTMENT";
+  const AccountIcon = (isAssetsDebts || isInvestmentAccount) ? ACCOUNT_TYPE_META[txn.account.type!]?.icon : null;
+  const canEditCategory = !isTransfer && !isAssetsDebts;
 
   const displayDesc = txn.displayName || txn.description;
 
@@ -1115,13 +1122,13 @@ function TransactionRow({
 
   const categoryDisplay = isTransfer
     ? partnerAccount ? "↔" : "→"
-    : isIlliquid && AccountIcon ? ""
+    : isAssetsDebts && AccountIcon ? ""
     : txn.fund ? `${txn.fund.icon ?? "💰"} ${txn.fund.name}`.trim()
     : txn.category ? `${txn.category.icon ?? ""} ${txn.category.name}`.trim() : "";
 
   const categoryIcon = isTransfer ? (
     <ArrowLeftRight className={cn("h-4 w-4 inline-block", partnerAccount ? "text-blue-500" : "text-amber-500")} />
-  ) : isIlliquid && AccountIcon ? (
+  ) : isAssetsDebts && AccountIcon ? (
     <AccountIcon className="h-4 w-4 inline-block text-muted-foreground" />
   ) : null;
 
@@ -1277,8 +1284,14 @@ function TransactionRow({
         />
       </td>
 
-      {/* Amount */}
+      {/* Amount + investment asset badge */}
       <td className="py-1.5 px-2 text-right whitespace-nowrap">
+        {txn.investmentAsset && (
+          <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 mr-1">
+            {txn.investmentAsset.ticker ?? txn.investmentAsset.name}
+            {txn.quantity != null && <span className="text-muted-foreground"> ×{String(txn.quantity)}</span>}
+          </span>
+        )}
         <InlineMoneyEdit
           value={txn.amount}
           onSave={(cents) => onUpdate(txn.id, { amount: cents })}

@@ -193,10 +193,11 @@ export const transactionRouter = router({
         take: input.limit + 1,
         ...(input.cursor && { cursor: { id: input.cursor }, skip: 1 }),
         include: {
-          account: { select: { id: true, name: true, type: true, institution: true } },
+          account: { select: { id: true, name: true, type: true, institution: true, ownership: true } },
           category: { select: { id: true, name: true, icon: true, color: true } },
           fund: { select: { id: true, name: true, icon: true } },
           opheliaCategory: { select: { id: true, name: true } },
+          investmentAsset: { select: { id: true, ticker: true, name: true, type: true } },
           tags: {
             include: {
               tag: { select: { id: true, name: true, color: true } },
@@ -229,6 +230,7 @@ export const transactionRouter = router({
           account: true,
           category: true,
           opheliaCategory: { select: { id: true, name: true } },
+          investmentAsset: { select: { id: true, ticker: true, name: true, type: true } },
           tags: { include: { tag: true } },
           user: { select: { id: true, name: true, image: true } },
           linkedTransaction: { include: { account: true } },
@@ -254,6 +256,9 @@ export const transactionRouter = router({
         toAccountId: z.string().optional(),
         categoryId: z.string().optional(),
         fundId: z.string().optional(),
+        investmentAssetId: z.string().nullable().optional(),
+        quantity: z.number().nullable().optional(),
+        unitPrice: z.number().int().nullable().optional(),
         notes: z.string().optional(),
         tagIds: z.array(z.string()).default([]),
       })
@@ -411,6 +416,9 @@ export const transactionRouter = router({
         accrualDate: z.coerce.date().nullable().optional(),
         categoryId: z.string().nullable().optional(),
         fundId: z.string().nullable().optional(),
+        investmentAssetId: z.string().nullable().optional(),
+        quantity: z.number().nullable().optional(),
+        unitPrice: z.number().int().nullable().optional(),
         notes: z.string().nullable().optional(),
         tagIds: z.array(z.string()).optional(),
       })
