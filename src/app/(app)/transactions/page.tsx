@@ -251,6 +251,7 @@ function TransactionsContent() {
   const fundsQuery = useQuery(
     trpc.fund.listForDropdown.queryOptions({ visibility: visibilityParam })
   );
+  const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
 
   // ── Build query input ──────────────────────────────────────────────
   const PAGE_SIZE = 50;
@@ -1071,6 +1072,7 @@ function TransactionsContent() {
             stickyOffset={selectedAccount && !headerVisible ? 104 : 64}
             members={members}
             currentUserId={currentUserId}
+            assets={assetsQuery.data ?? []}
           />
 
           {/* No results with active filters */}

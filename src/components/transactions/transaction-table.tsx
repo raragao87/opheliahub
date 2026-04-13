@@ -11,6 +11,7 @@ import { InlineTextEdit } from "@/components/shared/inline-text-edit";
 import { InlineDateEdit } from "@/components/shared/inline-date-edit";
 import { InlineSelectEdit } from "@/components/shared/inline-select-edit";
 import { InlineTagEdit } from "@/components/shared/inline-tag-edit";
+import { InlineAssetSelect } from "@/components/shared/inline-asset-select";
 import { MentionText } from "@/components/shared/mention-text";
 import { MentionTextarea } from "@/components/shared/mention-textarea";
 import { hasMentionForUser } from "@/lib/mentions";
@@ -133,6 +134,7 @@ interface TransactionTableProps {
   stickyOffset?: number;
   members?: Array<{ id: string; name: string; image: string | null }>;
   currentUserId?: string;
+  assets?: Array<{ id: string; ticker: string | null; name: string; type: string }>;
 }
 
 // ── Column Header Filter ─────────────────────────────────────────────
@@ -735,6 +737,7 @@ export function TransactionTable({
   stickyOffset = 64,
   members = [],
   currentUserId,
+  assets = [],
 }: TransactionTableProps) {
   const cf  = columnFilters;
   const setCf = onColumnFilterChange;
@@ -1054,6 +1057,7 @@ export function TransactionTable({
               onToggleSelect={() => toggleOne(txn.id)}
               members={members}
               currentUserId={currentUserId}
+              assets={assets}
             />
           ))}
         </tbody>
@@ -1079,6 +1083,7 @@ function TransactionRow({
   onToggleSelect,
   members,
   currentUserId,
+  assets,
 }: {
   txn: TransactionItem;
   categoryOptions: { value: string; label: string }[];
@@ -1094,6 +1099,7 @@ function TransactionRow({
   onToggleSelect: () => void;
   members?: Array<{ id: string; name: string; image: string | null }>;
   currentUserId?: string;
+  assets?: Array<{ id: string; ticker: string | null; name: string; type: string }>;
 }) {
   const isTransfer = txn.type === "TRANSFER";
   const partnerAccount = txn.linkedTransaction?.account ?? txn.linkedBy?.account ?? null;
@@ -1284,12 +1290,19 @@ function TransactionRow({
         />
       </td>
 
-      {/* Amount + investment asset badge */}
+      {/* Amount + investment asset selector */}
       <td className="py-1.5 px-2 text-right whitespace-nowrap">
-        {txn.investmentAsset && (
-          <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 mr-1">
-            {txn.investmentAsset.ticker ?? txn.investmentAsset.name}
-            {txn.quantity != null && <span className="text-muted-foreground"> ×{String(txn.quantity)}</span>}
+        {isInvestmentAccount && !isTransfer && (
+          <span className="mr-1">
+            <InlineAssetSelect
+              value={txn.investmentAssetId ?? null}
+              displayText={txn.investmentAsset?.ticker ?? txn.investmentAsset?.name ?? null}
+              assets={assets ?? []}
+              onChange={(assetId) => onUpdate(txn.id, { investmentAssetId: assetId })}
+            />
+            {txn.quantity != null && (
+              <span className="text-[10px] text-muted-foreground ml-0.5">×{String(txn.quantity)}</span>
+            )}
           </span>
         )}
         <InlineMoneyEdit

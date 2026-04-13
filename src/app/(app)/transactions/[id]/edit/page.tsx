@@ -29,6 +29,7 @@ export default function EditTransactionPage({
 
   const txnQuery = useQuery(trpc.transaction.getById.queryOptions({ id }));
   const tagsQuery = useQuery(trpc.tag.list.queryOptions({}));
+  const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
 
   const [form, setForm] = useState<{
     displayName: string;
@@ -40,6 +41,9 @@ export default function EditTransactionPage({
     categoryId: string;
     notes: string;
     tagIds: string[];
+    investmentAssetId: string;
+    quantity: string;
+    unitPrice: string;
   } | null>(null);
 
   const [showDelete, setShowDelete] = useState(false);
@@ -58,6 +62,9 @@ export default function EditTransactionPage({
         categoryId: txn.categoryId ?? "",
         notes: txn.notes ?? "",
         tagIds: txn.tags.map((t: { tag: { id: string } }) => t.tag.id),
+        investmentAssetId: txn.investmentAssetId ?? "",
+        quantity: txn.quantity ? String(txn.quantity) : "",
+        unitPrice: txn.unitPrice != null ? String(fromCents(txn.unitPrice)) : "",
       });
     }
   }, [txnQuery.data, form]);
@@ -98,6 +105,9 @@ export default function EditTransactionPage({
       categoryId: form.categoryId || null,
       notes: form.notes || null,
       tagIds: form.tagIds,
+      investmentAssetId: form.investmentAssetId || null,
+      quantity: form.quantity ? parseFloat(form.quantity) : null,
+      unitPrice: form.unitPrice ? toCents(parseFloat(form.unitPrice)) : null,
     });
   };
 
@@ -297,6 +307,52 @@ export default function EditTransactionPage({
                   visibility={txn.account.ownership as "SHARED" | "PERSONAL"}
                   categoryType={ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup === "INVESTMENT" ? "INVESTMENT" : undefined}
                 />
+              </div>
+            )}
+
+            {/* Investment Details */}
+            {ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup === "INVESTMENT" && !isTransfer && (
+              <div className="space-y-3 border-t pt-4">
+                <h3 className="text-sm font-medium text-blue-600 dark:text-blue-400">Investment Details</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="asset">Asset</Label>
+                  <Select
+                    id="asset"
+                    value={form.investmentAssetId}
+                    onChange={(e) => setForm({ ...form, investmentAssetId: e.target.value })}
+                  >
+                    <option value="">No asset</option>
+                    {(assetsQuery.data ?? []).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.ticker ? `${a.ticker} — ${a.name}` : a.name} ({a.type})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantity</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      step="0.00000001"
+                      placeholder="e.g. 10"
+                      value={form.quantity}
+                      onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="unitPrice">Price per unit</Label>
+                    <Input
+                      id="unitPrice"
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 150.25"
+                      value={form.unitPrice}
+                      onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
