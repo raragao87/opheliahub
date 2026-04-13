@@ -77,6 +77,7 @@ interface CategoryOption {
   name: string;
   icon?: string | null;
   groupName: string;
+  categoryType?: string; // "INCOME" | "EXPENSE" | "INVESTMENT"
 }
 
 interface TagOption {
@@ -1112,6 +1113,20 @@ function TransactionRow({
   const AccountIcon = (isAssetsDebts || isInvestmentAccount) ? ACCOUNT_TYPE_META[txn.account.type!]?.icon : null;
   const canEditCategory = !isTransfer && !isAssetsDebts;
 
+  // Filter category options for investment accounts — show only INVESTMENT categories
+  const effectiveCategoryOptions = isInvestmentAccount
+    ? categoryOptions.filter((o) => {
+        // categoryOptions don't have type, but categoryOptionGroups do by group label
+        // Use the "Investment" group label to filter
+        return categoryOptionGroups.some(
+          (g) => g.label === "Investment" && g.options.some((opt) => opt.value === o.value)
+        );
+      })
+    : categoryOptions;
+  const effectiveCategoryOptionGroups = isInvestmentAccount
+    ? categoryOptionGroups.filter((g) => g.label === "Investment")
+    : categoryOptionGroups;
+
   const displayDesc = txn.displayName || txn.description;
 
   const accountName = txn.account.name;
@@ -1234,8 +1249,8 @@ function TransactionRow({
               <InlineSelectEdit
                 value=""
                 displayValue={opheliaCatLabel}
-                options={categoryOptions}
-                optionGroups={categoryOptionGroups}
+                options={effectiveCategoryOptions}
+                optionGroups={effectiveCategoryOptionGroups}
                 topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
                 onSave={(value) => {
                   if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }

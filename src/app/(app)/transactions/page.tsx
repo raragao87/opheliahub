@@ -340,6 +340,7 @@ function TransactionsContent() {
         name: cat.name,
         icon: cat.icon,
         groupName: group.name,
+        categoryType: group.type as string,
       }))
     );
   }, [categoriesQuery.data]);

@@ -102,7 +102,7 @@ export async function categorizeTransactionBatch(
           amount: true,
           date: true,
           categoryId: true,
-          account: { select: { ownership: true } },
+          account: { select: { ownership: true, type: true } },
         },
         take: batchSize,
         orderBy: { opheliaProcessedAt: "asc" }, // null comes first
@@ -121,13 +121,15 @@ export async function categorizeTransactionBatch(
           householdId: hid,
           parentId: { not: null },
         },
-        select: { id: true, name: true, visibility: true, parent: { select: { name: true } } },
+        select: { id: true, name: true, type: true, visibility: true, parent: { select: { name: true, type: true } } },
         orderBy: [{ parent: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       });
 
-      // Split categories by visibility so transactions only see matching categories
-      const sharedCategories = categories.filter((c) => c.visibility === "SHARED");
-      const personalCategories = categories.filter((c) => c.visibility === "PERSONAL");
+      // Split categories by visibility and type
+      const sharedCategories = categories.filter((c) => c.visibility === "SHARED" && c.type !== "INVESTMENT");
+      const personalCategories = categories.filter((c) => c.visibility === "PERSONAL" && c.type !== "INVESTMENT");
+      const sharedInvestmentCategories = categories.filter((c) => c.visibility === "SHARED" && c.type === "INVESTMENT");
+      const personalInvestmentCategories = categories.filter((c) => c.visibility === "PERSONAL" && c.type === "INVESTMENT");
 
       // Fetch all non-archived tags visible to household members
       const tags = await prisma.tag.findMany({
@@ -191,9 +193,14 @@ export async function categorizeTransactionBatch(
             : undefined,
         }));
 
-      // Split transactions by visibility and call Ophelia with matching categories
-      const sharedTxns = transactions.filter((t) => t.account.ownership === "SHARED");
-      const personalTxns = transactions.filter((t) => t.account.ownership === "PERSONAL");
+      // Split transactions by visibility AND account type (investment vs non-investment)
+      const INVESTMENT_TYPES = new Set(["INVESTMENT", "CRYPTO", "SAVINGS"]);
+      const isInvestmentTx = (t: typeof transactions[0]) => INVESTMENT_TYPES.has(t.account.type);
+
+      const sharedTxns = transactions.filter((t) => t.account.ownership === "SHARED" && !isInvestmentTx(t));
+      const personalTxns = transactions.filter((t) => t.account.ownership === "PERSONAL" && !isInvestmentTx(t));
+      const sharedInvestmentTxns = transactions.filter((t) => t.account.ownership === "SHARED" && isInvestmentTx(t));
+      const personalInvestmentTxns = transactions.filter((t) => t.account.ownership === "PERSONAL" && isInvestmentTx(t));
 
       const examples = [
         ...correctionExamples,
@@ -234,10 +241,12 @@ export async function categorizeTransactionBatch(
         });
       };
 
-      // Run both visibility batches (in parallel if both exist)
-      const [sharedResults, personalResults] = await Promise.all([
+      // Run all batches in parallel (visibility × account type)
+      const [sharedResults, personalResults, sharedInvResults, personalInvResults] = await Promise.all([
         callEnrich(sharedTxns, sharedCategories),
         callEnrich(personalTxns, personalCategories),
+        callEnrich(sharedInvestmentTxns, sharedInvestmentCategories),
+        callEnrich(personalInvestmentTxns, personalInvestmentCategories),
       ]);
 
       // Merge results back into a single map keyed by transaction index in the original array
@@ -261,8 +270,24 @@ export async function categorizeTransactionBatch(
           }
         } else { anyFailed = true; }
       }
+      if (sharedInvestmentTxns.length > 0) {
+        if (sharedInvResults) {
+          for (const r of sharedInvResults) {
+            const origIdx = transactions.indexOf(sharedInvestmentTxns[r.index]);
+            if (origIdx >= 0) resultMap.set(origIdx, { ...r, index: origIdx });
+          }
+        } else { anyFailed = true; }
+      }
+      if (personalInvestmentTxns.length > 0) {
+        if (personalInvResults) {
+          for (const r of personalInvResults) {
+            const origIdx = transactions.indexOf(personalInvestmentTxns[r.index]);
+            if (origIdx >= 0) resultMap.set(origIdx, { ...r, index: origIdx });
+          }
+        } else { anyFailed = true; }
+      }
 
-      // Treat as full failure only if both batches failed
+      // Treat as full failure only if all batches failed
       const results = resultMap.size > 0 ? Array.from(resultMap.values()) : (anyFailed ? null : []);
 
       const now = new Date();
@@ -292,8 +317,12 @@ export async function categorizeTransactionBatch(
       // Validation is per-visibility so a hallucinated cross-visibility ID is rejected.
       const validSharedCategoryIds = new Set(sharedCategories.map((c) => c.id));
       const validPersonalCategoryIds = new Set(personalCategories.map((c) => c.id));
-      const validCategoryIdsFor = (vis: string) =>
-        vis === "SHARED" ? validSharedCategoryIds : validPersonalCategoryIds;
+      const validSharedInvestmentCategoryIds = new Set(sharedInvestmentCategories.map((c) => c.id));
+      const validPersonalInvestmentCategoryIds = new Set(personalInvestmentCategories.map((c) => c.id));
+      const validCategoryIdsFor = (vis: string, isInvestment: boolean) =>
+        isInvestment
+          ? (vis === "SHARED" ? validSharedInvestmentCategoryIds : validPersonalInvestmentCategoryIds)
+          : (vis === "SHARED" ? validSharedCategoryIds : validPersonalCategoryIds);
 
       // Track transactions where AI returned an invalid category ID — these get a retry pass.
       const retryNeeded: Array<{ tx: (typeof transactions)[number]; localIndex: number }> = [];
@@ -304,7 +333,7 @@ export async function categorizeTransactionBatch(
 
         // Validate the suggested category ID — AI sometimes returns hallucinated IDs.
         // Check against the visibility-scoped set so cross-visibility IDs are rejected.
-        const validIds = validCategoryIdsFor(tx.account.ownership);
+        const validIds = validCategoryIdsFor(tx.account.ownership, INVESTMENT_TYPES.has(tx.account.type));
         const hasInvalidCategory =
           !!result?.suggestedCategoryId && !validIds.has(result.suggestedCategoryId);
         const safeCategoryId = hasInvalidCategory ? null : (result?.suggestedCategoryId ?? null);
@@ -356,45 +385,38 @@ export async function categorizeTransactionBatch(
       // just the opheliaCategoryId field if the retry returns a valid ID.
       if (retryNeeded.length > 0) {
         console.log(`[Ophelia] Retrying categorization for ${retryNeeded.length} transaction(s) with invalid category suggestions`);
-        // Split retries by visibility too
-        const retryShared = retryNeeded.filter(({ tx }) => tx.account.ownership === "SHARED");
-        const retryPersonal = retryNeeded.filter(({ tx }) => tx.account.ownership === "PERSONAL");
+        // Split retries by visibility + account type
+        const retryBuckets = [
+          { txns: retryNeeded.filter(({ tx }) => tx.account.ownership === "SHARED" && !isInvestmentTx(tx)), cats: sharedCategories },
+          { txns: retryNeeded.filter(({ tx }) => tx.account.ownership === "PERSONAL" && !isInvestmentTx(tx)), cats: personalCategories },
+          { txns: retryNeeded.filter(({ tx }) => tx.account.ownership === "SHARED" && isInvestmentTx(tx)), cats: sharedInvestmentCategories },
+          { txns: retryNeeded.filter(({ tx }) => tx.account.ownership === "PERSONAL" && isInvestmentTx(tx)), cats: personalInvestmentCategories },
+        ];
 
-        const [retrySharedResults, retryPersonalResults] = await Promise.all([
-          retryShared.length > 0 ? enrichTransactions({
-            transactions: retryShared.map(({ tx }) => ({
-              date: tx.date.toISOString().slice(0, 10),
-              description: tx.description,
-              amount: tx.amount,
-            })),
-            categories: sharedCategories.map((c) => ({ id: c.id, name: c.name, parentName: c.parent?.name ?? undefined })),
-            tags: tagList,
-            recentExamples: examples,
-          }) : Promise.resolve(null),
-          retryPersonal.length > 0 ? enrichTransactions({
-            transactions: retryPersonal.map(({ tx }) => ({
-              date: tx.date.toISOString().slice(0, 10),
-              description: tx.description,
-              amount: tx.amount,
-            })),
-            categories: personalCategories.map((c) => ({ id: c.id, name: c.name, parentName: c.parent?.name ?? undefined })),
-            tags: tagList,
-            recentExamples: examples,
-          }) : Promise.resolve(null),
-        ]);
+        const retryBucketResults = await Promise.all(
+          retryBuckets.map(({ txns: bucket, cats }) =>
+            bucket.length > 0 ? enrichTransactions({
+              transactions: bucket.map(({ tx }) => ({
+                date: tx.date.toISOString().slice(0, 10),
+                description: tx.description,
+                amount: tx.amount,
+              })),
+              categories: cats.map((c) => ({ id: c.id, name: c.name, parentName: c.parent?.name ?? undefined })),
+              tags: tagList,
+              recentExamples: examples,
+            }) : Promise.resolve(null)
+          )
+        );
 
-        // Merge retry results
+        // Merge retry results from all buckets
         const retryResultMap = new Map<number, { suggestedCategoryId?: string | null; categoryConfidence?: number | null }>();
-        if (retrySharedResults) {
-          for (const r of retrySharedResults) {
-            const entry = retryShared[r.index];
-            if (entry) retryResultMap.set(entry.localIndex, r);
-          }
-        }
-        if (retryPersonalResults) {
-          for (const r of retryPersonalResults) {
-            const entry = retryPersonal[r.index];
-            if (entry) retryResultMap.set(entry.localIndex, r);
+        for (let b = 0; b < retryBuckets.length; b++) {
+          const bucketResults = retryBucketResults[b];
+          if (bucketResults) {
+            for (const r of bucketResults) {
+              const entry = retryBuckets[b].txns[r.index];
+              if (entry) retryResultMap.set(entry.localIndex, r);
+            }
           }
         }
         const retryResults = retryResultMap.size > 0 ? retryResultMap : null;
@@ -403,7 +425,7 @@ export async function categorizeTransactionBatch(
           for (const { tx, localIndex } of retryNeeded) {
             const retryResult = retryResults.get(localIndex);
             const retryId = retryResult?.suggestedCategoryId;
-            if (retryId && validCategoryIdsFor(tx.account.ownership).has(retryId)) {
+            if (retryId && validCategoryIdsFor(tx.account.ownership, INVESTMENT_TYPES.has(tx.account.type)).has(retryId)) {
               try {
                 await prisma.transaction.update({
                   where: { id: tx.id },
