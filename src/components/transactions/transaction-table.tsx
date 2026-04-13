@@ -1059,6 +1059,7 @@ export function TransactionTable({
               members={members}
               currentUserId={currentUserId}
               assets={assets}
+              flatCategories={flatCategories}
             />
           ))}
         </tbody>
@@ -1085,10 +1086,12 @@ function TransactionRow({
   members,
   currentUserId,
   assets,
+  flatCategories,
 }: {
   txn: TransactionItem;
   categoryOptions: { value: string; label: string }[];
   categoryOptionGroups: { label: string; options: { value: string; label: string }[] }[];
+  flatCategories: CategoryOption[];
   allTags: TagOption[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   onDelete?: (id: string) => void;
@@ -1114,17 +1117,25 @@ function TransactionRow({
   const canEditCategory = !isTransfer && !isAssetsDebts;
 
   // Filter category options for investment accounts — show only INVESTMENT categories
+  // Build a set of investment category IDs from flatCategories (which has categoryType)
+  const investmentCatIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of flatCategories) {
+      if (c.categoryType === "INVESTMENT") ids.add(c.id);
+    }
+    return ids;
+  }, [flatCategories]);
+
   const effectiveCategoryOptions = isInvestmentAccount
-    ? categoryOptions.filter((o) => {
-        // categoryOptions don't have type, but categoryOptionGroups do by group label
-        // Use the "Investment" group label to filter
-        return categoryOptionGroups.some(
-          (g) => g.label === "Investment" && g.options.some((opt) => opt.value === o.value)
-        );
-      })
+    ? categoryOptions.filter((o) => investmentCatIds.has(o.value))
     : categoryOptions;
   const effectiveCategoryOptionGroups = isInvestmentAccount
-    ? categoryOptionGroups.filter((g) => g.label === "Investment")
+    ? categoryOptionGroups
+        .map((g) => ({
+          ...g,
+          options: g.options.filter((o) => investmentCatIds.has(o.value)),
+        }))
+        .filter((g) => g.options.length > 0)
     : categoryOptionGroups;
 
   const displayDesc = txn.displayName || txn.description;
