@@ -251,16 +251,15 @@ export const trackerRouter = router({
 
       const investmentBudgeted = investmentAllocations.reduce((sum, a) => sum + a.amount, 0);
 
-      // Fetch ALL active investment accounts (SAVINGS, INVESTMENT, CRYPTO) for the summary
+      // Fetch active investment accounts scoped by ownership context
       const allInvestmentAccounts = await ctx.prisma.financialAccount.findMany({
         where: {
           type: { in: INVESTMENT_ACCOUNT_TYPES },
           isActive: true,
-          OR: [
-            { ownerId: ctx.userId },
-            ...(input.visibility === "SHARED" ? [{ householdId: ctx.householdId, ownership: "SHARED" as const }] : []),
-          ],
-          ...(input.visibility === "PERSONAL" ? { ownership: "PERSONAL" } : {}),
+          ownership: input.visibility,
+          ...(input.visibility === "SHARED"
+            ? { householdId: ctx.householdId }
+            : { ownerId: ctx.userId }),
         },
         select: { id: true, name: true, icon: true, type: true },
       });
