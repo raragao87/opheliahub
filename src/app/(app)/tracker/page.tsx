@@ -2109,14 +2109,9 @@ export default function TrackerPage() {
                           <span className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wider">
                             📈 Investment & Savings
                           </span>
-                          <div className="relative group/info">
+                          <span title="Budgeted per account, not per category">
                             <Info className="h-3.5 w-3.5 text-blue-500/50 hover:text-blue-500 transition-colors cursor-help" />
-                            <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/info:block">
-                              <div className="rounded-md bg-popover border shadow-md px-2.5 py-1.5 text-[11px] text-muted-foreground whitespace-nowrap">
-                                Budgeted per account, not per category
-                              </div>
-                            </div>
-                          </div>
+                          </span>
                         </div>
                       </td>
                       <td className="text-right py-2 px-3 text-xs text-blue-600/60 dark:text-blue-400/60 font-medium">Budgeted</td>
