@@ -12,7 +12,7 @@ async function main() {
     SET type = 'INVESTMENT'
     FROM financial_accounts a
     WHERE t."accountId" = a.id
-      AND a.type IN ('INVESTMENT', 'CRYPTO')
+      AND a.type IN ('SAVINGS', 'INVESTMENT', 'CRYPTO')
       AND t.type IN ('INCOME', 'EXPENSE')
   `);
   console.log(`Reclassified ${result} transactions to INVESTMENT`);

@@ -230,7 +230,8 @@ export const trackerRouter = router({
           AND: [
             visibilityFilter,
             effectiveDateFilter(start, end),
-            { type: "INVESTMENT" },
+            { account: { type: { in: INVESTMENT_ACCOUNT_TYPES } } },
+            { type: { not: "TRANSFER" } },
             { isInitialBalance: false },
           ],
         },
