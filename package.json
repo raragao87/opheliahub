@@ -18,6 +18,8 @@
     "db:reset": "prisma migrate reset",
     "db:generate": "prisma generate",
     "check:privacy-integrity": "tsx scripts/check-privacy-integrity.ts",
+    "db:apply-constraints": "tsx scripts/apply-db-constraints.ts",
+    "db:setup": "prisma db push && pnpm db:apply-constraints && prisma generate",
     "postinstall": "prisma generate"
   },
   "prisma": {

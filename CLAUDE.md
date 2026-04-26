@@ -100,6 +100,21 @@ All monetary operations should use helpers from `src/lib/finance/money.ts`:
 - `splitEvenly(cents: number, parts: number): number[]` — split handling remainders
 - Never do raw arithmetic on money without these helpers.
 
+## Database Setup
+
+Use `pnpm db:setup` to bring a database to the current schema. This runs:
+
+1. `prisma db push` — applies schema changes
+2. `pnpm db:apply-constraints` — applies non-Prisma DB constraints (CHECK, etc.)
+3. `prisma generate` — regenerates the Prisma Client
+
+**Never run `prisma db push` alone** for a fresh database — it will skip the
+CHECK constraints defined in `scripts/apply-db-constraints.ts` and the privacy
+invariants will not be enforced. Always use `pnpm db:setup`.
+
+To audit a database for privacy invariant violations:
+`pnpm check:privacy-integrity`
+
 ## Testing Requirements
 
 - All financial calculations must have unit tests
