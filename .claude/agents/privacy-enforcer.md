@@ -37,6 +37,7 @@ For EVERY data-access code path you review, verify all of the following:
 - [ ] No code references `Transaction.visibility` (field doesn't exist)
 - [ ] Budget-scoped queries filter by `account.ownership`, not transaction-level field
 - [ ] Account queries use `visibleAccountsWhere()` from `@/lib/privacy`
+- [ ] Any code that updates `FinancialAccount.ownership` also updates `householdId` atomically (the CHECK constraint `chk_ownership_household_consistency` will reject the row otherwise).
 - [ ] Aggregate queries (SUM, COUNT) apply privacy filters BEFORE aggregation
 - [ ] API responses don't include `created_by` user details on other users' personal items
 - [ ] Visibility changes are logged in AuditLog with before/after values

@@ -61,6 +61,7 @@ Use `SPENDING_ACCOUNT_TYPES` constant for budget/tracker queries.
 5. Net worth views:
    - **"My Net Worth"** = my personal accounts + shared accounts
    - **"Family Net Worth"** = all shared accounts (personal included only if both partners opt in)
+6. Enforced at the DB layer: `chk_ownership_household_consistency` on `financial_accounts` rejects any row where SHARED accounts have null `householdId` or PERSONAL accounts have a non-null `householdId`. Code that flips `ownership` MUST also update `householdId` in the same statement.
 
 ## Standard Privacy Query Pattern
 

@@ -212,6 +212,8 @@ model FinancialAccount {
   @@index([ownerId])
   @@index([householdId])
   @@index([householdId, isActive])
+  @@index([householdId, ownership])
+  @@index([ownerId, ownership])
   @@map("financial_accounts")
 }
 
