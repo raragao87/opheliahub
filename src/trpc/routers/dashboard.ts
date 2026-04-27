@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere, visibleAccountsWhere } from "@/lib/privacy";
+import { dashboardTransactionsWhere } from "@/lib/dashboard-where";
 import { getMonthRange } from "@/lib/date";
 import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
@@ -16,34 +17,36 @@ export const dashboardRouter = router({
     .query(async ({ ctx, input }) => {
       const { start, end } = getMonthRange(input.year, input.month);
 
-      const baseWhere = {
-        ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-        date: { gte: start, lte: end },
-        ...(input.visibility && { account: { ownership: input.visibility } }),
-      };
+      const baseWhere = dashboardTransactionsWhere({
+        userId: ctx.userId,
+        householdId: ctx.householdId,
+        visibility: input.visibility,
+        dateRange: { gte: start, lte: end },
+        includeInitialBalance: true, // preserve original behavior
+      });
 
       // Income total
       const income = await ctx.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: "INCOME" },
+        where: { AND: [baseWhere, { type: "INCOME" }] },
         _sum: { amount: true },
       });
 
       // Expense total
       const expenses = await ctx.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: "EXPENSE" },
+        where: { AND: [baseWhere, { type: "EXPENSE" }] },
         _sum: { amount: true },
       });
 
       // Investment total
       const investment = await ctx.prisma.transaction.aggregate({
-        where: { ...baseWhere, type: "INVESTMENT" },
+        where: { AND: [baseWhere, { type: "INVESTMENT" }] },
         _sum: { amount: true },
       });
 
       // By category
       const byCategory = await ctx.prisma.transaction.groupBy({
         by: ["categoryId"],
-        where: { ...baseWhere, type: "EXPENSE" },
+        where: { AND: [baseWhere, { type: "EXPENSE" }] },
         _sum: { amount: true },
         _count: true,
         orderBy: { _sum: { amount: "asc" } },
@@ -110,10 +113,12 @@ export const dashboardRouter = router({
     )
     .query(async ({ ctx, input }) => {
       return ctx.prisma.transaction.findMany({
-        where: {
-          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          ...(input.visibility && { account: { ownership: input.visibility } }),
-        },
+        where: dashboardTransactionsWhere({
+          userId: ctx.userId,
+          householdId: ctx.householdId,
+          visibility: input.visibility,
+          includeInitialBalance: true, // preserve original behavior
+        }),
         orderBy: { date: "desc" },
         take: input.limit,
         include: {
@@ -136,13 +141,13 @@ export const dashboardRouter = router({
     .query(async ({ ctx, input }) => {
       async function getMonthData(year: number, month: number) {
         const { start, end } = getMonthRange(year, month);
-        const baseWhere = {
-          ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-          account: { ownership: input.visibility },
-          date: { gte: start, lte: end },
-          isInitialBalance: false,
-          type: { in: ["INCOME", "EXPENSE"] as ("INCOME" | "EXPENSE")[] },
-        };
+        const baseWhere = dashboardTransactionsWhere({
+          userId: ctx.userId,
+          householdId: ctx.householdId,
+          visibility: input.visibility,
+          dateRange: { gte: start, lte: end },
+          type: { in: ["INCOME", "EXPENSE"] },
+        });
 
         const txns = await ctx.prisma.transaction.findMany({
           where: baseWhere,
@@ -241,13 +246,13 @@ export const dashboardRouter = router({
 
         const agg = await ctx.prisma.transaction.groupBy({
           by: ["type"],
-          where: {
-            ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-            account: { ownership: input.visibility },
-            date: { gte: start, lte: end },
-            isInitialBalance: false,
+          where: dashboardTransactionsWhere({
+            userId: ctx.userId,
+            householdId: ctx.householdId,
+            visibility: input.visibility,
+            dateRange: { gte: start, lte: end },
             type: { in: ["INCOME", "EXPENSE"] },
-          },
+          }),
           _sum: { amount: true },
         });
 
@@ -294,13 +299,13 @@ export const dashboardRouter = router({
         const { start, end } = getMonthRange(y, m);
 
         const txns = await ctx.prisma.transaction.findMany({
-          where: {
-            ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-            account: { ownership: input.visibility },
-            date: { gte: start, lte: end },
-            isInitialBalance: false,
+          where: dashboardTransactionsWhere({
+            userId: ctx.userId,
+            householdId: ctx.householdId,
+            visibility: input.visibility,
+            dateRange: { gte: start, lte: end },
             type: "EXPENSE",
-          },
+          }),
           select: {
             amount: true,
             category: {
@@ -358,19 +363,27 @@ export const dashboardRouter = router({
         const { end: monthEnd } = getMonthRange(y, m);
         const spending = await ctx.prisma.transaction.aggregate({
           where: {
-            type: "FUND",
-            fund: {
-              householdId: ctx.householdId,
-              userId: ctx.userId,
-              visibility: input.visibility,
-              isArchived: false,
-            },
-            ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
-            account: { type: { in: SPENDING_ACCOUNT_TYPES } },
-            isInitialBalance: false,
-            OR: [
-              { accrualDate: { lte: monthEnd } },
-              { accrualDate: null, date: { lte: monthEnd } },
+            AND: [
+              dashboardTransactionsWhere({
+                userId: ctx.userId,
+                householdId: ctx.householdId,
+                type: "FUND",
+              }),
+              {
+                fund: {
+                  householdId: ctx.householdId,
+                  userId: ctx.userId,
+                  visibility: input.visibility,
+                  isArchived: false,
+                },
+              },
+              { account: { type: { in: SPENDING_ACCOUNT_TYPES } } },
+              {
+                OR: [
+                  { accrualDate: { lte: monthEnd } },
+                  { accrualDate: null, date: { lte: monthEnd } },
+                ],
+              },
             ],
           },
           _sum: { amount: true },

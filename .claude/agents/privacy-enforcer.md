@@ -38,6 +38,7 @@ For EVERY data-access code path you review, verify all of the following:
 - [ ] Budget-scoped queries filter by `account.ownership`, not transaction-level field
 - [ ] Account queries use `visibleAccountsWhere()` from `@/lib/privacy`
 - [ ] Any code that updates `FinancialAccount.ownership` also updates `householdId` atomically (the CHECK constraint `chk_ownership_household_consistency` will reject the row otherwise).
+- [ ] No tRPC router spreads a privacy helper (`visibleTransactionsWhere`, `visibleRecurringRulesWhere`, `transactionOwnershipFilter`) into the same object literal as a sibling `account:` key. Object spread overwrites — use `AND: [...]` arrays or the `dashboardTransactionsWhere` helper. See `src/lib/dashboard-where.ts` for the canonical pattern.
 - [ ] Aggregate queries (SUM, COUNT) apply privacy filters BEFORE aggregation
 - [ ] API responses don't include `created_by` user details on other users' personal items
 - [ ] Visibility changes are logged in AuditLog with before/after values
