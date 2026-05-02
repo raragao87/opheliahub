@@ -751,13 +751,22 @@ export const transactionRouter = router({
         data.fundId = null; // category clears fund
         data.type = "EXPENSE"; // revert to EXPENSE when assigning category
       }
-      // Confirmed category always wins for effectiveCategoryId
-      data.effectiveCategoryId = data.categoryId;
+      if (data.categoryId) {
+        data.effectiveCategoryId = data.categoryId;
+      }
 
       await ctx.prisma.transaction.updateMany({
         where: { id: { in: accessibleIds } },
         data,
       });
+
+      if (!data.categoryId) {
+        await ctx.prisma.$executeRaw`
+          UPDATE transactions
+          SET "effectiveCategoryId" = "opheliaCategoryId"
+          WHERE id = ANY(${accessibleIds})
+        `;
+      }
 
       await ctx.prisma.auditLog.create({
         data: {
