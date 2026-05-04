@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { getMonthRange } from "@/lib/date";
-import { visibleTransactionsWhere } from "@/lib/privacy";
+import { visibleTransactionsWhere, fundOwnershipFilter } from "@/lib/privacy";
 import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
 export const fundRouter = router({
@@ -18,9 +18,7 @@ export const fundRouter = router({
     .query(async ({ ctx, input }) => {
       const funds = await ctx.prisma.fund.findMany({
         where: {
-          householdId: ctx.householdId,
-          userId: ctx.userId,
-          visibility: input.visibility,
+          ...fundOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           isArchived: false,
         },
         include: {
@@ -217,9 +215,7 @@ export const fundRouter = router({
     .query(async ({ ctx, input }) => {
       return ctx.prisma.fund.findMany({
         where: {
-          householdId: ctx.householdId,
-          userId: ctx.userId,
-          visibility: input.visibility,
+          ...fundOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           isArchived: false,
         },
         select: { id: true, name: true, icon: true },
@@ -240,11 +236,7 @@ export const fundRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const maxSort = await ctx.prisma.fund.aggregate({
-        where: {
-          householdId: ctx.householdId,
-          userId: ctx.userId,
-          visibility: input.visibility,
-        },
+        where: fundOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
         _max: { sortOrder: true },
       });
 
@@ -400,9 +392,7 @@ export const fundRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.fund.updateMany({
         where: {
-          householdId: ctx.householdId,
-          userId: ctx.userId,
-          visibility: input.visibility,
+          ...fundOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
           isArchived: false,
         },
         data: {
