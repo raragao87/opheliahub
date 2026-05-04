@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
 
@@ -12,22 +13,39 @@ interface EmojiPickerButtonProps {
 
 export function EmojiPickerButton({ value, onChange, className }: EmojiPickerButtonProps) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, left: rect.left });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    updatePosition();
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        pickerRef.current && !pickerRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={
@@ -39,8 +57,12 @@ export function EmojiPickerButton({ value, onChange, className }: EmojiPickerBut
         {value || "🏷"}
       </button>
 
-      {open && (
-        <div className="absolute z-50 top-8 left-0 shadow-xl rounded-xl overflow-hidden">
+      {open && createPortal(
+        <div
+          ref={pickerRef}
+          className="fixed z-[9999] shadow-xl rounded-xl"
+          style={{ top: pos.top, left: pos.left }}
+        >
           <Picker
             data={data}
             onEmojiSelect={(emoji: { native: string }) => {
@@ -52,7 +74,8 @@ export function EmojiPickerButton({ value, onChange, className }: EmojiPickerBut
             skinTonePosition="none"
             maxFrequentRows={2}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

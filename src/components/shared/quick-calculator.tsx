@@ -70,7 +70,7 @@ function InlineCalculator({ onClose }: { onClose: () => void }) {
     <div className="absolute right-0 top-full mt-1.5 z-50 w-80 rounded-lg glass shadow-ambient overflow-hidden">
       {/* Input row */}
       <div className="flex items-center border-b">
-        <div className="px-3 text-muted-foreground">
+        <div className="px-3 text-muted-foreground shrink-0">
           <Calculator className="h-3.5 w-3.5" />
         </div>
         <input
@@ -80,12 +80,12 @@ function InlineCalculator({ onClose }: { onClose: () => void }) {
           onChange={(e) => setExpression(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="e.g. 2500 * 1.23 + 500"
-          className="flex-1 py-2.5 pr-2 text-sm bg-transparent outline-none placeholder:text-muted-foreground/50"
+          className="flex-1 min-w-0 py-2.5 pr-2 text-sm bg-transparent outline-none placeholder:text-muted-foreground/50"
           autoComplete="off"
           spellCheck={false}
         />
         {result !== null && (
-          <div className="px-3 py-2 text-sm font-semibold text-green-600 dark:text-green-400 tabular-nums whitespace-nowrap">
+          <div className="px-3 py-2 text-sm font-semibold text-green-600 dark:text-green-400 tabular-nums whitespace-nowrap shrink-0">
             = {formatResult(result)}
           </div>
         )}

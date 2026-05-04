@@ -261,8 +261,8 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
     onNavigate?.();
   }, [setPendingImport, router, onNavigate]);
 
-  /** Only SPENDING accounts (checking, savings, credit card, cash) are drop targets */
-  const isDroppable = (groupKey: SidebarGroupKey) => groupKey === "SPENDING";
+  const isDroppable = (groupKey: SidebarGroupKey) =>
+    groupKey === "SPENDING" || groupKey === "INVESTMENT";
 
   const isLoading = accountsQuery.isLoading;
   const totalPending = Object.values(pendingByAccount).reduce((sum, n) => sum + n, 0);
