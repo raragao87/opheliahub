@@ -90,6 +90,7 @@ model User {
   funds                 Fund[]
   chatConversations     ChatConversation[]
   duplicateAlerts       DuplicateAlert[]
+  opheliaFeedback       OpheliaFeedback[] @relation("UserOpheliaFeedback")
   notes                 Note[]
 
   @@map("users")
@@ -206,6 +207,7 @@ model FinancialAccount {
   importProfiles          ImportProfile[]
   investmentAllocations   InvestmentTrackerAllocation[]
   duplicateAlerts DuplicateAlert[]
+  importBatches   ImportBatch[]
   recurringRules  RecurringRule[]
   linkedFunds     Fund[]
 
@@ -569,10 +571,13 @@ model ImportBatch {
   profileId    String?
   createdAt    DateTime     @default(now())
 
-  user         User          @relation(fields: [userId], references: [id])
-  transactions Transaction[]
-  profile      ImportProfile? @relation(fields: [profileId], references: [id])
+  user            User              @relation(fields: [userId], references: [id])
+  account         FinancialAccount  @relation(fields: [accountId], references: [id])
+  transactions    Transaction[]
+  duplicateAlerts DuplicateAlert[]
+  profile         ImportProfile?    @relation(fields: [profileId], references: [id])
 
+  @@index([accountId])
   @@map("import_batches")
 }
 
@@ -615,11 +620,13 @@ model DuplicateAlert {
   status          DuplicateAlertStatus @default(PENDING)
   createdAt       DateTime @default(now())
 
-  user    User             @relation(fields: [userId], references: [id])
-  account FinancialAccount @relation(fields: [accountId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+  account     FinancialAccount @relation(fields: [accountId], references: [id])
+  importBatch ImportBatch      @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([accountId])
+  @@index([importBatchId])
   @@map("duplicate_alerts")
 }
 
@@ -786,8 +793,10 @@ model OpheliaFeedback {
   createdAt              DateTime @default(now())
 
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation("UserOpheliaFeedback", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([householdId, createdAt])
+  @@index([userId])
   @@map("ophelia_feedback")
 }
 

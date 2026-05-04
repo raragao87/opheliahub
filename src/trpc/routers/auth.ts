@@ -268,7 +268,10 @@ export const authRouter = router({
             });
           }
 
-          // ImportBatch (FK to User)
+          // DuplicateAlert (FK to User, FinancialAccount, ImportBatch)
+          await tx.duplicateAlert.deleteMany({ where: { userId } });
+
+          // ImportBatch (FK to User, FinancialAccount)
           await tx.importBatch.deleteMany({ where: { userId } });
 
           // Transactions in personal accounts (TransactionTag cascades via onDelete:Cascade on Tag)
@@ -294,7 +297,7 @@ export const authRouter = router({
           // DismissedRecurringPattern (also has cascade on User, but explicit is safer)
           await tx.dismissedRecurringPattern.deleteMany({ where: { userId } });
 
-          // OpheliaFeedback (no FK to User — stored as plain string userId)
+          // OpheliaFeedback (FK to User via onDelete:Cascade, explicit for safety)
           await tx.opheliaFeedback.deleteMany({ where: { userId } });
 
           // AuditLog (FK to User — must delete before User)
