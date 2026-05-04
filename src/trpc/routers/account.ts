@@ -257,6 +257,61 @@ export const accountRouter = router({
       });
     }),
 
+  restore: householdProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const account = await ctx.prisma.financialAccount.findFirst({
+        where: {
+          id: input.id,
+          deletedAt: { not: null },
+          ownerId: ctx.userId,
+        },
+      });
+
+      if (!account) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Deleted account not found or you don't have permission.",
+        });
+      }
+
+      const result = await ctx.prisma.$transaction(async (tx) => {
+        const restored = await tx.financialAccount.update({
+          where: { id: input.id },
+          data: { deletedAt: null, isActive: true },
+        });
+
+        // Only restore transactions deleted at the same time as the account
+        const txResult = await tx.transaction.updateMany({
+          where: { accountId: input.id, deletedAt: account.deletedAt },
+          data: { deletedAt: null },
+        });
+
+        const agg = await tx.transaction.aggregate({
+          where: { accountId: input.id, deletedAt: null },
+          _sum: { amount: true },
+        });
+        await tx.financialAccount.update({
+          where: { id: input.id },
+          data: { balance: agg._sum.amount ?? 0 },
+        });
+
+        return { account: restored, transactionsRestored: txResult.count };
+      });
+
+      await ctx.prisma.auditLog.create({
+        data: {
+          action: "account.restore",
+          entityType: "FinancialAccount",
+          entityId: input.id,
+          userId: ctx.userId,
+          metadata: { transactionsRestored: result.transactionsRestored },
+        },
+      });
+
+      return result;
+    }),
+
   /**
    * Flip the sign of all imported transactions in an account.
    * Use to correct credit card accounts where expenses were imported as positive amounts.

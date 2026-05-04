@@ -998,36 +998,35 @@ export const transactionRouter = router({
         });
       }
 
-      await ctx.prisma.$transaction(async (tx) => {
-        const idsToDelete = new Set(input.ids);
-        const balanceAdjustments = new Map<string, number>();
+      // Compute full deletion set (including transfer partners) before the transaction
+      const idsToDelete = new Set(input.ids);
+      const balanceAdjustments = new Map<string, number>();
 
-        for (const txn of transactions) {
-          const current = balanceAdjustments.get(txn.accountId) ?? 0;
-          balanceAdjustments.set(txn.accountId, current + txn.amount);
+      for (const txn of transactions) {
+        const current = balanceAdjustments.get(txn.accountId) ?? 0;
+        balanceAdjustments.set(txn.accountId, current + txn.amount);
 
-          // Include transfer partners not already in the list
-          const partner = txn.linkedTransaction ?? txn.linkedBy;
-          if (partner && !idsToDelete.has(partner.id)) {
-            idsToDelete.add(partner.id);
-            const partnerCurrent = balanceAdjustments.get(partner.accountId) ?? 0;
-            balanceAdjustments.set(partner.accountId, partnerCurrent + partner.amount);
-          }
+        const partner = txn.linkedTransaction ?? txn.linkedBy;
+        if (partner && !idsToDelete.has(partner.id)) {
+          idsToDelete.add(partner.id);
+          const partnerCurrent = balanceAdjustments.get(partner.accountId) ?? 0;
+          balanceAdjustments.set(partner.accountId, partnerCurrent + partner.amount);
         }
+      }
 
-        // Nullify linked FKs to avoid constraint violations
+      const allDeletedIds = Array.from(idsToDelete);
+
+      await ctx.prisma.$transaction(async (tx) => {
         await tx.transaction.updateMany({
-          where: { id: { in: Array.from(idsToDelete) }, linkedTransactionId: { not: null } },
+          where: { id: { in: allDeletedIds }, linkedTransactionId: { not: null } },
           data: { linkedTransactionId: null },
         });
 
-        // Soft-delete transactions (keep tags for potential undo)
         await tx.transaction.updateMany({
-          where: { id: { in: Array.from(idsToDelete) } },
+          where: { id: { in: allDeletedIds } },
           data: { deletedAt: new Date() },
         });
 
-        // Reverse balance effects
         for (const [accountId, amount] of balanceAdjustments) {
           await tx.financialAccount.update({
             where: { id: accountId },
@@ -1040,13 +1039,148 @@ export const transactionRouter = router({
         data: {
           action: "transaction.bulk_delete",
           entityType: "Transaction",
-          entityId: input.ids.join(","),
+          entityId: allDeletedIds.join(","),
           userId: ctx.userId,
-          metadata: { count: input.ids.length },
+          metadata: { count: allDeletedIds.length },
         },
       });
 
-      return { deleted: input.ids.length };
+      return { deleted: allDeletedIds.length, deletedIds: allDeletedIds };
+    }),
+
+  restore: householdProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const transaction = await ctx.prisma.transaction.findFirst({
+        where: {
+          id: input.id,
+          deletedAt: { not: null },
+          account: {
+            OR: [
+              { ownerId: ctx.userId },
+              { householdId: ctx.householdId, ownership: "SHARED" },
+            ],
+          },
+        },
+      });
+
+      if (!transaction) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Deleted transaction not found or you don't have permission.",
+        });
+      }
+
+      // Find co-deleted transfer partner (same deletedAt timestamp)
+      let partner: typeof transaction | null = null;
+      if (transaction.type === "TRANSFER" && transaction.deletedAt) {
+        partner = await ctx.prisma.transaction.findFirst({
+          where: {
+            id: { not: transaction.id },
+            type: "TRANSFER",
+            deletedAt: transaction.deletedAt,
+            amount: -transaction.amount,
+            accountId: { not: transaction.accountId },
+          },
+        });
+      }
+
+      await ctx.prisma.$transaction(async (tx) => {
+        await tx.financialAccount.update({
+          where: { id: transaction.accountId },
+          data: { balance: { increment: transaction.amount } },
+        });
+        await tx.transaction.update({
+          where: { id: transaction.id },
+          data: { deletedAt: null },
+        });
+
+        if (partner) {
+          await tx.financialAccount.update({
+            where: { id: partner.accountId },
+            data: { balance: { increment: partner.amount } },
+          });
+          await tx.transaction.update({
+            where: { id: partner.id },
+            data: { deletedAt: null },
+          });
+        }
+      });
+
+      const restored = await ctx.prisma.transaction.findUniqueOrThrow({
+        where: { id: input.id },
+        include: {
+          account: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true, icon: true } },
+          fund: { select: { id: true, name: true, icon: true } },
+          tags: { include: { tag: true } },
+        },
+      });
+
+      await ctx.prisma.auditLog.create({
+        data: {
+          action: "transaction.restore",
+          entityType: "Transaction",
+          entityId: partner ? `${input.id},${partner.id}` : input.id,
+          userId: ctx.userId,
+        },
+      });
+
+      return restored;
+    }),
+
+  bulkRestore: householdProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      const transactions = await ctx.prisma.transaction.findMany({
+        where: {
+          id: { in: input.ids },
+          deletedAt: { not: null },
+          account: {
+            OR: [
+              { ownerId: ctx.userId },
+              { householdId: ctx.householdId, ownership: "SHARED" },
+            ],
+          },
+        },
+        select: { id: true, amount: true, accountId: true },
+      });
+
+      if (transactions.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No restorable transactions found." });
+      }
+
+      await ctx.prisma.$transaction(async (tx) => {
+        const balanceAdjustments = new Map<string, number>();
+        for (const txn of transactions) {
+          const current = balanceAdjustments.get(txn.accountId) ?? 0;
+          balanceAdjustments.set(txn.accountId, current + txn.amount);
+        }
+
+        for (const [accountId, amount] of balanceAdjustments) {
+          await tx.financialAccount.update({
+            where: { id: accountId },
+            data: { balance: { increment: amount } },
+          });
+        }
+
+        await tx.transaction.updateMany({
+          where: { id: { in: transactions.map(t => t.id) } },
+          data: { deletedAt: null },
+        });
+      });
+
+      await ctx.prisma.auditLog.create({
+        data: {
+          action: "transaction.bulk_restore",
+          entityType: "Transaction",
+          entityId: input.ids.join(","),
+          userId: ctx.userId,
+          metadata: { count: transactions.length },
+        },
+      });
+
+      return { restored: transactions.length };
     }),
 
   /** Find potential transfer matches for a given transaction */

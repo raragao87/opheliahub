@@ -13,6 +13,7 @@ import { useOwnership } from "@/lib/ownership-context";
 import { ACCOUNT_TYPE_META, SIDEBAR_GROUPS } from "@/lib/account-types";
 import { toCents } from "@/lib/money";
 import { toast } from "sonner";
+import { showUndoToast } from "@/lib/undo-toast";
 import {
   Plus,
   Upload,
@@ -425,7 +426,32 @@ function TransactionsContent() {
   );
 
   function handleUpdate(id: string, data: Record<string, unknown>) {
-    updateMutation.mutate({ id, ...data } as Parameters<typeof updateMutation.mutate>[0]);
+    const txn = transactions.find((t) => t.id === id);
+    const previousData: Record<string, unknown> = {};
+    if (txn) {
+      for (const key of Object.keys(data)) {
+        if (key === "categoryId") previousData.categoryId = txn.category?.id ?? null;
+        else if (key === "fundId") previousData.fundId = (txn as Record<string, unknown>).fundId ?? null;
+        else if (key === "tagIds") previousData.tagIds = txn.tags?.map((t: { tag: { id: string } }) => t.tag.id) ?? [];
+        else if (key in txn) previousData[key] = (txn as Record<string, unknown>)[key];
+      }
+    }
+
+    updateMutation.mutate({ id, ...data } as Parameters<typeof updateMutation.mutate>[0], {
+      onSuccess: () => {
+        if (Object.keys(previousData).length > 0) {
+          const label = Object.keys(data).includes("categoryId") ? "Category updated"
+            : Object.keys(data).includes("tagIds") ? "Tags updated"
+            : "Transaction updated";
+          showUndoToast({
+            message: label,
+            onUndo: () => {
+              updateMutation.mutate({ id, ...previousData } as Parameters<typeof updateMutation.mutate>[0]);
+            },
+          });
+        }
+      },
+    });
   }
 
   // ── Delete mutation with optimistic removal ────────────────────────
@@ -455,12 +481,27 @@ function TransactionsContent() {
         }
         toast.error("Failed to delete transaction");
       },
-      onSuccess: () => {
-        toast.success("Transaction deleted");
+      onSuccess: (_data, variables) => {
+        showUndoToast({
+          message: "Transaction deleted",
+          onUndo: async () => {
+            await restoreMutation.mutateAsync({ id: variables.id });
+          },
+        });
       },
       onSettled: () => {
         queryClient.invalidateQueries();
       },
+    })
+  );
+
+  const restoreMutation = useMutation(
+    trpc.transaction.restore.mutationOptions({
+      onSuccess: () => {
+        toast.success("Transaction restored");
+        queryClient.invalidateQueries();
+      },
+      onError: (err) => toast.error(`Failed to restore: ${err.message}`),
     })
   );
 
@@ -517,11 +558,26 @@ function TransactionsContent() {
   const bulkDeleteMutation = useMutation(
     trpc.transaction.bulkDelete.mutationOptions({
       onSuccess: (data) => {
-        toast.success(`Deleted ${data.deleted} transaction${data.deleted !== 1 ? "s" : ""}`);
+        showUndoToast({
+          message: `Deleted ${data.deleted} transaction${data.deleted !== 1 ? "s" : ""}`,
+          onUndo: async () => {
+            await bulkRestoreMutation.mutateAsync({ ids: data.deletedIds });
+          },
+        });
         setSelectedIds(new Set());
         queryClient.invalidateQueries();
       },
       onError: (err) => toast.error(err.message),
+    })
+  );
+
+  const bulkRestoreMutation = useMutation(
+    trpc.transaction.bulkRestore.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(`Restored ${data.restored} transaction${data.restored !== 1 ? "s" : ""}`);
+        queryClient.invalidateQueries();
+      },
+      onError: (err) => toast.error(`Failed to restore: ${err.message}`),
     })
   );
 
