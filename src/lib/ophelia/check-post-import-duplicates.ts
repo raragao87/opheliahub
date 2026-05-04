@@ -15,7 +15,7 @@ export async function checkPostImportDuplicates(
 ) {
   // Fetch all transactions from the newly imported batch
   const imported = await prisma.transaction.findMany({
-    where: { importBatchId: batchId },
+    where: { importBatchId: batchId, deletedAt: null },
     select: { id: true, date: true, amount: true, description: true, displayName: true, opheliaDisplayName: true },
   });
 
@@ -33,6 +33,7 @@ export async function checkPostImportDuplicates(
   const existing = await prisma.transaction.findMany({
     where: {
       accountId,
+      deletedAt: null,
       date: { gte: minDate, lte: maxDate },
       importBatchId: { not: batchId },
       isInitialBalance: false,

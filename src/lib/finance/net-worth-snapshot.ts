@@ -25,8 +25,8 @@ export async function captureNetWorthSnapshot(
   const accounts = await prisma.financialAccount.findMany({
     where:
       visibility === "SHARED"
-        ? { householdId, ownership: "SHARED", isActive: true }
-        : { ownerId: userId, ownership: "PERSONAL", isActive: true },
+        ? { householdId, ownership: "SHARED", isActive: true, deletedAt: null }
+        : { ownerId: userId, ownership: "PERSONAL", isActive: true, deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -97,6 +97,7 @@ async function computeHistoricalBalance(
   const { _sum } = await prisma.transaction.aggregate({
     where: {
       accountId,
+      deletedAt: null,
       date: { gte: endOfMonth },
     },
     _sum: { amount: true },
@@ -120,8 +121,8 @@ export async function backfillNetWorthSnapshots(
   const accounts = await prisma.financialAccount.findMany({
     where:
       visibility === "SHARED"
-        ? { householdId, ownership: "SHARED", isActive: true }
-        : { ownerId: userId, ownership: "PERSONAL", isActive: true },
+        ? { householdId, ownership: "SHARED", isActive: true, deletedAt: null }
+        : { ownerId: userId, ownership: "PERSONAL", isActive: true, deletedAt: null },
     select: { id: true, name: true, type: true, balance: true, currency: true },
   });
 

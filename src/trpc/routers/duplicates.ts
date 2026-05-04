@@ -66,7 +66,7 @@ export const duplicatesRouter = router({
       }
 
       const transactions = await ctx.prisma.transaction.findMany({
-        where: { id: { in: [...txIds] } },
+        where: { id: { in: [...txIds] }, deletedAt: null },
         select: {
           id: true,
           date: true,

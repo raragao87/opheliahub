@@ -82,6 +82,7 @@ export async function categorizeTransactionBatch(
       // retry until the 7-day reprocess window. This prevents infinite retry loops.
       const transactions = await prisma.transaction.findMany({
         where: {
+          deletedAt: null,
           isInitialBalance: false,
           type: { not: "TRANSFER" },
           OR: [
@@ -147,6 +148,7 @@ export async function categorizeTransactionBatch(
       // Fetch up to 20 recently user-categorized transactions as few-shot examples
       const recentExamples = await prisma.transaction.findMany({
         where: {
+          deletedAt: null,
           categoryId: { not: null },
           account: {
             OR: [

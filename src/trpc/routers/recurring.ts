@@ -333,6 +333,7 @@ export const recurringRouter = router({
           ? await ctx.prisma.transaction.findMany({
               where: {
                 accountId: { in: ruleAccountIds },
+                deletedAt: null,
                 date: { lte: end },
               },
               orderBy: { date: "desc" },
@@ -541,6 +542,7 @@ export const recurringRouter = router({
           ? await ctx.prisma.transaction.findMany({
               where: {
                 accountId: { in: dbInactiveAccountIds },
+                deletedAt: null,
                 date: { lte: end },
               },
               orderBy: { date: "desc" },

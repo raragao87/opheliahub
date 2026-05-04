@@ -191,12 +191,14 @@ export const accountRouter = router({
         });
       }
 
-      // Force delete: remove all transactions first, then delete account
+      // Force delete: soft-delete all transactions, then soft-delete account
       if (input.force) {
         return ctx.prisma.$transaction(async (tx) => {
+          const now = new Date();
+
           // Get all transaction IDs in this account
           const txnIds = await tx.transaction
-            .findMany({ where: { accountId: input.id }, select: { id: true } })
+            .findMany({ where: { accountId: input.id, deletedAt: null }, select: { id: true } })
             .then((rows) => rows.map((r) => r.id));
 
           // Unlink transfers: null out linkedTransactionId on both sides
@@ -210,11 +212,6 @@ export const accountRouter = router({
               data: { linkedTransactionId: null },
             });
           }
-
-          // Delete transaction tags (FK constraint)
-          await tx.transactionTag.deleteMany({
-            where: { transaction: { accountId: input.id } },
-          });
 
           // Delete duplicate alerts referencing this account
           await tx.duplicateAlert.deleteMany({
@@ -231,26 +228,29 @@ export const accountRouter = router({
             where: { accountId: input.id },
           });
 
-          // Delete transactions
-          await tx.transaction.deleteMany({
-            where: { accountId: input.id },
+          // Soft-delete transactions (keep tags for potential undo)
+          await tx.transaction.updateMany({
+            where: { accountId: input.id, deletedAt: null },
+            data: { deletedAt: now },
           });
 
-          // Delete the account
-          return tx.financialAccount.delete({
+          // Soft-delete the account
+          return tx.financialAccount.update({
             where: { id: input.id },
+            data: { deletedAt: now, isActive: false },
           });
         });
       }
 
-      // No transactions → safe to delete directly
+      // No transactions → soft-delete directly
       if (account._count.transactions === 0) {
-        return ctx.prisma.financialAccount.delete({
+        return ctx.prisma.financialAccount.update({
           where: { id: input.id },
+          data: { deletedAt: new Date(), isActive: false },
         });
       }
 
-      // Has transactions but no force → archive
+      // Has transactions but no force → archive (not a delete, just hide from active views)
       return ctx.prisma.financialAccount.update({
         where: { id: input.id },
         data: { isActive: false },
@@ -279,7 +279,7 @@ export const accountRouter = router({
 
       // Fetch all transactions except Initial Balance
       const transactions = await ctx.prisma.transaction.findMany({
-        where: { accountId: input.id, isInitialBalance: false },
+        where: { accountId: input.id, isInitialBalance: false, deletedAt: null },
         select: { id: true, amount: true },
       });
 
@@ -297,7 +297,7 @@ export const accountRouter = router({
 
         // Recalculate account balance from all transactions (including Initial Balance)
         const agg = await tx.transaction.aggregate({
-          where: { accountId: input.id },
+          where: { accountId: input.id, deletedAt: null },
           _sum: { amount: true },
         });
         await tx.financialAccount.update({

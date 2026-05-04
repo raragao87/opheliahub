@@ -257,6 +257,7 @@ export const trackerRouter = router({
         where: {
           type: { in: INVESTMENT_ACCOUNT_TYPES },
           isActive: true,
+          deletedAt: null,
           ownership: input.visibility,
           ...(input.visibility === "SHARED"
             ? { householdId: ctx.householdId }

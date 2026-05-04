@@ -13,6 +13,7 @@ export function visibleAccountsWhere(
 ): Prisma.FinancialAccountWhereInput {
   return {
     isActive: true,
+    deletedAt: null,
     OR: [
       { ownerId: userId, ownership: "PERSONAL" },
       { householdId, ownership: "SHARED" },
@@ -30,6 +31,7 @@ export function visibleTransactionsWhere(
   householdId: string
 ): Prisma.TransactionWhereInput {
   return {
+    deletedAt: null,
     account: {
       OR: [
         { ownerId: userId },
@@ -50,6 +52,7 @@ export function transactionOwnershipFilter(
 ): Prisma.TransactionWhereInput {
   if (ownership === "SHARED") {
     return {
+      deletedAt: null,
       account: {
         OR: [
           { householdId, ownership: "SHARED" },
@@ -59,6 +62,7 @@ export function transactionOwnershipFilter(
     };
   }
   return {
+    deletedAt: null,
     account: { ownerId: userId, ownership: "PERSONAL" },
   };
 }

@@ -50,20 +50,20 @@ export const authRouter = router({
 
     // Personal accounts (owned by user)
     const personalAccounts = await ctx.prisma.financialAccount.findMany({
-      where: { ownerId: userId, ownership: "PERSONAL" },
+      where: { ownerId: userId, ownership: "PERSONAL", deletedAt: null },
       select: { id: true },
     });
     const personalAccountIds = personalAccounts.map((a) => a.id);
 
     // Shared accounts (owned by user but shared)
     const sharedAccountsCount = await ctx.prisma.financialAccount.count({
-      where: { ownerId: userId, ownership: "SHARED" },
+      where: { ownerId: userId, ownership: "SHARED", deletedAt: null },
     });
 
     // Counts in personal accounts
     const personalTxnCount = personalAccountIds.length > 0
       ? await ctx.prisma.transaction.count({
-          where: { accountId: { in: personalAccountIds } },
+          where: { accountId: { in: personalAccountIds }, deletedAt: null },
         })
       : 0;
 
@@ -71,6 +71,7 @@ export const authRouter = router({
     const sharedTxnCount = householdId
       ? await ctx.prisma.transaction.count({
           where: {
+            deletedAt: null,
             account: { householdId, ownership: "SHARED" },
           },
         })

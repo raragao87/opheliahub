@@ -680,9 +680,10 @@ export const transactionRouter = router({
               });
             }
 
-            // Delete both transactions
-            await tx.transaction.delete({ where: { id: transaction.id } });
-            await tx.transaction.delete({ where: { id: partner.id } });
+            // Soft-delete both transactions
+            const now = new Date();
+            await tx.transaction.update({ where: { id: transaction.id }, data: { deletedAt: now } });
+            await tx.transaction.update({ where: { id: partner.id }, data: { deletedAt: now } });
 
             // Reverse balances on both accounts
             await tx.financialAccount.update({
@@ -706,7 +707,10 @@ export const transactionRouter = router({
         data: { balance: { decrement: transaction.amount } },
       });
 
-      return ctx.prisma.transaction.delete({ where: { id: input.id } });
+      return ctx.prisma.transaction.update({
+        where: { id: input.id },
+        data: { deletedAt: new Date() },
+      });
     }),
 
   // ── Bulk operations ──────────────────────────────────────────────────
@@ -891,6 +895,7 @@ export const transactionRouter = router({
     .mutation(async ({ ctx, input }) => {
       const where: Prisma.TransactionWhereInput = {
         userId: ctx.userId,
+        deletedAt: null,
         ...(input.force
           ? {}
           : {
@@ -1016,14 +1021,10 @@ export const transactionRouter = router({
           data: { linkedTransactionId: null },
         });
 
-        // Delete tags
-        await tx.transactionTag.deleteMany({
-          where: { transactionId: { in: Array.from(idsToDelete) } },
-        });
-
-        // Delete transactions
-        await tx.transaction.deleteMany({
+        // Soft-delete transactions (keep tags for potential undo)
+        await tx.transaction.updateMany({
           where: { id: { in: Array.from(idsToDelete) } },
+          data: { deletedAt: new Date() },
         });
 
         // Reverse balance effects

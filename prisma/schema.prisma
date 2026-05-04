@@ -198,6 +198,7 @@ model FinancialAccount {
   links       Json?            // Array of { label: string, url: string }
   ownerId     String
   householdId String?
+  deletedAt   DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -292,6 +293,7 @@ model Transaction {
   userId              String // creator / owner
   importBatchId       String?
   externalId          String? // for duplicate detection on import
+  deletedAt           DateTime?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
@@ -332,6 +334,7 @@ model Transaction {
   @@index([fundId, date])
   @@index([effectiveCategoryId])
   @@index([investmentAssetId])
+  @@index([deletedAt])
   @@map("transactions")
 }
 
