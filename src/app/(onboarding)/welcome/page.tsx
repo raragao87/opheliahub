@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -37,13 +36,14 @@ type Step =
 function UserAvatar({ src, name, size = 64 }: { src?: string | null; name?: string | null; size?: number }) {
   if (src) {
     return (
-      <Image
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
         src={src}
         alt={name ?? "You"}
         width={size}
         height={size}
         className="rounded-full ring-2 ring-primary/30"
-        unoptimized
+        referrerPolicy="no-referrer"
       />
     );
   }
