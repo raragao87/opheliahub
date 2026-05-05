@@ -18,8 +18,17 @@ import {
   ChevronLeft,
   Loader2,
 } from "lucide-react";
+import type { Language } from "@/lib/translations";
+
+const LANGUAGE_OPTIONS: { code: Language; flag: string; label: string }[] = [
+  { code: "en", flag: "🇬🇧", label: "English" },
+  { code: "pt", flag: "🇵🇹", label: "Português" },
+  { code: "ro", flag: "🇷🇴", label: "Română" },
+  { code: "nl", flag: "🇳🇱", label: "Nederlands" },
+];
 
 type Step =
+  | "language"
   | "choose"
   | "create"
   | "create-success"
@@ -31,7 +40,7 @@ export default function WelcomePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [step, setStep] = useState<Step>("choose");
+  const [step, setStep] = useState<Step>("language");
   const [householdName, setHouseholdName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [createError, setCreateError] = useState("");
@@ -87,6 +96,15 @@ export default function WelcomePage() {
     })
   );
 
+  const languageMutation = useMutation(
+    trpc.auth.updateProfile.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.auth.getPreferences.queryKey() });
+        setStep("choose");
+      },
+    })
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex flex-col">
       {/* Header */}
@@ -102,8 +120,8 @@ export default function WelcomePage() {
       {/* Main content */}
       <main className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-lg">
-          {/* Back button (except on choose step) */}
-          {step !== "choose" && step !== "create-success" && (
+          {/* Back button (except on language/choose/create-success steps) */}
+          {step !== "language" && step !== "choose" && step !== "create-success" && (
             <button
               onClick={() => setStep("choose")}
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
@@ -111,6 +129,45 @@ export default function WelcomePage() {
               <ChevronLeft className="h-4 w-4" />
               Back
             </button>
+          )}
+
+          {/* STEP: language */}
+          {step === "language" && (
+            <div className="space-y-6">
+              <div className="text-center space-y-3">
+                <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto">
+                  <span className="text-2xl">🌍</span>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-900">
+                    Choose your language
+                  </h1>
+                  <p className="text-muted-foreground mt-1">
+                    Select the language you&apos;d like to use in OpheliaHub.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {LANGUAGE_OPTIONS.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => languageMutation.mutate({ language: lang.code })}
+                    disabled={languageMutation.isPending}
+                    className="group"
+                  >
+                    <Card className="border-2 border-transparent group-hover:border-primary/30 group-hover:bg-primary/5 transition-all cursor-pointer h-full">
+                      <CardContent className="p-5 flex flex-col items-center gap-2 text-center">
+                        <span className="text-3xl">{lang.flag}</span>
+                        <span className="font-semibold text-slate-900 text-sm">
+                          {lang.label}
+                        </span>
+                      </CardContent>
+                    </Card>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* STEP: choose */}
