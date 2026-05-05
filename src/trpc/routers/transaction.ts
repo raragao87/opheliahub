@@ -201,7 +201,9 @@ export const transactionRouter = router({
           category: { select: { id: true, name: true, icon: true, color: true } },
           fund: { select: { id: true, name: true, icon: true } },
           opheliaCategory: { select: { id: true, name: true } },
-          investmentAsset: { select: { id: true, ticker: true, name: true, type: true } },
+          investmentDetail: {
+            include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
+          },
           tags: {
             include: {
               tag: { select: { id: true, name: true, color: true } },
@@ -234,7 +236,9 @@ export const transactionRouter = router({
           account: true,
           category: true,
           opheliaCategory: { select: { id: true, name: true } },
-          investmentAsset: { select: { id: true, ticker: true, name: true, type: true } },
+          investmentDetail: {
+            include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
+          },
           tags: { include: { tag: true } },
           user: { select: { id: true, name: true, image: true } },
           linkedTransaction: { include: { account: true } },
@@ -260,9 +264,9 @@ export const transactionRouter = router({
         toAccountId: z.string().optional(),
         categoryId: z.string().optional(),
         fundId: z.string().optional(),
-        investmentAssetId: z.string().nullable().optional(),
-        quantity: z.number().nullable().optional(),
-        unitPrice: z.number().int().nullable().optional(),
+        investmentAssetId: z.string().optional(),
+        quantity: z.number().optional(),
+        unitPrice: z.number().int().optional(),
         notes: z.string().optional(),
         tagIds: z.array(z.string()).default([]),
       })
@@ -376,33 +380,49 @@ export const transactionRouter = router({
         input.type = "INVESTMENT";
       }
 
-      const { tagIds, toAccountId: _toAccountId, ...data } = input;
+      const {
+        tagIds,
+        toAccountId: _toAccountId,
+        investmentAssetId,
+        quantity,
+        unitPrice,
+        ...data
+      } = input;
 
-      const transaction = await ctx.prisma.transaction.create({
-        data: {
-          ...data,
-          userId: ctx.userId,
-          displayName: extractDisplayName(data.description),
-          originalDescription: data.description,
-          effectiveCategoryId: computeEffectiveCategoryId(data.categoryId, null),
-          tags: tagIds.length > 0
-            ? {
-                create: tagIds.map((tagId) => ({ tagId })),
-              }
-            : undefined,
-        },
-        include: {
-          account: { select: { id: true, name: true } },
-          category: { select: { id: true, name: true, icon: true } },
-          fund: { select: { id: true, name: true, icon: true } },
-          tags: { include: { tag: true } },
-        },
-      });
+      const transaction = await ctx.prisma.$transaction(async (tx) => {
+        const txn = await tx.transaction.create({
+          data: {
+            ...data,
+            userId: ctx.userId,
+            displayName: extractDisplayName(data.description),
+            originalDescription: data.description,
+            effectiveCategoryId: computeEffectiveCategoryId(data.categoryId, null),
+            tags: tagIds.length > 0
+              ? { create: tagIds.map((tagId) => ({ tagId })) }
+              : undefined,
+            ...(investmentAssetId && quantity != null && unitPrice != null && {
+              investmentDetail: {
+                create: { investmentAssetId, quantity, unitPrice },
+              },
+            }),
+          },
+          include: {
+            account: { select: { id: true, name: true } },
+            category: { select: { id: true, name: true, icon: true } },
+            fund: { select: { id: true, name: true, icon: true } },
+            investmentDetail: {
+              include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
+            },
+            tags: { include: { tag: true } },
+          },
+        });
 
-      // Update account balance
-      await ctx.prisma.financialAccount.update({
-        where: { id: input.accountId },
-        data: { balance: { increment: input.amount } },
+        await tx.financialAccount.update({
+          where: { id: input.accountId },
+          data: { balance: { increment: input.amount } },
+        });
+
+        return txn;
       });
 
       return transaction;
@@ -428,6 +448,13 @@ export const transactionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const {
+        investmentAssetId: inputAssetId,
+        quantity: inputQuantity,
+        unitPrice: inputUnitPrice,
+        ...restInput
+      } = input;
+
       const existing = await ctx.prisma.transaction.findFirst({
         where: {
           id: input.id,
@@ -460,7 +487,7 @@ export const transactionRouter = router({
 
         if (partner) {
           return ctx.prisma.$transaction(async (tx) => {
-            const { id, tagIds, type: _type, ...data } = input;
+            const { id, tagIds, type: _type, ...data } = restInput;
 
             // Compute balance diffs for both sides
             const isOutflow = existing.amount < 0;
@@ -546,7 +573,7 @@ export const transactionRouter = router({
       }
 
       // ── Non-transfer: existing logic ────────────────────────────────
-      const { id, tagIds, ...data } = input;
+      const { id, tagIds, ...data } = restInput;
 
       // Auto-set type based on fund assignment
       if (data.fundId !== undefined) {
@@ -627,6 +654,29 @@ export const transactionRouter = router({
         );
       }
 
+      // Handle InvestmentDetail upsert/delete
+      if (inputAssetId !== undefined) {
+        if (inputAssetId && inputQuantity != null && inputUnitPrice != null) {
+          await ctx.prisma.investmentDetail.upsert({
+            where: { transactionId: id },
+            update: { investmentAssetId: inputAssetId, quantity: inputQuantity, unitPrice: inputUnitPrice },
+            create: { transactionId: id, investmentAssetId: inputAssetId, quantity: inputQuantity, unitPrice: inputUnitPrice },
+          });
+        } else if (inputAssetId) {
+          // Partial update — only asset (and optionally qty/price) changed
+          await ctx.prisma.investmentDetail.updateMany({
+            where: { transactionId: id },
+            data: {
+              investmentAssetId: inputAssetId,
+              ...(inputQuantity != null && { quantity: inputQuantity }),
+              ...(inputUnitPrice != null && { unitPrice: inputUnitPrice }),
+            },
+          });
+        } else if (inputAssetId === null) {
+          await ctx.prisma.investmentDetail.deleteMany({ where: { transactionId: id } });
+        }
+      }
+
       return ctx.prisma.transaction.update({
         where: { id },
         data: updateData,
@@ -634,6 +684,9 @@ export const transactionRouter = router({
           account: { select: { id: true, name: true } },
           category: { select: { id: true, name: true, icon: true } },
           fund: { select: { id: true, name: true, icon: true } },
+          investmentDetail: {
+            include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
+          },
           tags: { include: { tag: true } },
         },
       });

@@ -62,7 +62,7 @@ export const investmentAssetRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Asset not found." });
       }
-      const txnCount = await ctx.prisma.transaction.count({
+      const txnCount = await ctx.prisma.investmentDetail.count({
         where: { investmentAssetId: input.id },
       });
       if (txnCount > 0) {

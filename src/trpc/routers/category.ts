@@ -454,7 +454,7 @@ export const categoryRouter = router({
       });
       if (!category) throw new TRPCError({ code: "NOT_FOUND" });
 
-      return ctx.prisma.categoryLineItem.findMany({
+      return ctx.prisma.budgetLineItem.findMany({
         where: { categoryId: input.categoryId },
         orderBy: { sortOrder: "asc" },
       });
@@ -491,12 +491,12 @@ export const categoryRouter = router({
       const computedMonthly = Math.round(yearlyTotal / 12);
 
       await ctx.prisma.$transaction([
-        ctx.prisma.categoryLineItem.deleteMany({
+        ctx.prisma.budgetLineItem.deleteMany({
           where: { categoryId: input.categoryId },
         }),
         ...(input.items.length > 0
           ? [
-              ctx.prisma.categoryLineItem.createMany({
+              ctx.prisma.budgetLineItem.createMany({
                 data: input.items.map((li) => ({
                   categoryId: input.categoryId,
                   description: li.description,

@@ -62,9 +62,9 @@ export default function EditTransactionPage({
         categoryId: txn.categoryId ?? "",
         notes: txn.notes ?? "",
         tagIds: txn.tags.map((t: { tag: { id: string } }) => t.tag.id),
-        investmentAssetId: txn.investmentAssetId ?? "",
-        quantity: txn.quantity ? String(txn.quantity) : "",
-        unitPrice: txn.unitPrice != null ? String(fromCents(txn.unitPrice)) : "",
+        investmentAssetId: txn.investmentDetail?.investmentAssetId ?? "",
+        quantity: txn.investmentDetail?.quantity ? String(txn.investmentDetail.quantity) : "",
+        unitPrice: txn.investmentDetail?.unitPrice != null ? String(fromCents(txn.investmentDetail.unitPrice)) : "",
       });
     }
   }, [txnQuery.data, form]);

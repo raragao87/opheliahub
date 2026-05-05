@@ -356,12 +356,12 @@ export const fundRouter = router({
       const computedMonthly = Math.round(yearlyTotal / 12);
 
       await ctx.prisma.$transaction([
-        ctx.prisma.fundLineItem.deleteMany({
+        ctx.prisma.budgetLineItem.deleteMany({
           where: { fundId: input.fundId },
         }),
         ...(input.items.length > 0
           ? [
-              ctx.prisma.fundLineItem.createMany({
+              ctx.prisma.budgetLineItem.createMany({
                 data: input.items.map((li) => ({
                   fundId: input.fundId,
                   description: li.description,

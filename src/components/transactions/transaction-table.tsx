@@ -65,11 +65,13 @@ export interface TransactionItem {
   opheliaCategory?: { id: string; name: string } | null;
   opheliaConfidence?: number | null;
   opheliaDisplayName?: string | null;
-  // Investment fields
-  investmentAssetId?: string | null;
-  investmentAsset?: { id: string; ticker: string | null; name: string; type: string } | null;
-  quantity?: unknown; // Prisma Decimal — rendered via toString()
-  unitPrice?: number | null;
+  // Investment detail (1:1 relation)
+  investmentDetail?: {
+    investmentAssetId: string;
+    investmentAsset: { id: string; ticker: string | null; name: string; type: string };
+    quantity: unknown; // Prisma Decimal — rendered via toString()
+    unitPrice: number;
+  } | null;
 }
 
 interface CategoryOption {
@@ -1320,13 +1322,13 @@ function TransactionRow({
         {isInvestmentAccount && !isTransfer && (
           <span className="mr-1">
             <InlineAssetSelect
-              value={txn.investmentAssetId ?? null}
-              displayText={txn.investmentAsset?.ticker ?? txn.investmentAsset?.name ?? null}
+              value={txn.investmentDetail?.investmentAssetId ?? null}
+              displayText={txn.investmentDetail?.investmentAsset?.ticker ?? txn.investmentDetail?.investmentAsset?.name ?? null}
               assets={assets ?? []}
               onChange={(assetId) => onUpdate(txn.id, { investmentAssetId: assetId })}
             />
-            {txn.quantity != null && (
-              <span className="text-[10px] text-muted-foreground ml-0.5">×{String(txn.quantity)}</span>
+            {txn.investmentDetail?.quantity != null && (
+              <span className="text-[10px] text-muted-foreground ml-0.5">×{String(txn.investmentDetail.quantity)}</span>
             )}
           </span>
         )}

@@ -309,19 +309,14 @@ model Transaction {
   linkedTransaction   Transaction?  @relation("TransferLink", fields: [linkedTransactionId], references: [id])
   linkedBy            Transaction?  @relation("TransferLink")
 
-  // Investment-specific (null for non-investment transactions)
-  investmentAssetId String?
-  quantity          Decimal?  @db.Decimal(18, 8) // shares/units — 8 decimal places for crypto
-  unitPrice         Int?      // price per unit in transaction currency (cents)
-
-  account         FinancialAccount @relation(fields: [accountId], references: [id])
-  category        Category?        @relation("UserCategory", fields: [categoryId], references: [id])
-  fund            Fund?            @relation(fields: [fundId], references: [id])
-  opheliaCategory Category?        @relation("OpheliaCategory", fields: [opheliaCategoryId], references: [id])
-  investmentAsset InvestmentAsset? @relation(fields: [investmentAssetId], references: [id])
-  user            User             @relation(fields: [userId], references: [id])
-  importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id])
-  tags            TransactionTag[]
+  account          FinancialAccount  @relation(fields: [accountId], references: [id])
+  category         Category?         @relation("UserCategory", fields: [categoryId], references: [id])
+  fund             Fund?             @relation(fields: [fundId], references: [id])
+  opheliaCategory  Category?         @relation("OpheliaCategory", fields: [opheliaCategoryId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
+  importBatch      ImportBatch?      @relation(fields: [importBatchId], references: [id])
+  tags             TransactionTag[]
+  investmentDetail InvestmentDetail?
 
   @@index([userId])
   @@index([accountId])
@@ -333,7 +328,6 @@ model Transaction {
   @@index([categoryId, date])
   @@index([fundId, date])
   @@index([effectiveCategoryId])
-  @@index([investmentAssetId])
   @@index([deletedAt])
   @@map("transactions")
 }
@@ -377,23 +371,27 @@ model Category {
   opheliaTransactions Transaction[]      @relation("OpheliaCategory")
   allocations         TrackerAllocation[]
   recurringRules      RecurringRule[]
-  lineItems           CategoryLineItem[]
+  lineItems           BudgetLineItem[]
 
   @@unique([householdId, name, parentId, visibility])
   @@map("categories")
 }
 
-model CategoryLineItem {
-  id          String   @id @default(cuid())
-  categoryId  String
+model BudgetLineItem {
+  id          String  @id @default(cuid())
+  categoryId  String?
+  fundId      String?
   description String
   period      Int
   amount      Int
-  sortOrder   Int      @default(0)
+  sortOrder   Int     @default(0)
 
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  fund     Fund?     @relation(fields: [fundId], references: [id], onDelete: Cascade)
 
-  @@map("category_line_items")
+  @@index([categoryId])
+  @@index([fundId])
+  @@map("budget_line_items")
 }
 
 model TagGroup {
@@ -522,13 +520,27 @@ model InvestmentAsset {
   isin        String?   // International Securities ID (optional)
   householdId String
 
-  household    Household     @relation(fields: [householdId], references: [id])
-  transactions Transaction[]
+  household         Household          @relation(fields: [householdId], references: [id])
+  investmentDetails InvestmentDetail[]
 
   @@unique([householdId, ticker])
   @@unique([householdId, isin])
   @@index([householdId])
   @@map("investment_assets")
+}
+
+model InvestmentDetail {
+  id                String  @id @default(cuid())
+  transactionId     String  @unique
+  investmentAssetId String
+  quantity          Decimal @db.Decimal(18, 8)
+  unitPrice         Int
+
+  transaction     Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  investmentAsset InvestmentAsset @relation(fields: [investmentAssetId], references: [id])
+
+  @@index([investmentAssetId])
+  @@map("investment_details")
 }
 
 // ─── CURRENCY RATES ─────────────────────────────────────────────────
@@ -695,7 +707,7 @@ model Fund {
   user          User              @relation(fields: [userId], references: [id])
   linkedAccount FinancialAccount? @relation(fields: [linkedAccountId], references: [id])
   entries       FundEntry[]
-  lineItems     FundLineItem[]
+  lineItems     BudgetLineItem[]
   transactions  Transaction[]
   allocations   FundTrackerAllocation[]
 
@@ -703,19 +715,6 @@ model Fund {
   @@map("funds")
 }
 
-model FundLineItem {
-  id          String @id @default(cuid())
-  fundId      String
-  description String
-  period      Int    // times per year (1=yearly, 2=biannual, 4=quarterly, 12=monthly)
-  amount      Int    // cents — cost per single occurrence
-  sortOrder   Int    @default(0)
-
-  fund Fund @relation(fields: [fundId], references: [id], onDelete: Cascade)
-
-  @@index([fundId])
-  @@map("fund_line_items")
-}
 
 model FundEntry {
   id        String        @id @default(cuid())
