@@ -24,12 +24,15 @@ import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
  *
  */
 export async function POST(req: Request) {
-  // Verify the cron secret (set in .env as OPHELIA_CRON_SECRET)
-  const secret = env.OPHELIA_CRON_SECRET;
+  // Verify authorization — support both local PM2 and Vercel cron
   const authHeader = req.headers.get("authorization");
   const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const vercelCron = req.headers.get("x-vercel-cron");
 
-  if (!secret || !provided || provided !== secret) {
+  const isLocalCron = env.OPHELIA_CRON_SECRET && provided === env.OPHELIA_CRON_SECRET;
+  const isVercelCron = process.env.VERCEL && vercelCron;
+
+  if (!isLocalCron && !isVercelCron) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
