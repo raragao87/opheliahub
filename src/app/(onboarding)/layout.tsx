@@ -19,5 +19,11 @@ export default async function OnboardingLayout({ children }: { children: React.R
     redirect("/dashboard");
   }
 
-  return <Providers>{children}</Providers>;
+  return (
+    <Providers>
+      <div className="dark">
+        {children}
+      </div>
+    </Providers>
+  );
 }
