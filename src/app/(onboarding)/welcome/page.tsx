@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   Loader2,
 } from "lucide-react";
-import type { Language } from "@/lib/translations";
+import { t, type Language } from "@/lib/translations";
+import { useUserPreferences } from "@/lib/user-preferences-context";
 
 const LANGUAGE_OPTIONS: { code: Language; flag: string; label: string }[] = [
   { code: "en", flag: "🇬🇧", label: "English" },
@@ -64,6 +65,8 @@ export default function WelcomePage() {
   const trpc = useTRPC();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { preferences } = useUserPreferences();
+  const lang = preferences.language;
 
   const [step, setStep] = useState<Step>("language");
   const [householdName, setHouseholdName] = useState("");
@@ -130,6 +133,8 @@ export default function WelcomePage() {
     })
   );
 
+  const firstName = user?.name?.split(" ")[0] ?? "";
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -152,7 +157,7 @@ export default function WelcomePage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
-              Back
+              {t(lang, "onboarding.back")}
             </button>
           )}
 
@@ -169,16 +174,16 @@ export default function WelcomePage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {LANGUAGE_OPTIONS.map((lang) => (
+                {LANGUAGE_OPTIONS.map((option) => (
                   <button
-                    key={lang.code}
-                    onClick={() => languageMutation.mutate({ language: lang.code })}
+                    key={option.code}
+                    onClick={() => languageMutation.mutate({ language: option.code })}
                     disabled={languageMutation.isPending}
                     className="group relative rounded-xl bg-surface-container-low border border-outline-variant p-5 flex flex-col items-center gap-3 transition-all hover:bg-surface-container hover:border-primary/40 hover:shadow-[0_0_20px_rgba(165,180,252,0.1)] active:scale-[0.98]"
                   >
-                    <span className="text-4xl">{lang.flag}</span>
+                    <span className="text-4xl">{option.flag}</span>
                     <span className="font-display font-semibold text-foreground text-sm">
-                      {lang.label}
+                      {option.label}
                     </span>
                   </button>
                 ))}
@@ -189,24 +194,22 @@ export default function WelcomePage() {
           {/* STEP: choose */}
           {step === "choose" && (
             <div className="space-y-6">
-              {/* Greeting */}
               <div className="text-center space-y-4">
                 <div className="flex justify-center">
                   <UserAvatar src={user?.image} name={user?.name} size={72} />
                 </div>
                 <div>
                   <h1 className="text-2xl font-display font-bold text-foreground">
-                    Welcome to OpheliaHub
-                    {user?.name ? `, ${user.name.split(" ")[0]}` : ""}!
+                    {firstName
+                      ? t(lang, "onboarding.welcomeName").replace("{name}", firstName)
+                      : t(lang, "onboarding.welcome")}
                   </h1>
                   <p className="text-muted-foreground mt-1.5 text-sm">
-                    Let&apos;s get your household set up so you can start
-                    tracking your finances together.
+                    {t(lang, "onboarding.setupDesc")}
                   </p>
                 </div>
               </div>
 
-              {/* Options */}
               <div className="space-y-3">
                 <button
                   onClick={() => setStep("create")}
@@ -218,11 +221,10 @@ export default function WelcomePage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-foreground">
-                        Create a household
+                        {t(lang, "onboarding.createHousehold")}
                       </p>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Start fresh. You&apos;ll be the owner and can invite
-                        your partner later.
+                        {t(lang, "onboarding.createHouseholdDesc")}
                       </p>
                     </div>
                     <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 mt-0.5" />
@@ -239,11 +241,10 @@ export default function WelcomePage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-foreground">
-                        I was invited
+                        {t(lang, "onboarding.iWasInvited")}
                       </p>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Your partner already set things up. Check for a
-                        pending invitation.
+                        {t(lang, "onboarding.iWasInvitedDesc")}
                       </p>
                     </div>
                     <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 mt-0.5" />
@@ -258,10 +259,10 @@ export default function WelcomePage() {
             <div className="space-y-6">
               <div>
                 <h1 className="text-2xl font-display font-bold text-foreground">
-                  Create your household
+                  {t(lang, "onboarding.createYourHousehold")}
                 </h1>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  Give your household a name — you can always change it later.
+                  {t(lang, "onboarding.createHouseholdNameDesc")}
                 </p>
               </div>
 
@@ -276,7 +277,9 @@ export default function WelcomePage() {
                   className="space-y-4"
                 >
                   <div className="space-y-2">
-                    <Label htmlFor="householdName" className="text-foreground">Household name</Label>
+                    <Label htmlFor="householdName" className="text-foreground">
+                      {t(lang, "household.householdName")}
+                    </Label>
                     <Input
                       id="householdName"
                       placeholder="e.g., The Johnson Family"
@@ -296,11 +299,11 @@ export default function WelcomePage() {
                     {createMutation.isPending ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creating...
+                        {t(lang, "household.creating")}
                       </>
                     ) : (
                       <>
-                        Create household
+                        {t(lang, "household.createBtn")}
                         <ArrowRight className="h-4 w-4 ml-2" />
                       </>
                     )}
@@ -318,11 +321,10 @@ export default function WelcomePage() {
                   <Check className="h-7 w-7 text-emerald-400" />
                 </div>
                 <h1 className="text-2xl font-display font-bold text-foreground">
-                  Household created!
+                  {t(lang, "onboarding.householdCreated")}
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                  &ldquo;{householdName}&rdquo; is ready. Would you like to
-                  invite your partner now?
+                  {t(lang, "onboarding.householdReady").replace("{name}", householdName)}
                 </p>
               </div>
 
@@ -334,17 +336,17 @@ export default function WelcomePage() {
                     </div>
                     <div>
                       <p className="font-semibold text-sm text-foreground">
-                        Invite your partner
+                        {t(lang, "onboarding.invitePartner")}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        They&apos;ll see a pending invite when they sign in.
+                        {t(lang, "onboarding.invitePartnerDesc")}
                       </p>
                     </div>
                   </div>
                   {inviteSent ? (
                     <div className="flex items-center gap-2 text-sm text-emerald-300 bg-emerald-500/10 rounded-lg px-3 py-2 border border-emerald-500/20">
                       <Check className="h-4 w-4" />
-                      Invitation sent! They&apos;ll see it when they sign in.
+                      {t(lang, "onboarding.inviteSent")}
                     </div>
                   ) : (
                     <form
@@ -358,7 +360,7 @@ export default function WelcomePage() {
                     >
                       <Input
                         type="email"
-                        placeholder="partner@email.com"
+                        placeholder={t(lang, "household.invitePlaceholder")}
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
                         className="flex-1"
@@ -370,7 +372,7 @@ export default function WelcomePage() {
                         {inviteMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          "Invite"
+                          t(lang, "household.invite")
                         )}
                       </Button>
                     </form>
@@ -385,7 +387,7 @@ export default function WelcomePage() {
                   className="w-full text-muted-foreground hover:text-foreground"
                   onClick={() => router.push("/dashboard")}
                 >
-                  Skip for now, take me to the dashboard
+                  {t(lang, "onboarding.skipToDashboard")}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </div>
@@ -397,10 +399,10 @@ export default function WelcomePage() {
             <div className="space-y-6">
               <div>
                 <h1 className="text-2xl font-display font-bold text-foreground">
-                  Check your invitation
+                  {t(lang, "onboarding.checkInvitation")}
                 </h1>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  Looking for a pending invitation for{" "}
+                  {t(lang, "onboarding.lookingForInvite")}{" "}
                   <span className="font-medium text-foreground">{user?.email}</span>...
                 </p>
               </div>
@@ -419,10 +421,10 @@ export default function WelcomePage() {
                     />
                     <div>
                       <p className="font-semibold text-foreground">
-                        {pendingInviteQuery.data.invitedByName} invited you
+                        {pendingInviteQuery.data.invitedByName} {t(lang, "onboarding.invitedYou")}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        to join{" "}
+                        {t(lang, "onboarding.toJoin")}{" "}
                         <span className="font-medium text-foreground">
                           {pendingInviteQuery.data.householdName}
                         </span>
@@ -441,7 +443,7 @@ export default function WelcomePage() {
                       ) : (
                         <>
                           <Check className="h-4 w-4 mr-1" />
-                          Accept &amp; join
+                          {t(lang, "onboarding.acceptAndJoin")}
                         </>
                       )}
                     </Button>
@@ -455,7 +457,7 @@ export default function WelcomePage() {
                       ) : (
                         <>
                           <X className="h-4 w-4 mr-1" />
-                          Decline
+                          {t(lang, "onboarding.decline")}
                         </>
                       )}
                     </Button>
@@ -468,10 +470,10 @@ export default function WelcomePage() {
                       <Mail className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <p className="font-medium text-foreground">
-                      No invitation found
+                      {t(lang, "onboarding.noInvitation")}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Ask your partner to invite you using your email:{" "}
+                      {t(lang, "onboarding.askPartnerToInvite")}{" "}
                       <span className="font-medium text-foreground">
                         {user?.email}
                       </span>
@@ -483,7 +485,7 @@ export default function WelcomePage() {
                     onClick={() => setStep("choose")}
                   >
                     <ChevronLeft className="h-4 w-4 mr-1" />
-                    Create your own household instead
+                    {t(lang, "onboarding.createInstead")}
                   </Button>
                 </div>
               )}
