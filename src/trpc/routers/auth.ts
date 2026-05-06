@@ -180,18 +180,14 @@ export const authRouter = router({
               data: { ownerId: partnerId },
             });
 
-            // Reassign transactions on shared accounts to partner
-            const sharedAccounts = await tx.financialAccount.findMany({
-              where: { householdId, ownership: "SHARED" },
-              select: { id: true },
+            // Reassign ALL transactions by this user to the partner.
+            // This covers shared-account txns, txns the user created on
+            // the partner's personal accounts (e.g. via import), and any
+            // other edge cases. Personal-account txns are deleted later.
+            await tx.transaction.updateMany({
+              where: { userId },
+              data: { userId: partnerId },
             });
-            const sharedAccountIds = sharedAccounts.map((a) => a.id);
-            if (sharedAccountIds.length > 0) {
-              await tx.transaction.updateMany({
-                where: { userId, accountId: { in: sharedAccountIds } },
-                data: { userId: partnerId },
-              });
-            }
 
             // Reassign shared tags to partner
             await tx.tag.updateMany({
