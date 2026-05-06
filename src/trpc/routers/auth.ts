@@ -180,6 +180,19 @@ export const authRouter = router({
               data: { ownerId: partnerId },
             });
 
+            // Reassign transactions on shared accounts to partner
+            const sharedAccounts = await tx.financialAccount.findMany({
+              where: { householdId, ownership: "SHARED" },
+              select: { id: true },
+            });
+            const sharedAccountIds = sharedAccounts.map((a) => a.id);
+            if (sharedAccountIds.length > 0) {
+              await tx.transaction.updateMany({
+                where: { userId, accountId: { in: sharedAccountIds } },
+                data: { userId: partnerId },
+              });
+            }
+
             // Reassign shared tags to partner
             await tx.tag.updateMany({
               where: { userId, visibility: "SHARED" },
@@ -189,6 +202,18 @@ export const authRouter = router({
             // Reassign shared tag groups to partner
             await tx.tagGroup.updateMany({
               where: { userId, visibility: "SHARED" },
+              data: { userId: partnerId },
+            });
+
+            // Reassign shared funds to partner
+            await tx.fund.updateMany({
+              where: { userId, visibility: "SHARED" },
+              data: { userId: partnerId },
+            });
+
+            // Reassign shared recurring rules to partner
+            await tx.recurringRule.updateMany({
+              where: { userId, householdId },
               data: { userId: partnerId },
             });
 
@@ -294,14 +319,26 @@ export const authRouter = router({
           // TagGroups (remaining after reassignment)
           await tx.tagGroup.deleteMany({ where: { userId } });
 
-          // Assets, Debts, Goals
-          // DismissedRecurringPattern (also has cascade on User, but explicit is safer)
+          // Funds (remaining after shared fund reassignment — personal funds)
+          // Null out fundId on any transactions referencing these funds
+          const remainingFundIds = await tx.fund
+            .findMany({ where: { userId }, select: { id: true } })
+            .then((rows) => rows.map((r) => r.id));
+          if (remainingFundIds.length > 0) {
+            await tx.transaction.updateMany({
+              where: { fundId: { in: remainingFundIds } },
+              data: { fundId: null },
+            });
+          }
+          await tx.fund.deleteMany({ where: { userId } });
+
+          // ChatConversation, NetWorthSnapshot, Note
+          await tx.chatConversation.deleteMany({ where: { userId } });
+          await tx.netWorthSnapshot.deleteMany({ where: { userId } });
+          await tx.note.deleteMany({ where: { userId } });
+
           await tx.dismissedRecurringPattern.deleteMany({ where: { userId } });
-
-          // OpheliaFeedback (FK to User via onDelete:Cascade, explicit for safety)
           await tx.opheliaFeedback.deleteMany({ where: { userId } });
-
-          // AuditLog (FK to User — must delete before User)
           await tx.auditLog.deleteMany({ where: { userId } });
 
           // PendingInvites sent by this user
@@ -314,12 +351,9 @@ export const authRouter = router({
           await tx.session.deleteMany({ where: { userId } });
           await tx.account.deleteMany({ where: { userId } });
 
-          // ── Delete the user ─────────────────────────────────────────
-          await tx.user.delete({ where: { id: userId } });
-
           // ── PHASE 4: Household cleanup if user was the last member ──
+          // Must run BEFORE user delete — shared transactions reference userId
           if (!partnerId && householdId) {
-            // All household accounts (any ownership since no partner)
             const householdAccounts = await tx.financialAccount.findMany({
               where: { householdId },
               select: { id: true },
@@ -327,30 +361,27 @@ export const authRouter = router({
             const householdAccountIds = householdAccounts.map((a) => a.id);
 
             if (householdAccountIds.length > 0) {
-              // ImportProfiles on these accounts
               await tx.importProfile.deleteMany({
                 where: { accountId: { in: householdAccountIds } },
               });
-              // Transactions (TransactionTag cascades)
               await tx.transaction.deleteMany({
                 where: { accountId: { in: householdAccountIds } },
               });
-              // The accounts themselves
               await tx.financialAccount.deleteMany({ where: { householdId } });
             }
 
-            // Categories (delete children before parents to avoid FK self-ref issues)
             await tx.category.deleteMany({
               where: { householdId, parentId: { not: null } },
             });
             await tx.category.deleteMany({ where: { householdId } });
 
-            // TagGroups (remaining household-level ones with null userId)
             await tx.tagGroup.deleteMany({ where: { householdId } });
 
-            // Household (DismissedRecurringPattern and OpheliaFeedback cascade via onDelete:Cascade)
             await tx.household.delete({ where: { id: householdId } });
           }
+
+          // ── Delete the user ─────────────────────────────────────────
+          await tx.user.delete({ where: { id: userId } });
         },
         { timeout: 30_000 }
       );
