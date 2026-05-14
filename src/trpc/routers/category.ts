@@ -51,6 +51,13 @@ export const categoryRouter = router({
         ? { type: input.type }
         : {};
 
+      const txnCountFilter = {
+        where: {
+          deletedAt: null,
+          ...(input?.budgetScope && { account: { ownership: input.budgetScope } }),
+        },
+      };
+
       return ctx.prisma.category.findMany({
         where: {
           householdId: ctx.householdId,
@@ -64,10 +71,10 @@ export const categoryRouter = router({
             where: visibilityFilter,
             orderBy: { sortOrder: "asc" },
             include: {
-              _count: { select: { transactions: true, lineItems: true } },
+              _count: { select: { transactions: txnCountFilter, lineItems: true } },
             },
           },
-          _count: { select: { transactions: true, children: true, lineItems: true } },
+          _count: { select: { transactions: txnCountFilter, children: true, lineItems: true } },
         },
       });
     }),
@@ -166,7 +173,7 @@ export const categoryRouter = router({
       const category = await ctx.prisma.category.findFirst({
         where: { id: input.id, householdId: ctx.householdId },
         include: {
-          _count: { select: { transactions: true, children: true } },
+          _count: { select: { children: true } },
         },
       });
 
@@ -181,17 +188,27 @@ export const categoryRouter = router({
         });
       }
 
-      if (category._count.transactions > 0) {
+      const scopedTxnFilter = {
+        categoryId: input.id,
+        deletedAt: null,
+        account: { ownership: category.budgetScope },
+      };
+
+      const scopedCount = await ctx.prisma.transaction.count({
+        where: scopedTxnFilter,
+      });
+
+      if (scopedCount > 0) {
         if (!input.reassignTo) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: `HAS_TRANSACTIONS:${category._count.transactions}`,
+            message: `HAS_TRANSACTIONS:${scopedCount}`,
           });
         }
 
         if (input.reassignTo === "uncategorized") {
           await ctx.prisma.transaction.updateMany({
-            where: { categoryId: input.id },
+            where: scopedTxnFilter,
             data: { categoryId: null, effectiveCategoryId: null },
           });
         } else if (input.reassignTo === "category" && input.targetCategoryId) {
@@ -202,11 +219,17 @@ export const categoryRouter = router({
             throw new TRPCError({ code: "NOT_FOUND", message: "Target category not found." });
           }
           await ctx.prisma.transaction.updateMany({
-            where: { categoryId: input.id },
+            where: scopedTxnFilter,
             data: { categoryId: input.targetCategoryId, effectiveCategoryId: input.targetCategoryId },
           });
         }
       }
+
+      // Also clear any cross-scope orphans pointing to this category
+      await ctx.prisma.transaction.updateMany({
+        where: { categoryId: input.id },
+        data: { categoryId: null, effectiveCategoryId: null },
+      });
 
       // Clear effectiveCategoryId for any transactions referencing this category
       // via opheliaCategoryId (where it was the Ophelia suggestion, not user-confirmed)

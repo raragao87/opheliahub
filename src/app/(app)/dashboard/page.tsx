@@ -77,17 +77,6 @@ export default function DashboardPage() {
 
   const monthName = new Date(year, month - 1).toLocaleString("default", { month: "long" });
 
-  if (reviewQuery.error && !reviewQuery.data) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Set up your household and add accounts to see your financial overview.
-        </p>
-      </div>
-    );
-  }
-
   const review = reviewQuery.data;
   const deltas = review?.deltas;
   const funds = fundSummaryQuery.data;
@@ -95,7 +84,6 @@ export default function DashboardPage() {
   const recentTxns = recentTxnsQuery.data ?? [];
   const trend = trendQuery.data;
 
-  // Ophelia page context
   const { setPageSummary } = useOpheliaChat();
   useEffect(() => {
     if (!review) return;
@@ -110,6 +98,17 @@ export default function DashboardPage() {
     }
     setPageSummary(parts.join(", "));
   }, [review, setPageSummary]);
+
+  if (reviewQuery.error && !reviewQuery.data) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Set up your household and add accounts to see your financial overview.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

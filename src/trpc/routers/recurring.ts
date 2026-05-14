@@ -280,9 +280,10 @@ export const recurringRouter = router({
       // 1. Fetch all active recurring rules (liquid accounts only)
       const allRules = await ctx.prisma.recurringRule.findMany({
         where: {
-          ...recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
-          isActive: true,
-          account: { type: { in: SPENDING_ACCOUNT_TYPES } },
+          AND: [
+            recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
+            { isActive: true, account: { type: { in: SPENDING_ACCOUNT_TYPES } } },
+          ],
         },
         include: {
           account: { select: { id: true, name: true, type: true, ownership: true } },

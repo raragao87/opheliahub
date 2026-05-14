@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
+import { captureNetWorthSnapshot } from "@/lib/finance/net-worth-snapshot";
 
 export const accountRouter = router({
   list: householdProcedure.query(async ({ ctx }) => {
@@ -193,7 +194,7 @@ export const accountRouter = router({
 
       // Force delete: soft-delete all transactions, then soft-delete account
       if (input.force) {
-        return ctx.prisma.$transaction(async (tx) => {
+        const result = await ctx.prisma.$transaction(async (tx) => {
           const now = new Date();
 
           // Get all transaction IDs in this account
@@ -240,21 +241,47 @@ export const accountRouter = router({
             data: { deletedAt: now, isActive: false },
           });
         });
+
+        await captureNetWorthSnapshot(
+          ctx.prisma, ctx.householdId, ctx.userId,
+          account.ownership as "SHARED" | "PERSONAL",
+          new Date().getFullYear(), new Date().getMonth() + 1,
+        ).catch(() => {});
+
+        return result;
       }
 
       // No transactions → soft-delete directly
       if (account._count.transactions === 0) {
-        return ctx.prisma.financialAccount.update({
+        const deleted = await ctx.prisma.financialAccount.update({
           where: { id: input.id },
           data: { deletedAt: new Date(), isActive: false },
         });
+
+        const now = new Date();
+        await captureNetWorthSnapshot(
+          ctx.prisma, ctx.householdId, ctx.userId,
+          account.ownership as "SHARED" | "PERSONAL",
+          now.getFullYear(), now.getMonth() + 1,
+        ).catch(() => {});
+
+        return deleted;
       }
 
       // Has transactions but no force → archive (not a delete, just hide from active views)
-      return ctx.prisma.financialAccount.update({
+      const archived = await ctx.prisma.financialAccount.update({
         where: { id: input.id },
         data: { isActive: false },
       });
+
+      const now = new Date();
+      await captureNetWorthSnapshot(
+        ctx.prisma, ctx.householdId, ctx.userId,
+        account.ownership as "SHARED" | "PERSONAL",
+        now.getFullYear(), now.getMonth() + 1,
+      ).catch(() => {});
+
+      return archived;
     }),
 
   restore: householdProcedure

@@ -36,6 +36,8 @@ export async function captureNetWorthSnapshot(
     },
   });
 
+  if (accounts.length === 0) return null;
+
   const assetAccounts = accounts.filter((a) => !ACCOUNT_TYPE_META[a.type]?.isLiability);
   const liabilityAccounts = accounts.filter((a) => ACCOUNT_TYPE_META[a.type]?.isLiability);
 
@@ -125,6 +127,8 @@ export async function backfillNetWorthSnapshots(
         : { ownerId: userId, ownership: "PERSONAL", isActive: true, deletedAt: null },
     select: { id: true, name: true, type: true, balance: true, currency: true },
   });
+
+  if (accounts.length === 0) return 0;
 
   const now = new Date();
   let created = 0;
