@@ -74,8 +74,10 @@ const SHARED_CATEGORY_GROUPS: CategoryGroup[] = [
     icon: "🔄",
     color: "#6b7280",
     sortOrder: 40,
+    type: "TRANSFER",
     children: [
-      { name: "Transfer", icon: "🔄", color: "#6b7280", sortOrder: 0 },
+      { name: "Matched", icon: "🔗", color: "#6b7280", sortOrder: 0 },
+      { name: "Unmatched", icon: "🔄", color: "#6b7280", sortOrder: 1 },
     ],
   },
   {
@@ -165,8 +167,10 @@ const PERSONAL_CATEGORY_GROUPS: CategoryGroup[] = [
     icon: "🔄",
     color: "#6b7280",
     sortOrder: 30,
+    type: "TRANSFER",
     children: [
-      { name: "Transfer", icon: "🔄", color: "#6b7280", sortOrder: 0 },
+      { name: "Matched", icon: "🔗", color: "#6b7280", sortOrder: 0 },
+      { name: "Unmatched", icon: "🔄", color: "#6b7280", sortOrder: 1 },
     ],
   },
   {
