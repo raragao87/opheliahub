@@ -13,7 +13,7 @@ async function computeAutoCarryForward(
   prisma: any,
   householdId: string,
   userId: string,
-  visibility: "SHARED" | "PERSONAL",
+  budgetScope: "SHARED" | "PERSONAL",
   year: number,
   month: number,
 ): Promise<number> {
@@ -21,12 +21,12 @@ async function computeAutoCarryForward(
 
   const prevTracker = await prisma.tracker.findUnique({
     where: {
-      householdId_userId_month_year_visibility: {
+      householdId_userId_month_year_budgetScope: {
         householdId,
         userId,
         month: prev.month,
         year: prev.year,
-        visibility,
+        budgetScope,
       },
     },
     select: { id: true, toNextMonth: true },
@@ -47,18 +47,18 @@ export const trackerRouter = router({
       z.object({
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2020).max(2100),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .query(async ({ ctx, input }) => {
       let tracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
         include: {
@@ -76,7 +76,7 @@ export const trackerRouter = router({
           data: {
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
             householdId: ctx.householdId,
             userId: ctx.userId,
           },
@@ -123,18 +123,18 @@ export const trackerRouter = router({
       z.object({
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2020).max(2100),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .query(async ({ ctx, input }) => {
       const tracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
         include: {
@@ -150,7 +150,7 @@ export const trackerRouter = router({
 
       // Visibility filter for transactions — derived from account ownership
       const visibilityFilter = transactionOwnershipFilter(
-        ctx.userId, ctx.householdId, input.visibility
+        ctx.userId, ctx.householdId, input.budgetScope
       );
 
       // Only consider spending account transactions for budgeting
@@ -168,7 +168,7 @@ export const trackerRouter = router({
 
       // Fetch leaf category IDs by type (used to scope actual income/expense to correct category types)
       const leafCategories = await ctx.prisma.category.findMany({
-        where: { householdId: ctx.householdId, parentId: { not: null }, visibility: input.visibility },
+        where: { householdId: ctx.householdId, parentId: { not: null }, budgetScope: input.budgetScope },
         select: { id: true, type: true },
       });
       const incomeCategoryIds = leafCategories.filter((c) => c.type === "INCOME").map((c) => c.id);
@@ -258,8 +258,8 @@ export const trackerRouter = router({
           type: { in: INVESTMENT_ACCOUNT_TYPES },
           isActive: true,
           deletedAt: null,
-          ownership: input.visibility,
-          ...(input.visibility === "SHARED"
+          ownership: input.budgetScope,
+          ...(input.budgetScope === "SHARED"
             ? { householdId: ctx.householdId }
             : { ownerId: ctx.userId }),
         },
@@ -440,7 +440,7 @@ export const trackerRouter = router({
 
       // Compute carry-in (always auto from previous month's toNextMonth)
       const carryIn = await computeAutoCarryForward(
-        ctx.prisma, ctx.householdId, ctx.userId, input.visibility, input.year, input.month
+        ctx.prisma, ctx.householdId, ctx.userId, input.budgetScope, input.year, input.month
       );
 
       // Compute and persist "to next month"
@@ -551,18 +551,18 @@ export const trackerRouter = router({
       z.object({
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2020).max(2100),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .query(async ({ ctx, input }) => {
       const tracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
         include: {
@@ -586,7 +586,7 @@ export const trackerRouter = router({
       const { start, end } = getMonthRange(input.year, input.month);
 
       const visibilityFilter = transactionOwnershipFilter(
-        ctx.userId, ctx.householdId, input.visibility
+        ctx.userId, ctx.householdId, input.budgetScope
       );
 
       // Fetch expense transactions with tags for this month (spending accounts only)
@@ -672,7 +672,7 @@ export const trackerRouter = router({
       z.object({
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2020).max(2100),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -681,12 +681,12 @@ export const trackerRouter = router({
       // Find previous month's tracker
       const prevTracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: prev.month,
             year: prev.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
         include: { allocations: true, tagAllocations: true },
@@ -702,12 +702,12 @@ export const trackerRouter = router({
       // Find or create the current month's tracker
       let currentTracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
       });
@@ -717,7 +717,7 @@ export const trackerRouter = router({
           data: {
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
             householdId: ctx.householdId,
             userId: ctx.userId,
           },
@@ -841,18 +841,18 @@ export const trackerRouter = router({
       z.object({
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2020).max(2100),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const tracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
       });

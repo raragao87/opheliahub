@@ -25,14 +25,14 @@ export async function POST(request: Request) {
   const errors: string[] = [];
 
   for (const { householdId, userId } of memberships) {
-    for (const visibility of ["SHARED", "PERSONAL"] as const) {
+    for (const scope of ["SHARED", "PERSONAL"] as const) {
       try {
         const created = await backfillNetWorthSnapshots(
-          prisma, householdId, userId, visibility, monthsBack
+          prisma, householdId, userId, scope, monthsBack
         );
         total += created;
       } catch (err) {
-        errors.push(`${householdId}/${userId}/${visibility}: ${String(err)}`);
+        errors.push(`${householdId}/${userId}/${scope}: ${String(err)}`);
       }
     }
   }

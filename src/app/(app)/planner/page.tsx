@@ -43,7 +43,7 @@ export default function PlannerPage() {
 function PlannerContent() {
   const searchParams = useSearchParams();
   const trpc = useTRPC();
-  const { visibilityParam } = useOwnership();
+  const { budgetScopeParam } = useOwnership();
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const param = searchParams.get("tab");
@@ -76,15 +76,14 @@ function PlannerContent() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showMonthPicker]);
 
-  // Visibility
-  const visibility = visibilityParam ?? "SHARED";
+  const budgetScope = budgetScopeParam ?? "SHARED";
 
   // Need tracker for loading state
   const trackerQuery = useQuery(
     trpc.tracker.getOrCreate.queryOptions({
       month: period.month,
       year: period.year,
-      visibility,
+      budgetScope,
     })
   );
 
@@ -206,10 +205,10 @@ function PlannerContent() {
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Badge
-            variant={visibility === "SHARED" ? "shared" : "personal"}
+            variant={budgetScope === "SHARED" ? "shared" : "personal"}
             className="text-[10px] ml-1"
           >
-            {visibility === "SHARED" ? "Shared" : "Personal"}
+            {budgetScope === "SHARED" ? "Shared" : "Personal"}
           </Badge>
         </div>
       </div>
@@ -234,22 +233,22 @@ function PlannerContent() {
 
       {/* ── Upcoming Tab ───────────────────────────────────────────── */}
       {activeTab === "upcoming" && (
-        <UpcomingTab month={period.month} year={period.year} visibility={visibility} />
+        <UpcomingTab month={period.month} year={period.year} budgetScope={budgetScope} />
       )}
 
       {/* ── Cost Analysis Tab ──────────────────────────────────────── */}
       {activeTab === "cost-analysis" && (
-        <CostAnalysisTab month={period.month} year={period.year} visibility={visibility} />
+        <CostAnalysisTab month={period.month} year={period.year} budgetScope={budgetScope} />
       )}
 
       {/* ── Reports Tab ────────────────────────────────────────────── */}
       {activeTab === "reports" && (
-        <ReportsTab month={period.month} year={period.year} visibility={visibility} />
+        <ReportsTab month={period.month} year={period.year} budgetScope={budgetScope} />
       )}
 
       {/* ── Tags Explorer ─────────────────────────────────────────── */}
       {activeTab === "tags" && (
-        <TagsTab month={period.month} year={period.year} visibility={visibility} />
+        <TagsTab month={period.month} year={period.year} budgetScope={budgetScope} />
       )}
     </div>
   );

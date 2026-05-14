@@ -95,7 +95,7 @@ export const recurringRouter = router({
   detect: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -103,7 +103,7 @@ export const recurringRouter = router({
       const since = subMonths(new Date(), lookbackMonths);
 
       const visibilityFilter = transactionOwnershipFilter(
-        ctx.userId, ctx.householdId, input.visibility
+        ctx.userId, ctx.householdId, input.budgetScope
       );
 
       // Fetch transactions from the last 12 months (spending accounts only)
@@ -131,7 +131,7 @@ export const recurringRouter = router({
       // Including inactive ones prevents deactivated rules from reappearing as suggestions.
       const existingRules = await ctx.prisma.recurringRule.findMany({
         where: {
-          ...recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
         },
         select: { name: true, description: true, accountId: true, type: true, amount: true },
       });
@@ -191,7 +191,7 @@ export const recurringRouter = router({
 
       // Fetch which of these patterns the user has dismissed
       const dismissed = await ctx.prisma.dismissedRecurringPattern.findMany({
-        where: { userId: ctx.userId, visibility: input.visibility },
+        where: { userId: ctx.userId, budgetScope: input.budgetScope },
         select: { patternKey: true },
       });
       const dismissedKeys = dismissed.map((d) => d.patternKey);
@@ -204,23 +204,23 @@ export const recurringRouter = router({
     .input(
       z.object({
         patternKey: z.string(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await ctx.prisma.dismissedRecurringPattern.upsert({
         where: {
-          patternKey_userId_visibility: {
+          patternKey_userId_budgetScope: {
             patternKey: input.patternKey,
             userId: ctx.userId,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
         create: {
           patternKey: input.patternKey,
           userId: ctx.userId,
           householdId: ctx.householdId,
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
         },
         update: {},
       });
@@ -231,7 +231,7 @@ export const recurringRouter = router({
     .input(
       z.object({
         patternKey: z.string(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -239,7 +239,7 @@ export const recurringRouter = router({
         where: {
           patternKey: input.patternKey,
           userId: ctx.userId,
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
         },
       });
     }),
@@ -248,7 +248,7 @@ export const recurringRouter = router({
   list: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
         includeInactive: z.boolean().default(false),
       })
     )
@@ -256,7 +256,7 @@ export const recurringRouter = router({
       return ctx.prisma.recurringRule.findMany({
         where: {
           ...visibleRecurringRulesWhere(ctx.userId, ctx.householdId),
-          ...(input.visibility && recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.visibility)),
+          ...(input.budgetScope && recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope)),
           ...(!input.includeInactive && { isActive: true }),
         },
         orderBy: { nextDueDate: "asc" },
@@ -273,14 +273,14 @@ export const recurringRouter = router({
       z.object({
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2020).max(2100),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .query(async ({ ctx, input }) => {
       // 1. Fetch all active recurring rules (liquid accounts only)
       const allRules = await ctx.prisma.recurringRule.findMany({
         where: {
-          ...recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
           isActive: true,
           account: { type: { in: SPENDING_ACCOUNT_TYPES } },
         },
@@ -307,7 +307,7 @@ export const recurringRouter = router({
       const bufferedEnd = new Date(end.getTime() + BUFFER_MS);
 
       const visibilityFilter =
-        transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility);
+        transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope);
 
       const monthTransactions = await ctx.prisma.transaction.findMany({
         where: {
@@ -472,7 +472,7 @@ export const recurringRouter = router({
           totalInstallments: rule.totalInstallments,
           categoryId: rule.categoryId,
           accountId: rule.accountId,
-          visibility: (rule.account as any).ownership as string,
+          budgetScope: (rule.account as any).ownership as string,
           isActive: rule.isActive,
           account: rule.account,
           category: rule.category,
@@ -520,7 +520,7 @@ export const recurringRouter = router({
         allCategoryIds.length > 0
           ? await ctx.prisma.recurringRule.findMany({
               where: {
-                ...recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+                ...recurringRuleOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
                 isActive: false,
                 categoryId: { in: allCategoryIds },
               },
@@ -592,7 +592,7 @@ export const recurringRouter = router({
           totalInstallments: rule.totalInstallments,
           categoryId: rule.categoryId,
           accountId: rule.accountId,
-          visibility: (rule.account as any).ownership as string,
+          budgetScope: (rule.account as any).ownership as string,
           isActive: false as const,
           account: rule.account,
           category: rule.category,

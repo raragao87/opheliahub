@@ -14,7 +14,7 @@ import { fromCents } from "@/lib/money";
 interface ReportsTabProps {
   month: number;
   year: number;
-  visibility: "SHARED" | "PERSONAL";
+  budgetScope: "SHARED" | "PERSONAL";
 }
 
 function getMonthLabel(year: number, month: number) {
@@ -39,14 +39,14 @@ function DeltaChip({ value, suffix = "" }: { value: number; suffix?: string }) {
   );
 }
 
-export function ReportsTab({ month, year, visibility }: ReportsTabProps) {
+export function ReportsTab({ month, year, budgetScope }: ReportsTabProps) {
   const trpc = useTRPC();
   const prev = getPrevMonth(year, month);
   const [compareEnabled, setCompareEnabled] = useState(true);
 
   const reviewQuery = useQuery(
     trpc.dashboard.monthlyReview.queryOptions({
-      year, month, visibility,
+      year, month, budgetScope,
       ...(compareEnabled && { compareYear: prev.year, compareMonth: prev.month }),
     })
   );

@@ -2,30 +2,28 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 
-type Visibility = "SHARED" | "PERSONAL";
+type BudgetScope = "SHARED" | "PERSONAL";
 
 interface OwnershipContextValue {
-  visibility: Visibility;
-  setVisibility: (v: Visibility) => void;
-  /** Alias kept for backward-compat — always returns the current visibility */
-  visibilityParam: Visibility;
-  /** Returns true if accounts/transactions with this ownership should be visible */
-  isVisible: (ownership: Visibility) => boolean;
+  budgetScope: BudgetScope;
+  setBudgetScope: (v: BudgetScope) => void;
+  budgetScopeParam: BudgetScope;
+  isVisible: (ownership: BudgetScope) => boolean;
 }
 
 const OwnershipContext = createContext<OwnershipContextValue | null>(null);
 
 export function OwnershipProvider({ children }: { children: ReactNode }) {
-  const [visibility, setVisibility] = useState<Visibility>("SHARED");
+  const [budgetScope, setBudgetScope] = useState<BudgetScope>("SHARED");
 
   const isVisible = useCallback(
-    (ownership: Visibility) => ownership === visibility,
-    [visibility]
+    (ownership: BudgetScope) => ownership === budgetScope,
+    [budgetScope]
   );
 
   return (
     <OwnershipContext.Provider
-      value={{ visibility, setVisibility, visibilityParam: visibility, isVisible }}
+      value={{ budgetScope, setBudgetScope, budgetScopeParam: budgetScope, isVisible }}
     >
       {children}
     </OwnershipContext.Provider>

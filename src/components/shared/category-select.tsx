@@ -9,14 +9,14 @@ interface CategorySelectProps {
   onChange: (value: string) => void;
   id?: string;
   className?: string;
-  visibility?: "SHARED" | "PERSONAL";
+  budgetScope?: "SHARED" | "PERSONAL";
   categoryType?: "INCOME" | "EXPENSE" | "INVESTMENT";
 }
 
-export function CategorySelect({ value, onChange, id, className, visibility, categoryType }: CategorySelectProps) {
+export function CategorySelect({ value, onChange, id, className, budgetScope, categoryType }: CategorySelectProps) {
   const trpc = useTRPC();
-  const queryInput = (visibility || categoryType)
-    ? { ...(visibility && { visibility }), ...(categoryType && { type: categoryType }) }
+  const queryInput = (budgetScope || categoryType)
+    ? { ...(budgetScope && { budgetScope }), ...(categoryType && { type: categoryType }) }
     : undefined;
   const treeQuery = useQuery(
     trpc.category.tree.queryOptions(queryInput)

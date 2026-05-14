@@ -23,7 +23,7 @@ import { fromCents } from "@/lib/money";
 
 export default function DashboardPage() {
   const trpc = useTRPC();
-  const { visibilityParam } = useOwnership();
+  const { budgetScopeParam } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
   const { year, month } = getCurrentYearMonth();
@@ -37,7 +37,7 @@ export default function DashboardPage() {
       month,
       compareYear: prev.year,
       compareMonth: prev.month,
-      visibility: visibilityParam ?? "SHARED",
+      budgetScope: budgetScopeParam ?? "SHARED",
     })
   );
 
@@ -45,33 +45,33 @@ export default function DashboardPage() {
     trpc.dashboard.fundSummary.queryOptions({
       year,
       month,
-      visibility: visibilityParam ?? "SHARED",
+      budgetScope: budgetScopeParam ?? "SHARED",
     })
   );
 
   const accountsQuery = useQuery(
     trpc.dashboard.accountBalances.queryOptions({
-      visibility: visibilityParam,
+      budgetScope: budgetScopeParam,
     })
   );
 
   const recentTxnsQuery = useQuery(
     trpc.dashboard.recentTransactions.queryOptions({
       limit: 10,
-      visibility: visibilityParam,
+      budgetScope: budgetScopeParam,
     })
   );
 
   const trendQuery = useQuery(
     trpc.netWorth.getTrend.queryOptions({
-      visibility: visibilityParam ?? "SHARED",
+      budgetScope: budgetScopeParam ?? "SHARED",
       months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 6,
     })
   );
 
   const netWorthSummaryQuery = useQuery(
     trpc.netWorth.getSummary.queryOptions({
-      visibility: visibilityParam,
+      budgetScope: budgetScopeParam,
     })
   );
 

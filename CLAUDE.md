@@ -21,7 +21,8 @@ OpheliaHub is a personal & family finance management app for couples. It unifies
 - Multi-currency: every transaction and account stores its currency code (EUR default).
 - Privacy is enforced at the **database query level**, not just UI. Every Prisma query involving transactions, accounts, or balances must be scoped by user permissions.
 - Transaction visibility is derived from **account ownership** — all transactions on a SHARED account are shared, all on a PERSONAL account are personal. There is no per-transaction visibility field.
-- **Transaction types**: INCOME, EXPENSE, FUND, TRANSFER, INVESTMENT — each type has distinct budget semantics.
+- **Transaction types**: INCOME, EXPENSE, FUND, TRANSFER, INVESTMENT — the type is derived from the category's type (for FUND), the account's type (for INVESTMENT), or explicit user action (for TRANSFER). Every transaction has a `categoryId` — no exceptions.
+- **Category types** determine behavior: `CategoryType` enum has INCOME, EXPENSE, FUND, INVESTMENT, TRANSFER. EXPENSE categories reset monthly. FUND categories accumulate balances across months (envelope budgeting). TRANSFER categories (Matched/Unmatched) are auto-assigned by the mark-as-transfer flow.
 - Zero-based budgeting: availableToSpend − allocated = 0. Track allocated vs spent per category.
 
 ## Code Conventions
@@ -40,8 +41,8 @@ OpheliaHub is a personal & family finance management app for couples. It unifies
 
 User, Household, HouseholdMember, FinancialAccount, Transaction, TransactionTag,
 Category, Tag, TagGroup, Tracker, TrackerAllocation, InvestmentTrackerAllocation,
-FundTrackerAllocation, TagTrackerAllocation, Fund, ImportBatch, ImportProfile,
-RecurringRule, AuditLog
+FundTrackerAllocation, TagTrackerAllocation, FundEntry, BudgetLineItem,
+ImportBatch, ImportProfile, RecurringRule, AuditLog
 
 ## Account Groups
 
@@ -90,6 +91,28 @@ where: visibleAccountsWhere(userId, householdId)
 - Investment budgets are per-account via `InvestmentTrackerAllocation`
 - `toNextMonth = carryIn + actualIncome + actualInvestment - actualExpenses - fundAllocations`
 - `readyToAssign = carryIn + incomeBudgeted + investmentBudgeted - expenseBudgeted - fundContributions`
+- Fund allocations are stored in `FundTrackerAllocation` (references `categoryId` of a FUND-type category)
+- The fund router (`src/trpc/routers/fund.ts`) queries categories with `type = "FUND"` — there is no separate Fund model
+
+## Classification Model
+
+Every transaction is classified through a single `categoryId` field. The `CategoryType`
+enum determines behavior:
+
+| CategoryType | Behavior | Auto-derived? |
+|-------------|----------|---------------|
+| INCOME | Aggregates inflows, resets monthly | No — set explicitly |
+| EXPENSE | Tracks spending, resets monthly | No — set explicitly or by Ophelia |
+| FUND | Envelope budgeting, accumulates across months | Yes — when assigning a FUND-type category |
+| INVESTMENT | Per-account tracking | Yes — when transaction is on an investment account |
+| TRANSFER | Money movement (Matched/Unmatched) | Yes — via markAsTransfer flow |
+
+Key rules:
+- `effectiveCategoryId = categoryId ?? opheliaCategoryId ?? null` — denormalized, kept in sync at every write path
+- `Transaction.type` is derived from the category's type, not set independently
+- There is NO `fundId` on Transaction — funds are just categories
+- TRANSFER transactions get auto-assigned Matched (linked) or Unmatched (standalone) categories
+- Ophelia never suggests FUND, TRANSFER, or INVESTMENT categories — only INCOME and EXPENSE
 
 ## Money Utilities
 

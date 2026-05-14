@@ -31,10 +31,10 @@ import {
 interface TagsTabProps {
   month: number;
   year: number;
-  visibility: "SHARED" | "PERSONAL";
+  budgetScope: "SHARED" | "PERSONAL";
 }
 
-export function TagsTab({ month, year, visibility }: TagsTabProps) {
+export function TagsTab({ month, year, budgetScope }: TagsTabProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
 
@@ -42,13 +42,13 @@ export function TagsTab({ month, year, visibility }: TagsTabProps) {
   const { start: monthFrom, end: monthTo } = useMemo(() => getMonthRange(year, month), [year, month]);
   const yearFrom = useMemo(() => new Date(year, 0, 1), [year]);
 
-  const tagsQuery = useQuery(trpc.tag.list.queryOptions({ visibility }));
-  const tagGroupsQuery = useQuery(trpc.tag.listGroups.queryOptions({ visibility }));
-  const monthTotalsQuery = useQuery(trpc.tag.getTagTotals.queryOptions({ visibility, dateFrom: monthFrom, dateTo: monthTo }));
-  const yearTotalsQuery = useQuery(trpc.tag.getTagTotals.queryOptions({ visibility, dateFrom: yearFrom }));
-  const trackerQuery = useQuery(trpc.tracker.getOrCreate.queryOptions({ month, year, visibility }));
-  const tagSummaryQuery = useQuery(trpc.tracker.getTagSummary.queryOptions({ month, year, visibility }));
-  const yearlyBudgetsQuery = useQuery(trpc.tag.getYearlyBudgets.queryOptions({ year, visibility }));
+  const tagsQuery = useQuery(trpc.tag.list.queryOptions({ budgetScope }));
+  const tagGroupsQuery = useQuery(trpc.tag.listGroups.queryOptions({ budgetScope }));
+  const monthTotalsQuery = useQuery(trpc.tag.getTagTotals.queryOptions({ budgetScope, dateFrom: monthFrom, dateTo: monthTo }));
+  const yearTotalsQuery = useQuery(trpc.tag.getTagTotals.queryOptions({ budgetScope, dateFrom: yearFrom }));
+  const trackerQuery = useQuery(trpc.tracker.getOrCreate.queryOptions({ month, year, budgetScope }));
+  const tagSummaryQuery = useQuery(trpc.tracker.getTagSummary.queryOptions({ month, year, budgetScope }));
+  const yearlyBudgetsQuery = useQuery(trpc.tag.getYearlyBudgets.queryOptions({ year, budgetScope }));
 
   const allTags = tagsQuery.data ?? [];
   const tagGroups = tagGroupsQuery.data ?? [];
@@ -295,12 +295,12 @@ export function TagsTab({ month, year, visibility }: TagsTabProps) {
 
   const handleCreateTag = (groupId?: string) => {
     if (!newTagName.trim()) return;
-    createTagMutation.mutate({ name: newTagName.trim(), visibility, ...(groupId && { groupId }) });
+    createTagMutation.mutate({ name: newTagName.trim(), budgetScope, ...(groupId && { groupId }) });
   };
 
   const handleCreateGroup = () => {
     if (!newGroupName.trim()) return;
-    createGroupMutation.mutate({ name: newGroupName.trim(), visibility });
+    createGroupMutation.mutate({ name: newGroupName.trim(), budgetScope });
   };
 
   const handleDeleteTag = (tagId: string, tagName: string, txnCount: number) => {
@@ -542,7 +542,7 @@ export function TagsTab({ month, year, visibility }: TagsTabProps) {
       {/* Analysis panel */}
       {analysisTarget && (
         <div ref={analysisPanelRef}>
-          <TagAnalysisPanel target={analysisTarget} visibility={visibility}
+          <TagAnalysisPanel target={analysisTarget} budgetScope={budgetScope}
             onClose={() => setAnalysisTarget(null)}
             onSelectTag={(id, name) => setAnalysisTarget({ type: "tag", id, name })} />
         </div>

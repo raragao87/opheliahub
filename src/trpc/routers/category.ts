@@ -10,13 +10,13 @@ export const categoryRouter = router({
     .input(
       z
         .object({
-          visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+          budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
         })
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      const visibilityFilter = input?.visibility
-        ? { visibility: input.visibility }
+      const visibilityFilter = input?.budgetScope
+        ? { budgetScope: input.budgetScope }
         : {};
 
       return ctx.prisma.category.findMany({
@@ -38,14 +38,14 @@ export const categoryRouter = router({
     .input(
       z
         .object({
-          visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+          budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
           type: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "FUND", "TRANSFER"]).optional(),
         })
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      const visibilityFilter = input?.visibility
-        ? { visibility: input.visibility }
+      const visibilityFilter = input?.budgetScope
+        ? { budgetScope: input.budgetScope }
         : {};
       const typeFilter = input?.type
         ? { type: input.type }
@@ -79,13 +79,13 @@ export const categoryRouter = router({
         icon: z.string().optional(),
         color: z.string().optional(),
         parentId: z.string().nullable().optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
         type: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "FUND", "TRANSFER"]).default("EXPENSE"),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // If creating under a parent, inherit the parent's visibility and type
-      let visibility = input.visibility;
+      // If creating under a parent, inherit the parent's budgetScope and type
+      let budgetScope = input.budgetScope;
       let type = input.type;
       if (input.parentId) {
         const parent = await ctx.prisma.category.findFirst({
@@ -101,8 +101,8 @@ export const categoryRouter = router({
             message: `${parent.type} categories cannot have subcategories.`,
           });
         }
-        // Children inherit parent visibility and type
-        visibility = parent.visibility as "SHARED" | "PERSONAL";
+        // Children inherit parent budgetScope and type
+        budgetScope = parent.budgetScope as "SHARED" | "PERSONAL";
         type = parent.type as "INCOME" | "EXPENSE" | "INVESTMENT" | "FUND" | "TRANSFER";
       }
 
@@ -122,7 +122,7 @@ export const categoryRouter = router({
           type,
           parentId: input.parentId,
           householdId: ctx.householdId,
-          visibility,
+          budgetScope,
           sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
         },
       });
@@ -328,7 +328,7 @@ export const categoryRouter = router({
       categoryIds: z.array(z.string()).min(1).max(20),
       dateFrom: z.coerce.date().optional(),
       dateTo: z.coerce.date().optional(),
-      visibility: z.enum(["SHARED", "PERSONAL"]),
+      budgetScope: z.enum(["SHARED", "PERSONAL"]),
     }))
     .query(async ({ ctx, input }) => {
       const dateFilter = {
@@ -338,7 +338,7 @@ export const categoryRouter = router({
 
       const txns = await ctx.prisma.transaction.findMany({
         where: {
-          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
           categoryId: { in: input.categoryIds },
           isInitialBalance: false,
           type: { in: ["INCOME", "EXPENSE"] },

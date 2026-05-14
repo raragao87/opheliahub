@@ -7,7 +7,7 @@ import type { PageContext } from "@/lib/ophelia/page-context";
 const pageContextSchema = z.object({
   path: z.string(),
   pageName: z.string(),
-  visibility: z.enum(["SHARED", "PERSONAL"]),
+  budgetScope: z.enum(["SHARED", "PERSONAL"]),
   month: z.string().optional(),
   summary: z.string().optional(),
   suggestedPrompts: z.array(z.string()),
@@ -27,7 +27,7 @@ You are warm, knowledgeable about personal finance, and concise. You speak like 
 
 ## Current Context
 The user is currently viewing: ${ctx.pageName} (${ctx.path})
-Visibility mode: ${ctx.visibility}
+Budget scope: ${ctx.budgetScope}
 ${ctx.month ? `Viewing month: ${ctx.month}` : ""}
 ${ctx.summary ? `Page summary: ${ctx.summary}` : ""}
 

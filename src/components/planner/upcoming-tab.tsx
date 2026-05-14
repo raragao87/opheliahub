@@ -18,7 +18,7 @@ import {
 interface UpcomingTabProps {
   month: number;
   year: number;
-  visibility: "SHARED" | "PERSONAL";
+  budgetScope: "SHARED" | "PERSONAL";
 }
 
 function formatDay(d: Date | string) {
@@ -26,11 +26,11 @@ function formatDay(d: Date | string) {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
-export function UpcomingTab({ month, year, visibility }: UpcomingTabProps) {
+export function UpcomingTab({ month, year, budgetScope }: UpcomingTabProps) {
   const trpc = useTRPC();
 
   const recurringQuery = useQuery(
-    trpc.recurring.listForMonth.queryOptions({ month, year, visibility })
+    trpc.recurring.listForMonth.queryOptions({ month, year, budgetScope })
   );
 
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
@@ -88,9 +88,9 @@ export function UpcomingTab({ month, year, visibility }: UpcomingTabProps) {
   const liquidBalance = useMemo(() => {
     const accounts = accountsQuery.data ?? [];
     return accounts
-      .filter((a) => a.ownership === visibility && ACCOUNT_TYPE_META[a.type]?.sidebarGroup === "SPENDING")
+      .filter((a) => a.ownership === budgetScope && ACCOUNT_TYPE_META[a.type]?.sidebarGroup === "SPENDING")
       .reduce((s, a) => s + a.balance, 0);
-  }, [accountsQuery.data, visibility]);
+  }, [accountsQuery.data, budgetScope]);
 
   const remainingIncome = useMemo(() => {
     return upcoming.filter((r) => r.type === "INCOME").reduce((s, r) => s + r.amount, 0);

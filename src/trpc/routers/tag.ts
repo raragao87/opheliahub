@@ -9,7 +9,7 @@ export const tagRouter = router({
       z.object({
         groupId: z.string().optional(),
         includeArchived: z.boolean().default(false),
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -18,7 +18,7 @@ export const tagRouter = router({
           ...visibleTagsWhere(ctx.userId, ctx.householdId),
           ...(input.groupId && { groupId: input.groupId }),
           ...(!input.includeArchived && { isArchived: false }),
-          ...(input.visibility && { visibility: input.visibility }),
+          ...(input.budgetScope && { budgetScope: input.budgetScope }),
         },
         orderBy: { sortOrder: "asc" },
         include: {
@@ -34,7 +34,7 @@ export const tagRouter = router({
         name: z.string().min(1).max(50),
         color: z.string().optional(),
         groupId: z.string().optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -134,14 +134,14 @@ export const tagRouter = router({
   listGroups: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
       return ctx.prisma.tagGroup.findMany({
         where: {
           householdId: ctx.householdId,
-          ...(input.visibility && { visibility: input.visibility }),
+          ...(input.budgetScope && { budgetScope: input.budgetScope }),
         },
         orderBy: { sortOrder: "asc" },
         include: {
@@ -156,7 +156,7 @@ export const tagRouter = router({
         name: z.string().min(1).max(50),
         icon: z.string().optional(),
         color: z.string().optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -240,7 +240,7 @@ export const tagRouter = router({
   getGroupAnalysis: householdProcedure
     .input(z.object({
       tagGroupId: z.string(),
-      visibility: z.enum(["SHARED", "PERSONAL"]),
+      budgetScope: z.enum(["SHARED", "PERSONAL"]),
       dateFrom: z.coerce.date().optional(),
       dateTo: z.coerce.date().optional(),
     }))
@@ -266,7 +266,7 @@ export const tagRouter = router({
       // Fetch all transactions with any tag from this group (deduplicated)
       const txns = await ctx.prisma.transaction.findMany({
         where: {
-          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
           tags: { some: { tagId: { in: tagIds } } },
           isInitialBalance: false,
           ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
@@ -374,7 +374,7 @@ export const tagRouter = router({
       tagIds: z.array(z.string()).min(1).max(5),
       dateFrom: z.coerce.date().optional(),
       dateTo: z.coerce.date().optional(),
-      visibility: z.enum(["SHARED", "PERSONAL"]),
+      budgetScope: z.enum(["SHARED", "PERSONAL"]),
     }))
     .query(async ({ ctx, input }) => {
       const tags = await ctx.prisma.tag.findMany({
@@ -390,7 +390,7 @@ export const tagRouter = router({
 
         const txns = await ctx.prisma.transaction.findMany({
           where: {
-            ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+            ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
             tags: { some: { tagId: tag.id } },
             isInitialBalance: false,
             ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
@@ -477,7 +477,7 @@ export const tagRouter = router({
   /** Lightweight totals per tag for the Tags tab table columns */
   getTagTotals: householdProcedure
     .input(z.object({
-      visibility: z.enum(["SHARED", "PERSONAL"]),
+      budgetScope: z.enum(["SHARED", "PERSONAL"]),
       dateFrom: z.coerce.date().optional(),
       dateTo: z.coerce.date().optional(),
     }))
@@ -488,7 +488,7 @@ export const tagRouter = router({
       };
 
       const tags = await ctx.prisma.tag.findMany({
-        where: { ...visibleTagsWhere(ctx.userId, ctx.householdId), visibility: input.visibility },
+        where: { ...visibleTagsWhere(ctx.userId, ctx.householdId), budgetScope: input.budgetScope },
         select: { id: true },
       });
       const tagIds = tags.map(t => t.id);
@@ -496,7 +496,7 @@ export const tagRouter = router({
 
       const txns = await ctx.prisma.transaction.findMany({
         where: {
-          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
           tags: { some: { tagId: { in: tagIds } } },
           isInitialBalance: false,
           type: { in: ["INCOME", "EXPENSE"] },
@@ -545,7 +545,7 @@ export const tagRouter = router({
   getYearlyBudgets: householdProcedure
     .input(z.object({
       year: z.number().int(),
-      visibility: z.enum(["SHARED", "PERSONAL"]),
+      budgetScope: z.enum(["SHARED", "PERSONAL"]),
     }))
     .query(async ({ ctx, input }) => {
       const allocations = await ctx.prisma.tagTrackerAllocation.findMany({
@@ -554,7 +554,7 @@ export const tagRouter = router({
             householdId: ctx.householdId,
             userId: ctx.userId,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
         select: { tagId: true, amount: true },

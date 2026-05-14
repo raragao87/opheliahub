@@ -304,7 +304,7 @@ export default function EditTransactionPage({
                   id="category"
                   value={form.categoryId}
                   onChange={(val) => setForm({ ...form, categoryId: val })}
-                  visibility={txn.account.ownership as "SHARED" | "PERSONAL"}
+                  budgetScope={txn.account.ownership as "SHARED" | "PERSONAL"}
                   categoryType={ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup === "INVESTMENT" ? "INVESTMENT" : undefined}
                 />
               </div>

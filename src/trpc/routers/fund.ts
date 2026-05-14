@@ -9,7 +9,7 @@ export const fundRouter = router({
   list: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
         month: z.number().int().min(1).max(12),
         year: z.number().int(),
       })
@@ -19,7 +19,7 @@ export const fundRouter = router({
         where: {
           householdId: ctx.householdId,
           type: "FUND",
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
           isArchived: false,
         },
         include: {
@@ -65,12 +65,12 @@ export const fundRouter = router({
 
       const thisMonthTracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
       });
@@ -191,7 +191,7 @@ export const fundRouter = router({
   listForDropdown: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -199,7 +199,7 @@ export const fundRouter = router({
         where: {
           householdId: ctx.householdId,
           type: "FUND",
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
           isArchived: false,
         },
         select: { id: true, name: true, icon: true },
@@ -214,7 +214,7 @@ export const fundRouter = router({
         icon: z.string().max(10).optional(),
         color: z.string().max(20).optional(),
         linkedAccountId: z.string().optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -222,7 +222,7 @@ export const fundRouter = router({
         where: {
           householdId: ctx.householdId,
           type: "FUND",
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
         },
         _max: { sortOrder: true },
       });
@@ -234,7 +234,7 @@ export const fundRouter = router({
           color: input.color,
           type: "FUND",
           householdId: ctx.householdId,
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
           linkedAccountId: input.linkedAccountId,
           sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
           parentId: null,
@@ -367,7 +367,7 @@ export const fundRouter = router({
   updateLinkedAccount: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]),
         linkedAccountId: z.string().nullable(),
       })
     )
@@ -376,7 +376,7 @@ export const fundRouter = router({
         where: {
           householdId: ctx.householdId,
           type: "FUND",
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
           isArchived: false,
         },
         data: {

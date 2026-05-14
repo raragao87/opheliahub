@@ -8,7 +8,7 @@ import { useOwnership } from "@/lib/ownership-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MoneyDisplay } from "@/components/shared/money-display";
-import { VisibilityBadge } from "@/components/shared/visibility-badge";
+import { ScopeBadge } from "@/components/shared/visibility-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { NetWorthTrendChart, PeriodSelector, PERIOD_OPTIONS, type PeriodKey } from "@/components/charts/net-worth-trend";
@@ -81,7 +81,7 @@ export default function AccountsPage() {
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { isVisible, visibilityParam } = useOwnership();
+  const { isVisible, budgetScopeParam } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
   const locale = preferences.locale;
@@ -93,7 +93,7 @@ export default function AccountsPage() {
 
   const trendQuery = useQuery(
     trpc.netWorth.getTrend.queryOptions({
-      visibility: visibilityParam ?? "SHARED",
+      budgetScope: budgetScopeParam ?? "SHARED",
       months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 12,
     })
   );
@@ -103,7 +103,7 @@ export default function AccountsPage() {
       onSuccess: () => {
         toast.success(t(lang, "netWorth.snapshotSaved"));
         queryClient.invalidateQueries(trpc.netWorth.getTrend.queryOptions({
-          visibility: visibilityParam ?? "SHARED",
+          budgetScope: budgetScopeParam ?? "SHARED",
           months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 12,
         }));
       },
@@ -116,7 +116,7 @@ export default function AccountsPage() {
       onSuccess: (data) => {
         toast.success(`Created ${data.created} snapshots`);
         queryClient.invalidateQueries(trpc.netWorth.getTrend.queryOptions({
-          visibility: visibilityParam ?? "SHARED",
+          budgetScope: budgetScopeParam ?? "SHARED",
           months: PERIOD_OPTIONS.find((o) => o.key === period)?.months ?? 12,
         }));
       },
@@ -124,7 +124,7 @@ export default function AccountsPage() {
     })
   );
 
-  const vis = visibilityParam ?? "SHARED";
+  const vis = budgetScopeParam ?? "SHARED";
 
   if (accountsQuery.isLoading) {
     return <div className="text-muted-foreground">Loading accounts...</div>;
@@ -248,7 +248,7 @@ export default function AccountsPage() {
                     size="sm"
                     variant="outline"
                     disabled={snapshotMutation.isPending}
-                    onClick={() => snapshotMutation.mutate({ visibility: vis })}
+                    onClick={() => snapshotMutation.mutate({ budgetScope: vis })}
                   >
                     <RefreshCw className={`h-3.5 w-3.5 mr-1 ${snapshotMutation.isPending ? "animate-spin" : ""}`} />
                     {t(lang, "netWorth.refreshSnapshot")}
@@ -332,7 +332,7 @@ export default function AccountsPage() {
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium truncate">{account.name}</span>
                               {account.ownership === "SHARED" && (
-                                <VisibilityBadge visibility="SHARED" className="text-[10px]" />
+                                <ScopeBadge scope="SHARED" className="text-[10px]" />
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">

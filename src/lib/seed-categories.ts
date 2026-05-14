@@ -1,4 +1,4 @@
-import { PrismaClient, Visibility, CategoryType } from "@prisma/client";
+import { PrismaClient, BudgetScope, CategoryType } from "@prisma/client";
 
 interface CategoryChild {
   name: string;
@@ -185,13 +185,13 @@ async function seedCategoryGroups(
   prisma: PrismaClient,
   householdId: string,
   groups: CategoryGroup[],
-  visibility: Visibility
+  budgetScope: BudgetScope
 ) {
   for (const group of groups) {
     const { children, type: groupType, ...groupData } = group;
 
     let parent = await prisma.category.findFirst({
-      where: { householdId, name: groupData.name, parentId: null, visibility },
+      where: { householdId, name: groupData.name, parentId: null, budgetScope },
     });
 
     if (!parent) {
@@ -199,7 +199,7 @@ async function seedCategoryGroups(
         data: {
           ...groupData,
           householdId,
-          visibility,
+          budgetScope,
           ...(groupType && { type: groupType }),
         },
       });
@@ -208,7 +208,7 @@ async function seedCategoryGroups(
     if (children) {
       for (const child of children) {
         const existing = await prisma.category.findFirst({
-          where: { householdId, name: child.name, parentId: parent.id, visibility },
+          where: { householdId, name: child.name, parentId: parent.id, budgetScope },
         });
         if (!existing) {
           await prisma.category.create({
@@ -216,7 +216,7 @@ async function seedCategoryGroups(
               ...child,
               parentId: parent.id,
               householdId,
-              visibility,
+              budgetScope,
               ...(groupType && { type: groupType }),
             },
           });

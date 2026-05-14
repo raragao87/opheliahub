@@ -56,7 +56,7 @@ export const opheliaRouter = router({
           })
         ),
         /** Visibility of the target account — used to scope categories and tags. */
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -68,7 +68,7 @@ export const opheliaRouter = router({
         where: {
           householdId: ctx.householdId,
           parentId: { not: null },
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
         },
         select: { id: true, name: true, parent: { select: { name: true } } },
         orderBy: [{ parent: { sortOrder: "asc" } }, { sortOrder: "asc" }],
@@ -77,8 +77,8 @@ export const opheliaRouter = router({
       // Fetch active tags matching the import visibility
       const dbTags = await ctx.prisma.tag.findMany({
         where: {
-          visibility: input.visibility,
-          ...(input.visibility === "PERSONAL" && { userId: ctx.userId }),
+          budgetScope: input.budgetScope,
+          ...(input.budgetScope === "PERSONAL" && { userId: ctx.userId }),
           isArchived: false,
         },
         select: { id: true, name: true, group: { select: { name: true } } },
@@ -88,7 +88,7 @@ export const opheliaRouter = router({
       // Fetch 20 recent categorized transactions as few-shot examples (same ownership)
       const recentTxns = await ctx.prisma.transaction.findMany({
         where: {
-          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
           categoryId: { not: null },
         },
         orderBy: { date: "desc" },
@@ -147,12 +147,12 @@ export const opheliaRouter = router({
    * Returns { pending: 0, enabled: false } when Ophelia is disabled.
    */
   pendingCount: householdProcedure
-    .input(z.object({ visibility: z.enum(["SHARED", "PERSONAL"]) }))
+    .input(z.object({ budgetScope: z.enum(["SHARED", "PERSONAL"]) }))
     .query(async ({ ctx, input }) => {
       if (!isOpheliaEnabled()) return { pending: 0, enabled: false };
       const pending = await ctx.prisma.transaction.count({
         where: {
-          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
           opheliaProcessedAt: null,
           isInitialBalance: false,
           type: { not: "TRANSFER" },
@@ -166,13 +166,13 @@ export const opheliaRouter = router({
    * Used by the sidebar to show per-account uncategorized badges.
    */
   pendingByAccount: householdProcedure
-    .input(z.object({ visibility: z.enum(["SHARED", "PERSONAL"]) }))
+    .input(z.object({ budgetScope: z.enum(["SHARED", "PERSONAL"]) }))
     .query(async ({ ctx, input }) => {
       if (!isOpheliaEnabled()) return { byAccount: {} as Record<string, number>, enabled: false };
       const groups = await ctx.prisma.transaction.groupBy({
         by: ["accountId"],
         where: {
-          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.visibility),
+          ...transactionOwnershipFilter(ctx.userId, ctx.householdId, input.budgetScope),
           opheliaProcessedAt: null,
           isInitialBalance: false,
           type: { not: "TRANSFER" },

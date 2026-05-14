@@ -28,12 +28,12 @@ export async function POST(request: Request) {
   const errors: string[] = [];
 
   for (const { householdId, userId } of memberships) {
-    for (const visibility of ["SHARED", "PERSONAL"] as const) {
+    for (const scope of ["SHARED", "PERSONAL"] as const) {
       try {
-        await captureNetWorthSnapshot(prisma, householdId, userId, visibility, year, month);
+        await captureNetWorthSnapshot(prisma, householdId, userId, scope, year, month);
         captured++;
       } catch (err) {
-        errors.push(`${householdId}/${userId}/${visibility}: ${String(err)}`);
+        errors.push(`${householdId}/${userId}/${scope}: ${String(err)}`);
       }
     }
   }

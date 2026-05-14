@@ -3,8 +3,8 @@ export interface PageContext {
   path: string;
   /** Human-readable page name, e.g. "Budget Tracker" */
   pageName: string;
-  /** Current visibility mode */
-  visibility: "SHARED" | "PERSONAL";
+  /** Current budget scope */
+  budgetScope: "SHARED" | "PERSONAL";
   /** Current month being viewed (if applicable) */
   month?: string;
   /** Brief description of what's on screen */

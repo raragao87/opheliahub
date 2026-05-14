@@ -20,7 +20,7 @@ const NAV_ITEM_KEYS: Record<string, "nav.dashboard" | "nav.tracker" | "nav.plann
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { visibility, setVisibility } = useOwnership();
+  const { budgetScope, setBudgetScope } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
@@ -49,10 +49,10 @@ export function AppSidebar() {
           <div className="flex gap-1.5">
             <button
               type="button"
-              onClick={() => setVisibility("SHARED")}
+              onClick={() => setBudgetScope("SHARED")}
               className={cn(
                 "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md border transition-colors",
-                visibility === "SHARED"
+                budgetScope === "SHARED"
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "bg-transparent text-muted-foreground border-transparent hover:bg-muted"
               )}
@@ -62,10 +62,10 @@ export function AppSidebar() {
             </button>
             <button
               type="button"
-              onClick={() => setVisibility("PERSONAL")}
+              onClick={() => setBudgetScope("PERSONAL")}
               className={cn(
                 "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md border transition-colors",
-                visibility === "PERSONAL"
+                budgetScope === "PERSONAL"
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "bg-transparent text-muted-foreground border-transparent hover:bg-muted"
               )}

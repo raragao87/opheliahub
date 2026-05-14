@@ -122,24 +122,24 @@ export async function categorizeTransactionBatch(
           householdId: hid,
           parentId: { not: null },
         },
-        select: { id: true, name: true, type: true, visibility: true, parent: { select: { name: true, type: true } } },
+        select: { id: true, name: true, type: true, budgetScope: true, parent: { select: { name: true, type: true } } },
         orderBy: [{ parent: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       });
 
       // Split categories by visibility and type
       const excludedTypes = new Set(["INVESTMENT", "TRANSFER", "FUND"]);
-      const sharedCategories = categories.filter((c) => c.visibility === "SHARED" && !excludedTypes.has(c.type));
-      const personalCategories = categories.filter((c) => c.visibility === "PERSONAL" && !excludedTypes.has(c.type));
-      const sharedInvestmentCategories = categories.filter((c) => c.visibility === "SHARED" && c.type === "INVESTMENT");
-      const personalInvestmentCategories = categories.filter((c) => c.visibility === "PERSONAL" && c.type === "INVESTMENT");
+      const sharedCategories = categories.filter((c) => c.budgetScope === "SHARED" && !excludedTypes.has(c.type));
+      const personalCategories = categories.filter((c) => c.budgetScope === "PERSONAL" && !excludedTypes.has(c.type));
+      const sharedInvestmentCategories = categories.filter((c) => c.budgetScope === "SHARED" && c.type === "INVESTMENT");
+      const personalInvestmentCategories = categories.filter((c) => c.budgetScope === "PERSONAL" && c.type === "INVESTMENT");
 
       // Fetch all non-archived tags visible to household members
       const tags = await prisma.tag.findMany({
         where: {
           isArchived: false,
           OR: [
-            { visibility: "SHARED" },
-            { visibility: "PERSONAL", userId: { in: memberUserIds } },
+            { budgetScope: "SHARED" },
+            { budgetScope: "PERSONAL", userId: { in: memberUserIds } },
           ],
         },
         select: { id: true, name: true, group: { select: { name: true } } },

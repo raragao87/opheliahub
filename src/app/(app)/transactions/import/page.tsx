@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { MoneyDisplay } from "@/components/shared/money-display";
-import { VisibilityBadge } from "@/components/shared/visibility-badge";
+import { ScopeBadge } from "@/components/shared/visibility-badge";
 import { formatDate } from "@/lib/date";
 import { parseCsvFile, transformCsvToTransactions, type AmountColumnHints, type ColumnMapping, type ParsedTransaction } from "@/lib/parsers/csv-parser";
 import { parseMT940 } from "@/lib/parsers/mt940-parser";
@@ -1776,7 +1776,7 @@ export default function ImportPage() {
                           >
                             <option value="">Uncategorised</option>
                             {(categoriesQuery.data ?? [])
-                              .filter((c) => c.visibility === defaultVisibility)
+                              .filter((c) => c.budgetScope === defaultVisibility)
                               .map((c) => (
                                 <option key={c.id} value={c.id}>
                                   {c.parent?.name ? `${c.parent.name} / ${c.name}` : c.name}

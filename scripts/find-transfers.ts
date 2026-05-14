@@ -20,7 +20,7 @@ async function getMatchedTransferCategoryId(
   visibility: "SHARED" | "PERSONAL",
 ): Promise<string | null> {
   const transferGroup = await prisma.category.findFirst({
-    where: { householdId, type: "TRANSFER" as never, parentId: null, visibility },
+    where: { householdId, type: "TRANSFER" as never, parentId: null, budgetScope: visibility },
   });
   if (!transferGroup) return null;
   const matched = await prisma.category.findFirst({

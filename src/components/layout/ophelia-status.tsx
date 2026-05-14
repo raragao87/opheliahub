@@ -18,10 +18,10 @@ import { useOwnership } from "@/lib/ownership-context";
 export function OpheliaStatus() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { visibility } = useOwnership();
+  const { budgetScope } = useOwnership();
 
   const pendingQuery = useQuery({
-    ...trpc.ophelia.pendingCount.queryOptions({ visibility }),
+    ...trpc.ophelia.pendingCount.queryOptions({ budgetScope }),
     refetchInterval: 30_000,
   });
 

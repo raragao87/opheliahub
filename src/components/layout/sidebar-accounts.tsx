@@ -59,7 +59,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const searchParams = useSearchParams();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { isVisible, visibility } = useOwnership();
+  const { isVisible, budgetScope } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
@@ -78,14 +78,14 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
 
   // Fetch per-account pending Ophelia counts (poll every 30s)
   const pendingByAccountQuery = useQuery({
-    ...trpc.ophelia.pendingByAccount.queryOptions({ visibility }),
+    ...trpc.ophelia.pendingByAccount.queryOptions({ budgetScope }),
     refetchInterval: 30_000,
   });
   const pendingByAccount = pendingByAccountQuery.data?.byAccount ?? {};
 
   // Fetch per-account pending duplicate alert counts (poll every 30s)
   const duplicatesByAccountQuery = useQuery({
-    ...trpc.duplicates.pendingByAccount.queryOptions({ visibility }),
+    ...trpc.duplicates.pendingByAccount.queryOptions({ budgetScope }),
     refetchInterval: 30_000,
   });
   const duplicatesByAccount = duplicatesByAccountQuery.data?.byAccount ?? {};

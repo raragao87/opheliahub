@@ -52,7 +52,7 @@ interface Filters {
   dateTo: string;
   accrualDateFrom: string;
   accrualDateTo: string;
-  visibility: string; // "" | "SHARED" | "PERSONAL"
+  budgetScope: string; // "" | "SHARED" | "PERSONAL"
   amountMin: string; // stored as display value (e.g. "10.00"), converted to cents for query
   amountMax: string;
   liquidOnly: string;
@@ -76,7 +76,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     dateTo: sp.get("dateTo") ?? "",
     accrualDateFrom: sp.get("accrualDateFrom") ?? "",
     accrualDateTo: sp.get("accrualDateTo") ?? "",
-    visibility: sp.get("visibility") ?? "",
+    budgetScope: sp.get("budgetScope") ?? "",
     amountMin: sp.get("amountMin") ?? "",
     amountMax: sp.get("amountMax") ?? "",
     liquidOnly: sp.get("liquidOnly") ?? "",
@@ -101,7 +101,7 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.dateTo) sp.set("dateTo", f.dateTo);
   if (f.accrualDateFrom) sp.set("accrualDateFrom", f.accrualDateFrom);
   if (f.accrualDateTo) sp.set("accrualDateTo", f.accrualDateTo);
-  if (f.visibility) sp.set("visibility", f.visibility);
+  if (f.budgetScope) sp.set("budgetScope", f.budgetScope);
   if (f.amountMin) sp.set("amountMin", f.amountMin);
   if (f.amountMax) sp.set("amountMax", f.amountMax);
   if (f.liquidOnly) sp.set("liquidOnly", f.liquidOnly);
@@ -126,7 +126,7 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.dateTo === b.dateTo &&
     a.accrualDateFrom === b.accrualDateFrom &&
     a.accrualDateTo === b.accrualDateTo &&
-    a.visibility === b.visibility &&
+    a.budgetScope === b.budgetScope &&
     a.amountMin === b.amountMin &&
     a.amountMax === b.amountMax &&
     a.liquidOnly === b.liquidOnly &&
@@ -150,7 +150,7 @@ const EMPTY_FILTERS: Filters = {
   dateTo: "",
   accrualDateFrom: "",
   accrualDateTo: "",
-  visibility: "",
+  budgetScope: "",
   amountMin: "",
   amountMax: "",
   liquidOnly: "",
@@ -177,7 +177,7 @@ function TransactionsContent() {
   const searchParams = useSearchParams();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { visibilityParam } = useOwnership();
+  const { budgetScopeParam } = useOwnership();
 
   const [filters, setFilters] = useState<Filters>(() => filtersFromParams(searchParams));
   const [mounted, setMounted] = useState(false);
@@ -234,10 +234,10 @@ function TransactionsContent() {
 
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
   const categoriesQuery = useQuery(
-    trpc.category.tree.queryOptions({ visibility: visibilityParam })
+    trpc.category.tree.queryOptions({ budgetScope: budgetScopeParam })
   );
   const tagsQuery = useQuery(
-    trpc.tag.list.queryOptions({ visibility: visibilityParam })
+    trpc.tag.list.queryOptions({ budgetScope: budgetScopeParam })
   );
   const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
 
@@ -250,7 +250,7 @@ function TransactionsContent() {
 
     return {
       search: filters.search || undefined,
-      visibility: (filters.visibility as "SHARED" | "PERSONAL") || visibilityParam,
+      budgetScope: (filters.budgetScope as "SHARED" | "PERSONAL") || budgetScopeParam,
       accountIds: filters.accountIds.length ? filters.accountIds : undefined,
       categoryIds: !filters.uncategorized && !filters.opheliaUnconfirmed && filters.categoryIds.length ? filters.categoryIds : undefined,
       type: (filters.type as "INCOME" | "EXPENSE" | "FUND" | "TRANSFER" | "INVESTMENT") || undefined,
@@ -270,7 +270,7 @@ function TransactionsContent() {
       mentionedMe: filters.mentionedMe || undefined,
       limit: PAGE_SIZE,
     };
-  }, [filters, visibilityParam]);
+  }, [filters, budgetScopeParam]);
 
   const transactionsQuery = useInfiniteQuery({
     ...trpc.transaction.list.infiniteQueryOptions(queryInput, {
@@ -628,7 +628,7 @@ function TransactionsContent() {
   // Account filter groups (Liquid / Illiquid) — filtered by current visibility
   const accountFilterGroups: FilterOptionGroup[] = useMemo(() => {
     const accounts = (accountsQuery.data ?? []).filter(
-      (a) => a.ownership === visibilityParam
+      (a) => a.ownership === budgetScopeParam
     );
     return SIDEBAR_GROUPS.map((sg) => ({
       label: sg.label,
@@ -636,7 +636,7 @@ function TransactionsContent() {
         .filter((a) => ACCOUNT_TYPE_META[a.type]?.sidebarGroup === sg.key)
         .map((a) => ({ value: a.id, label: a.name })),
     })).filter((g) => g.options.length > 0);
-  }, [accountsQuery.data, visibilityParam]);
+  }, [accountsQuery.data, budgetScopeParam]);
 
   // Category filter groups (by parent group)
   const categoryFilterGroups: FilterOptionGroup[] = useMemo(() => {
@@ -747,7 +747,7 @@ function TransactionsContent() {
     filters.dateTo !== "" ||
     filters.accrualDateFrom !== "" ||
     filters.accrualDateTo !== "" ||
-    filters.visibility !== "" ||
+    filters.budgetScope !== "" ||
     filters.amountMin !== "" ||
     filters.amountMax !== "" ||
     filters.liquidOnly !== "" ||
@@ -766,7 +766,7 @@ function TransactionsContent() {
     filters.type !== "" || filters.transferType !== "",
     filters.dateFrom !== "" || filters.dateTo !== "",
     filters.accrualDateFrom !== "" || filters.accrualDateTo !== "",
-    filters.visibility !== "",
+    filters.budgetScope !== "",
     filters.amountMin !== "" || filters.amountMax !== "",
     filters.uncategorized,
     filters.opheliaUnconfirmed,
@@ -985,7 +985,7 @@ function TransactionsContent() {
             </button>
             {filters.opheliaUnconfirmed && transactions.length > 0 && (
               <button
-                onClick={() => confirmOpheliaMutation.mutate({ visibility: visibilityParam })}
+                onClick={() => confirmOpheliaMutation.mutate({ budgetScope: budgetScopeParam })}
                 disabled={confirmOpheliaMutation.isPending}
                 className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium hover:bg-amber-500/20 transition-colors disabled:opacity-50"
               >

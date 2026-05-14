@@ -53,12 +53,7 @@ export function transactionOwnershipFilter(
   if (ownership === "SHARED") {
     return {
       deletedAt: null,
-      account: {
-        OR: [
-          { householdId, ownership: "SHARED" },
-          { ownerId: userId, ownership: "SHARED" },
-        ],
-      },
+      account: { householdId, ownership: "SHARED" },
     };
   }
   return {
@@ -76,7 +71,7 @@ export function visibleTagsWhere(
     OR: [
       { userId },
       {
-        visibility: "SHARED",
+        budgetScope: "SHARED",
         user: {
           householdMembers: {
             some: { householdId, inviteStatus: "ACCEPTED" },
@@ -95,7 +90,7 @@ export function visibleTrackersWhere(
   return {
     OR: [
       { userId },
-      { visibility: "SHARED", householdId },
+      { budgetScope: "SHARED", householdId },
     ],
   };
 }
@@ -126,13 +121,7 @@ export function recurringRuleOwnershipFilter(
 ): Prisma.RecurringRuleWhereInput {
   if (ownership === "SHARED") {
     return {
-      account: {
-        isActive: true,
-        OR: [
-          { householdId, ownership: "SHARED" },
-          { ownerId: userId, ownership: "SHARED" },
-        ],
-      },
+      account: { isActive: true, householdId, ownership: "SHARED" },
     };
   }
   return {

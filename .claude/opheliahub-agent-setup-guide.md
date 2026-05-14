@@ -43,7 +43,8 @@ OpheliaHub is a personal & family finance app for couples. Next.js + TypeScript 
 - All monetary values are integers (cents). Never use floats for money.
 - Multi-currency: every transaction and account stores its currency code (EUR default).
 - Privacy is enforced at the DATABASE QUERY level, not just UI. Every Prisma query involving transactions, accounts, or balances must be scoped by user permissions.
-- Visibility model: transactions are either `shared` or `personal`. Personal transactions are NEVER returned to non-owners, even via API.
+- Transaction visibility is derived from account ownership (FinancialAccount.ownership). There is no per-transaction visibility field.
+- Transaction types (INCOME, EXPENSE, FUND, TRANSFER, INVESTMENT) are derived from the category's type. Every transaction has a categoryId — no exceptions. There is no separate Fund model — funds are categories with type FUND.
 - Zero-based budgeting: income - allocated = 0. Track allocated vs spent per category.
 
 ## Tech Stack
@@ -64,14 +65,15 @@ OpheliaHub is a personal & family finance app for couples. Next.js + TypeScript 
 - Import parsers in `src/lib/parsers/`
 
 ## Key Entities (Reference)
-User, Household, HouseholdMember, Account, Transaction, TransactionTag,
-Category, Tag, TagGroup, Budget, Asset, Debt, Goal, ImportBatch, ImportProfile,
-RecurringRule, AuditLog
+User, Household, HouseholdMember, FinancialAccount, Transaction, TransactionTag,
+Category, Tag, TagGroup, Tracker, TrackerAllocation, InvestmentTrackerAllocation,
+FundTrackerAllocation, TagTrackerAllocation, FundEntry, BudgetLineItem,
+ImportBatch, ImportProfile, RecurringRule, AuditLog
 
 ## Privacy Rules (CRITICAL)
 1. Partner A NEVER sees Partner B's personal transactions/accounts/balances
 2. Both see all shared/household transactions
-3. A single account can mix shared + personal transactions
+3. Transaction visibility is derived from account ownership (FinancialAccount.ownership) — no per-transaction visibility field
 4. Tags respect privacy: filtering by tag only returns permitted transactions
 5. Net worth: "My Net Worth" = my accounts + shared accounts + my assets - my debt
 
@@ -122,9 +124,10 @@ You are a senior database architect specializing in financial applications with 
 Always consider:
 1. Who is the requesting user?
 2. What is their household?
-3. For transactions: filter by (visibility = 'shared') OR (created_by = current_user)
-4. For accounts: filter by (owner_type = 'household' AND owner_id = user's household) OR (owner_type = 'user' AND owner_id = current_user)
-5. Indexes on: (account_id, date), (category_id), (visibility, created_by), (import_batch_id)
+3. For transactions: use visibleTransactionsWhere() — visibility is derived from account ownership
+4. For accounts: use visibleAccountsWhere() from src/lib/privacy
+5. There is no Fund model — funds are categories with type = FUND. No fundId on Transaction.
+6. Indexes on: (account_id, date), (category_id, date), (effectiveCategoryId), (import_batch_id)
 
 ## Migration Safety
 - Always generate migration SQL and review before applying
@@ -151,10 +154,12 @@ model: sonnet
 You are a security and privacy specialist for a couples' finance app where data isolation between partners is the #1 architectural constraint.
 
 ## The Privacy Model
-- Transactions have visibility: 'shared' | 'personal'
-- Personal transactions are ONLY visible to their creator
-- Shared transactions are visible to all household members
-- A single account can contain both shared and personal transactions
+- Transaction visibility is derived from account ownership (FinancialAccount.ownership)
+- All transactions on a SHARED account are shared; all on a PERSONAL account are personal
+- There is no per-transaction visibility field
+- Every transaction has a categoryId — including transfers (Matched/Unmatched)
+- Category types (INCOME, EXPENSE, FUND, INVESTMENT, TRANSFER) determine behavior, not separate models
+- There is no Fund model — funds are categories with type FUND
 - Tags cross all boundaries but RESPECT privacy: tag views only return transactions the user can see
 - Net worth calculations must respect visibility rules
 
@@ -170,8 +175,9 @@ You are a security and privacy specialist for a couples' finance app where data 
 For every data-access code path, verify:
 - [ ] User authentication is checked (session exists)
 - [ ] Household membership is verified
-- [ ] Transaction queries include: WHERE (visibility = 'shared' OR created_by = userId)
-- [ ] Account queries include ownership check
+- [ ] Transaction queries use visibleTransactionsWhere() or transactionOwnershipFilter() from src/lib/privacy
+- [ ] No query references fundId (it no longer exists)
+- [ ] Account queries use visibleAccountsWhere() from src/lib/privacy
 - [ ] Aggregate queries (SUM, COUNT) respect visibility filters
 - [ ] API responses don't include created_by details of other users' personal items
 - [ ] Visibility changes are logged in AuditLog
@@ -216,10 +222,11 @@ You are a personal finance engineer building calculation logic for a couples' fi
 - Separate budgets for: household (shared income) and personal (individual income)
 
 ## Funds / Sinking Funds
-- Fund categories accumulate balances month-to-month (unlike expense categories that reset)
-- Monthly contribution is a budget line item that consumes income allocation
-- Running balance = sum of all prior contributions - sum of all withdrawals
-- Funds are backed by real account balances (virtual envelope, not separate account)
+- Funds are categories with type = FUND (NOT a separate model). All CRUD operates on Category records.
+- FUND-type categories accumulate balances month-to-month (unlike EXPENSE categories that reset)
+- Monthly contribution is tracked via FundTrackerAllocation (references categoryId)
+- Running balance = sum(all contributions via allocations) − sum(all spending) + adjustments (via FundEntry)
+- Assigning a FUND-type category to a transaction auto-sets Transaction.type = "FUND"
 
 ## Net Worth Calculation
 - "My Net Worth" = sum(my personal account balances) + sum(shared account balances) + sum(my assets) - sum(my debts)

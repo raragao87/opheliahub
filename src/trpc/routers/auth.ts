@@ -191,13 +191,13 @@ export const authRouter = router({
 
             // Reassign shared tags to partner
             await tx.tag.updateMany({
-              where: { userId, visibility: "SHARED" },
+              where: { userId, budgetScope: "SHARED" },
               data: { userId: partnerId },
             });
 
             // Reassign shared tag groups to partner
             await tx.tagGroup.updateMany({
-              where: { userId, visibility: "SHARED" },
+              where: { userId, budgetScope: "SHARED" },
               data: { userId: partnerId },
             });
 

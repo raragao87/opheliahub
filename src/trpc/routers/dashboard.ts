@@ -11,7 +11,7 @@ export const dashboardRouter = router({
       z.object({
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2020).max(2100),
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -20,7 +20,7 @@ export const dashboardRouter = router({
       const baseWhere = dashboardTransactionsWhere({
         userId: ctx.userId,
         householdId: ctx.householdId,
-        visibility: input.visibility,
+        budgetScope: input.budgetScope,
         dateRange: { gte: start, lte: end },
         includeInitialBalance: true, // preserve original behavior
       });
@@ -80,14 +80,14 @@ export const dashboardRouter = router({
   accountBalances: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
       }).optional()
     )
     .query(async ({ ctx, input }) => {
       return ctx.prisma.financialAccount.findMany({
         where: {
           ...visibleAccountsWhere(ctx.userId, ctx.householdId),
-          ...(input?.visibility && { ownership: input.visibility }),
+          ...(input?.budgetScope && { ownership: input.budgetScope }),
         },
         select: {
           id: true,
@@ -108,7 +108,7 @@ export const dashboardRouter = router({
     .input(
       z.object({
         limit: z.number().int().min(1).max(20).default(10),
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -116,7 +116,7 @@ export const dashboardRouter = router({
         where: dashboardTransactionsWhere({
           userId: ctx.userId,
           householdId: ctx.householdId,
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
           includeInitialBalance: true, // preserve original behavior
         }),
         orderBy: { date: "desc" },
@@ -136,7 +136,7 @@ export const dashboardRouter = router({
       month: z.number().int().min(1).max(12),
       compareYear: z.number().int().optional(),
       compareMonth: z.number().int().min(1).max(12).optional(),
-      visibility: z.enum(["SHARED", "PERSONAL"]),
+      budgetScope: z.enum(["SHARED", "PERSONAL"]),
     }))
     .query(async ({ ctx, input }) => {
       async function getMonthData(year: number, month: number) {
@@ -144,7 +144,7 @@ export const dashboardRouter = router({
         const baseWhere = dashboardTransactionsWhere({
           userId: ctx.userId,
           householdId: ctx.householdId,
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
           dateRange: { gte: start, lte: end },
           type: { in: ["INCOME", "EXPENSE"] },
         });
@@ -249,7 +249,7 @@ export const dashboardRouter = router({
           where: dashboardTransactionsWhere({
             userId: ctx.userId,
             householdId: ctx.householdId,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
             dateRange: { gte: start, lte: end },
             type: { in: ["INCOME", "EXPENSE"] },
           }),
@@ -267,7 +267,7 @@ export const dashboardRouter = router({
             category: {
               householdId: ctx.householdId,
               type: "FUND",
-              visibility: input.visibility,
+              budgetScope: input.budgetScope,
               isArchived: false,
             },
             tracker: { year: y, month: m },
@@ -302,7 +302,7 @@ export const dashboardRouter = router({
           where: dashboardTransactionsWhere({
             userId: ctx.userId,
             householdId: ctx.householdId,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
             dateRange: { gte: start, lte: end },
             type: "EXPENSE",
           }),
@@ -346,7 +346,7 @@ export const dashboardRouter = router({
             category: {
               householdId: ctx.householdId,
               type: "FUND",
-              visibility: input.visibility,
+              budgetScope: input.budgetScope,
               isArchived: false,
             },
             tracker: {
@@ -373,7 +373,7 @@ export const dashboardRouter = router({
                 category: {
                   householdId: ctx.householdId,
                   type: "FUND",
-                  visibility: input.visibility,
+                  budgetScope: input.budgetScope,
                   isArchived: false,
                 },
               },
@@ -408,14 +408,14 @@ export const dashboardRouter = router({
     .input(z.object({
       month: z.number().int().min(1).max(12),
       year: z.number().int().min(2020).max(2100),
-      visibility: z.enum(["SHARED", "PERSONAL"]),
+      budgetScope: z.enum(["SHARED", "PERSONAL"]),
     }))
     .query(async ({ ctx, input }) => {
       const categories = await ctx.prisma.category.findMany({
         where: {
           householdId: ctx.householdId,
           type: "FUND",
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
           isArchived: false,
         },
         include: {
@@ -435,12 +435,12 @@ export const dashboardRouter = router({
 
       const thisMonthTracker = await ctx.prisma.tracker.findUnique({
         where: {
-          householdId_userId_month_year_visibility: {
+          householdId_userId_month_year_budgetScope: {
             householdId: ctx.householdId,
             userId: ctx.userId,
             month: input.month,
             year: input.year,
-            visibility: input.visibility,
+            budgetScope: input.budgetScope,
           },
         },
       });

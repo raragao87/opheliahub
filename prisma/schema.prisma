@@ -268,9 +268,11 @@ enum TransactionType {
   INVESTMENT  // money flowing to/from investment accounts
 }
 
-enum Visibility {
+enum BudgetScope {
   SHARED
   PERSONAL
+
+  @@map("Visibility")
 }
 
 model Transaction {
@@ -358,7 +360,7 @@ model Category {
   parentId    String?
   householdId String
   sortOrder   Int          @default(0)
-  visibility  Visibility   @default(SHARED)
+  budgetScope BudgetScope @default(SHARED) @map("visibility")
 
   // Fund-specific fields (only relevant when type = FUND)
   linkedAccountId String?
@@ -377,7 +379,7 @@ model Category {
   fundEntries         FundEntry[]
   fundTrackerAllocations FundTrackerAllocation[]
 
-  @@unique([householdId, name, parentId, visibility])
+  @@unique([householdId, name, parentId, budgetScope])
   @@map("categories")
 }
 
@@ -402,14 +404,14 @@ model TagGroup {
   color       String?
   householdId String
   userId      String?
-  visibility  Visibility @default(SHARED)
-  sortOrder   Int        @default(0)
+  budgetScope BudgetScope @default(SHARED) @map("visibility")
+  sortOrder   Int         @default(0)
 
   household Household @relation(fields: [householdId], references: [id])
   user      User?     @relation(fields: [userId], references: [id])
   tags      Tag[]
 
-  @@unique([householdId, name, visibility])
+  @@unique([householdId, name, budgetScope])
   @@index([userId])
   @@map("tag_groups")
 }
@@ -420,8 +422,8 @@ model Tag {
   color      String?
   groupId    String?
   userId     String // creator
-  visibility Visibility @default(SHARED)
-  isArchived Boolean    @default(false)
+  budgetScope BudgetScope @default(SHARED) @map("visibility")
+  isArchived  Boolean     @default(false)
   sortOrder  Int        @default(0)
   createdAt  DateTime   @default(now())
 
@@ -442,10 +444,10 @@ model Tracker {
   year          Int
   householdId   String
   userId        String
-  visibility    Visibility @default(SHARED)
-  toNextMonth   Int?       // cents — persisted carry-out, computed on each getSummary call
-  createdAt     DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  budgetScope   BudgetScope @default(SHARED) @map("visibility")
+  toNextMonth   Int?        // cents — persisted carry-out, computed on each getSummary call
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   household      Household              @relation(fields: [householdId], references: [id])
   user           User                   @relation(fields: [userId], references: [id])
@@ -454,7 +456,7 @@ model Tracker {
   fundAllocations          FundTrackerAllocation[]
   investmentAllocations    InvestmentTrackerAllocation[]
 
-  @@unique([householdId, userId, month, year, visibility])
+  @@unique([householdId, userId, month, year, budgetScope])
   @@map("trackers")
 }
 
@@ -733,13 +735,13 @@ model DismissedRecurringPattern {
   patternKey  String
   userId      String
   householdId String
-  visibility  Visibility @default(SHARED)
-  createdAt   DateTime   @default(now())
+  budgetScope BudgetScope @default(SHARED) @map("visibility")
+  createdAt   DateTime    @default(now())
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
-  @@unique([patternKey, userId, visibility])
+  @@unique([patternKey, userId, budgetScope])
   @@index([userId])
   @@map("dismissed_recurring_patterns")
 }
@@ -840,7 +842,7 @@ model NetWorthSnapshot {
   userId           String
   month            Int        // 1-12
   year             Int        // e.g. 2026
-  visibility       Visibility // SHARED or PERSONAL
+  budgetScope      BudgetScope @map("visibility") // SHARED or PERSONAL
 
   // All values in cents
   totalAssets      Int
@@ -856,7 +858,7 @@ model NetWorthSnapshot {
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([householdId, userId, year, month, visibility])
+  @@unique([householdId, userId, year, month, budgetScope])
   @@index([householdId, userId])
   @@index([year, month])
   @@map("net_worth_snapshots")

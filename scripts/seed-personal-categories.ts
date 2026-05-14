@@ -14,7 +14,7 @@ async function main() {
 
   // Check if personal categories already exist
   const personalCount = await prisma.category.count({
-    where: { householdId: household.id, visibility: "PERSONAL" },
+    where: { householdId: household.id, budgetScope: "PERSONAL" },
   });
 
   if (personalCount > 0) {
@@ -28,7 +28,7 @@ async function main() {
   await seedDefaultCategories(prisma, household.id);
 
   const newCount = await prisma.category.count({
-    where: { householdId: household.id, visibility: "PERSONAL" },
+    where: { householdId: household.id, budgetScope: "PERSONAL" },
   });
   console.log(`Done. Now ${newCount} personal categories.`);
 }

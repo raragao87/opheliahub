@@ -2,7 +2,7 @@
  * Integration tests for dashboardTransactionsWhere() — verify privacy
  * isolation across users, households, and visibility scopes.
  *
- * The "A2 with visibility=PERSONAL sees only A2-personal" case is the
+ * The "A2 with budgetScope=PERSONAL sees only A2-personal" case is the
  * key one: it would FAIL against the unfixed dashboard.ts spread-bug
  * because the privacy filter dropped out and Prisma returned both
  * A1-personal and A2-personal.
@@ -96,7 +96,7 @@ afterAll(async () => {
 });
 
 describe("dashboardTransactionsWhere isolation", () => {
-  it("A1 with no visibility sees A1-personal + A-shared, nothing else", async () => {
+  it("A1 with no budgetScope sees A1-personal + A-shared, nothing else", async () => {
     const where = dashboardTransactionsWhere({
       userId: A1.id, householdId: householdA.id,
       dateRange: { gte: monthStart, lte: monthEnd },
@@ -106,9 +106,9 @@ describe("dashboardTransactionsWhere isolation", () => {
     expect(accountIds).toEqual(new Set([A1Personal.id, AShared.id]));
   });
 
-  it("A1 with visibility=PERSONAL sees only A1-personal — not A2's, not B1's", async () => {
+  it("A1 with budgetScope=PERSONAL sees only A1-personal — not A2's, not B1's", async () => {
     const where = dashboardTransactionsWhere({
-      userId: A1.id, householdId: householdA.id, visibility: "PERSONAL",
+      userId: A1.id, householdId: householdA.id, budgetScope: "PERSONAL",
       dateRange: { gte: monthStart, lte: monthEnd },
     });
     const txs = await prisma.transaction.findMany({ where });
@@ -119,9 +119,9 @@ describe("dashboardTransactionsWhere isolation", () => {
     // The CRITICAL spread-bug regression: before the fix, A2-personal would leak in.
   });
 
-  it("A1 with visibility=SHARED sees only A-shared — not B-shared", async () => {
+  it("A1 with budgetScope=SHARED sees only A-shared — not B-shared", async () => {
     const where = dashboardTransactionsWhere({
-      userId: A1.id, householdId: householdA.id, visibility: "SHARED",
+      userId: A1.id, householdId: householdA.id, budgetScope: "SHARED",
       dateRange: { gte: monthStart, lte: monthEnd },
     });
     const txs = await prisma.transaction.findMany({ where });
@@ -130,10 +130,10 @@ describe("dashboardTransactionsWhere isolation", () => {
     expect(accountIds).not.toContain(BShared.id);
   });
 
-  it("A2 with visibility=PERSONAL sees only A2-personal", async () => {
+  it("A2 with budgetScope=PERSONAL sees only A2-personal", async () => {
     // Same household as A1, but different user — A2 must NOT see A1-personal.
     const where = dashboardTransactionsWhere({
-      userId: A2.id, householdId: householdA.id, visibility: "PERSONAL",
+      userId: A2.id, householdId: householdA.id, budgetScope: "PERSONAL",
       dateRange: { gte: monthStart, lte: monthEnd },
     });
     const txs = await prisma.transaction.findMany({ where });
@@ -141,7 +141,7 @@ describe("dashboardTransactionsWhere isolation", () => {
     expect(accountIds).toEqual([A2Personal.id]);
   });
 
-  it("B1 with no visibility sees only B1-personal + B-shared, never household A's data", async () => {
+  it("B1 with no budgetScope sees only B1-personal + B-shared, never household A's data", async () => {
     const where = dashboardTransactionsWhere({
       userId: B1.id, householdId: householdB.id,
       dateRange: { gte: monthStart, lte: monthEnd },
@@ -157,7 +157,7 @@ describe("dashboardTransactionsWhere isolation", () => {
 
   it("excludes initial-balance transactions by default", async () => {
     const where = dashboardTransactionsWhere({
-      userId: A1.id, householdId: householdA.id, visibility: "PERSONAL",
+      userId: A1.id, householdId: householdA.id, budgetScope: "PERSONAL",
       dateRange: { gte: monthStart, lte: monthEnd },
     });
     const txs = await prisma.transaction.findMany({ where });
@@ -166,7 +166,7 @@ describe("dashboardTransactionsWhere isolation", () => {
 
   it("includes initial-balance transactions when includeInitialBalance: true", async () => {
     const where = dashboardTransactionsWhere({
-      userId: A1.id, householdId: householdA.id, visibility: "PERSONAL",
+      userId: A1.id, householdId: householdA.id, budgetScope: "PERSONAL",
       dateRange: { gte: monthStart, lte: monthEnd },
       includeInitialBalance: true,
     });
@@ -176,7 +176,7 @@ describe("dashboardTransactionsWhere isolation", () => {
 
   it("respects type filter when provided", async () => {
     const where = dashboardTransactionsWhere({
-      userId: A1.id, householdId: householdA.id, visibility: "PERSONAL",
+      userId: A1.id, householdId: householdA.id, budgetScope: "PERSONAL",
       dateRange: { gte: monthStart, lte: monthEnd },
       type: "INCOME",
     });

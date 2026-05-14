@@ -15,14 +15,14 @@ async function computeToNextMonth(tracker: {
   year: number;
   householdId: string;
   userId: string;
-  visibility: string;
+  budgetScope: string;
 }, prevToNextMonth: number): Promise<number> {
   const { start, end } = getMonthRange(tracker.year, tracker.month);
   const carryForward = prevToNextMonth;
 
   // Get leaf categories by type
   const leafCats = await prisma.category.findMany({
-    where: { householdId: tracker.householdId, parentId: { not: null }, visibility: tracker.visibility as any },
+    where: { householdId: tracker.householdId, parentId: { not: null }, budgetScope: tracker.budgetScope as any },
     select: { id: true, type: true },
   });
   const incomeCatIds = new Set(leafCats.filter(c => c.type === "INCOME").map(c => c.id));
@@ -43,7 +43,7 @@ async function computeToNextMonth(tracker: {
   const fundAllocated = fundAgg._sum.amount ?? 0;
 
   // Ownership filter — derived from account ownership
-  const visFilter = tracker.visibility === "SHARED"
+  const visFilter = tracker.budgetScope === "SHARED"
     ? {
         account: {
           OR: [
@@ -102,7 +102,7 @@ async function main() {
   // Group by chain key
   const chains = new Map<string, typeof trackers>();
   for (const t of trackers) {
-    const key = `${t.householdId}:${t.userId}:${t.visibility}`;
+    const key = `${t.householdId}:${t.userId}:${t.budgetScope}`;
     if (!chains.has(key)) chains.set(key, []);
     chains.get(key)!.push(t);
   }

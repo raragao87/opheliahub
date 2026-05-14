@@ -18,7 +18,7 @@ const OpheliaChatContext = createContext<OpheliaChatContextValue | null>(null);
 
 export function OpheliaChatProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { visibilityParam } = useOwnership();
+  const { budgetScopeParam } = useOwnership();
   const [isOpen, setIsOpen] = useState(false);
   const [pageSummary, setPageSummary] = useState<string | undefined>(undefined);
 
@@ -32,11 +32,11 @@ export function OpheliaChatProvider({ children }: { children: React.ReactNode })
     return {
       path: pathname,
       pageName: config.pageName,
-      visibility: visibilityParam ?? "SHARED",
+      budgetScope: budgetScopeParam ?? "SHARED",
       summary: pageSummary,
       suggestedPrompts: config.suggestedPrompts,
     };
-  }, [pathname, visibilityParam, pageSummary]);
+  }, [pathname, budgetScopeParam, pageSummary]);
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);

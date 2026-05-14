@@ -8,14 +8,14 @@ export const duplicatesRouter = router({
    * Used by the sidebar to show per-account duplicate badges.
    */
   pendingByAccount: householdProcedure
-    .input(z.object({ visibility: z.enum(["SHARED", "PERSONAL"]) }))
+    .input(z.object({ budgetScope: z.enum(["SHARED", "PERSONAL"]) }))
     .query(async ({ ctx, input }) => {
       const accounts = await ctx.prisma.financialAccount.findMany({
         where: visibleAccountsWhere(ctx.userId, ctx.householdId),
         select: { id: true, ownership: true },
       });
       const accountIds = accounts
-        .filter((a) => a.ownership === input.visibility)
+        .filter((a) => a.ownership === input.budgetScope)
         .map((a) => a.id);
 
       if (accountIds.length === 0) return { byAccount: {} as Record<string, number> };

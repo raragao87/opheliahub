@@ -8,14 +8,14 @@ export const netWorthRouter = router({
   getSummary: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
       }).optional()
     )
     .query(async ({ ctx, input }) => {
       const accounts = await ctx.prisma.financialAccount.findMany({
         where: {
           ...visibleAccountsWhere(ctx.userId, ctx.householdId),
-          ...(input?.visibility && { ownership: input.visibility }),
+          ...(input?.budgetScope && { ownership: input.budgetScope }),
         },
         select: {
           id: true,
@@ -56,7 +56,7 @@ export const netWorthRouter = router({
       z.object({
         year: z.number().int().min(2000).max(2100).optional(),
         month: z.number().int().min(1).max(12).optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -68,7 +68,7 @@ export const netWorthRouter = router({
         ctx.prisma,
         ctx.householdId,
         ctx.userId,
-        input.visibility,
+        input.budgetScope,
         year,
         month
       );
@@ -79,7 +79,7 @@ export const netWorthRouter = router({
   getTrend: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]),
         months: z.number().int().min(1).max(120).default(12),
       })
     )
@@ -89,7 +89,7 @@ export const netWorthRouter = router({
         where: {
           householdId: ctx.householdId,
           userId: ctx.userId,
-          visibility: input.visibility,
+          budgetScope: input.budgetScope,
         },
         orderBy: [{ year: "desc" }, { month: "desc" }],
         take: input.months,
@@ -122,7 +122,7 @@ export const netWorthRouter = router({
   backfillSnapshots: householdProcedure
     .input(
       z.object({
-        visibility: z.enum(["SHARED", "PERSONAL"]),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]),
         monthsBack: z.number().int().min(1).max(36).default(12),
       })
     )
@@ -131,7 +131,7 @@ export const netWorthRouter = router({
         ctx.prisma,
         ctx.householdId,
         ctx.userId,
-        input.visibility,
+        input.budgetScope,
         input.monthsBack
       );
       return { created };

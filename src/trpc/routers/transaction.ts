@@ -10,7 +10,7 @@ import { computeEffectiveCategoryId } from "@/lib/effective-category";
 async function getTransferCategoryId(
   prisma: PrismaClient,
   householdId: string,
-  visibility: "SHARED" | "PERSONAL",
+  budgetScope: "SHARED" | "PERSONAL",
   matched: boolean,
 ): Promise<string | null> {
   const name = matched ? "Matched" : "Unmatched";
@@ -20,11 +20,29 @@ async function getTransferCategoryId(
       type: "TRANSFER",
       name,
       parentId: { not: null },
-      visibility,
+      budgetScope,
     },
     select: { id: true },
   });
   return category?.id ?? null;
+}
+
+async function validateCategoryAccountMatch(
+  prisma: PrismaClient,
+  categoryId: string | null | undefined,
+  accountOwnership: "SHARED" | "PERSONAL",
+) {
+  if (!categoryId) return;
+  const cat = await prisma.category.findFirst({
+    where: { id: categoryId },
+    select: { budgetScope: true },
+  });
+  if (cat && cat.budgetScope !== accountOwnership) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Category belongs to ${cat.budgetScope} scope but account is ${accountOwnership}.`,
+    });
+  }
 }
 
 export const transactionRouter = router({
@@ -37,7 +55,7 @@ export const transactionRouter = router({
         categoryIds: z.array(z.string()).optional(),
         type: z.enum(["INCOME", "EXPENSE", "FUND", "TRANSFER", "INVESTMENT"]).optional(),
         transferType: z.enum(["INTERNAL", "EXTERNAL"]).optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).optional(),
         tagId: z.string().optional(),
         tagIds: z.array(z.string()).optional(),
         uncategorized: z.boolean().optional(),
@@ -174,8 +192,8 @@ export const transactionRouter = router({
             : []),
 
           // Ownership filter (separate AND to avoid account key collision)
-          ...(input.visibility
-            ? [{ account: { ownership: input.visibility } }]
+          ...(input.budgetScope
+            ? [{ account: { ownership: input.budgetScope } }]
             : []),
 
           // Accrual date filter (uses OR — already separate)
@@ -295,6 +313,8 @@ export const transactionRouter = router({
           message: "Account not found or not accessible.",
         });
       }
+
+      await validateCategoryAccountMatch(ctx.prisma, input.categoryId, account.ownership as "SHARED" | "PERSONAL");
 
       // ── TRANSFER: dual-sided creation ──────────────────────────────
       if (input.type === "TRANSFER") {
@@ -481,6 +501,7 @@ export const transactionRouter = router({
         include: {
           linkedTransaction: true,
           linkedBy: true,
+          account: { select: { ownership: true } },
         },
       });
 
@@ -490,6 +511,8 @@ export const transactionRouter = router({
           message: "Transaction not found or you don't have permission.",
         });
       }
+
+      await validateCategoryAccountMatch(ctx.prisma, restInput.categoryId, existing.account.ownership as "SHARED" | "PERSONAL");
 
       // ── TRANSFER: cascading update ──────────────────────────────────
       if (existing.type === "TRANSFER") {
@@ -806,7 +829,7 @@ export const transactionRouter = router({
           id: { in: input.ids },
           ...visibleTransactionsWhere(ctx.userId, ctx.householdId),
         },
-        select: { id: true },
+        select: { id: true, account: { select: { ownership: true } } },
       });
       const accessibleIds = accessible.map((t) => t.id);
 
@@ -815,6 +838,22 @@ export const transactionRouter = router({
           code: "FORBIDDEN",
           message: `${input.ids.length - accessibleIds.length} transaction(s) not found or not accessible.`,
         });
+      }
+
+      if (input.categoryId) {
+        const cat = await ctx.prisma.category.findFirst({
+          where: { id: input.categoryId },
+          select: { budgetScope: true },
+        });
+        if (cat) {
+          const mismatch = accessible.find((t) => t.account.ownership !== cat.budgetScope);
+          if (mismatch) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Category belongs to ${cat.budgetScope} scope but some transactions belong to ${mismatch.account.ownership} accounts.`,
+            });
+          }
+        }
       }
 
       const data: {
@@ -1021,7 +1060,7 @@ export const transactionRouter = router({
     .input(
       z.object({
         transactionIds: z.array(z.string()).optional(),
-        visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
+        budgetScope: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1030,7 +1069,7 @@ export const transactionRouter = router({
         AND: [
           baseWhere,
           {
-            account: { ownership: input.visibility },
+            account: { ownership: input.budgetScope },
             categoryId: null,
             opheliaCategoryId: { not: null },
             ...(input.transactionIds?.length && { id: { in: input.transactionIds } }),
@@ -1366,9 +1405,9 @@ export const transactionRouter = router({
           where: { id: txn.accountId },
           select: { ownership: true },
         });
-        const visibility = (account?.ownership ?? "SHARED") as "SHARED" | "PERSONAL";
+        const scope = (account?.ownership ?? "SHARED") as "SHARED" | "PERSONAL";
         const matchedCategoryId = await getTransferCategoryId(
-          ctx.prisma, ctx.householdId, visibility, true,
+          ctx.prisma, ctx.householdId, scope, true,
         );
 
         await ctx.prisma.$transaction([
@@ -1396,9 +1435,9 @@ export const transactionRouter = router({
           where: { id: txn.accountId },
           select: { ownership: true },
         });
-        const visibility = (account?.ownership ?? "SHARED") as "SHARED" | "PERSONAL";
+        const scope = (account?.ownership ?? "SHARED") as "SHARED" | "PERSONAL";
         const unmatchedCategoryId = await getTransferCategoryId(
-          ctx.prisma, ctx.householdId, visibility, false,
+          ctx.prisma, ctx.householdId, scope, false,
         );
 
         await ctx.prisma.transaction.update({

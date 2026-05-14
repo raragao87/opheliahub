@@ -209,7 +209,7 @@ export default function TrackerPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const { visibilityParam } = useOwnership();
+  const { budgetScopeParam } = useOwnership();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
@@ -293,14 +293,13 @@ export default function TrackerPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showActionsMenu]);
 
-  // Tracker is per-visibility
-  const visibility = visibilityParam ?? "SHARED";
+  const budgetScope = budgetScopeParam ?? "SHARED";
 
   const trackerQuery = useQuery({
     ...trpc.tracker.getOrCreate.queryOptions({
       month: period.month,
       year: period.year,
-      visibility,
+      budgetScope,
     }),
     placeholderData: keepPreviousData,
   });
@@ -309,16 +308,16 @@ export default function TrackerPage() {
     ...trpc.tracker.getSummary.queryOptions({
       month: period.month,
       year: period.year,
-      visibility,
+      budgetScope,
     }),
     placeholderData: keepPreviousData,
   });
 
-  const treeQuery = useQuery(trpc.category.tree.queryOptions({ visibility }));
+  const treeQuery = useQuery(trpc.category.tree.queryOptions({ budgetScope }));
 
   // Funds query
   const fundsQuery = useQuery({
-    ...trpc.fund.list.queryOptions({ visibility, month: period.month, year: period.year }),
+    ...trpc.fund.list.queryOptions({ budgetScope, month: period.month, year: period.year }),
     placeholderData: keepPreviousData,
   });
 
@@ -1276,7 +1275,7 @@ export default function TrackerPage() {
                         copyPreviousMonthMutation.mutate({
                           month: period.month,
                           year: period.year,
-                          visibility,
+                          budgetScope,
                         });
                         setShowActionsMenu(false);
                       }}
@@ -1298,7 +1297,7 @@ export default function TrackerPage() {
                           resetAllocationsMutation.mutate({
                             month: period.month,
                             year: period.year,
-                            visibility,
+                            budgetScope,
                           });
                           setShowActionsMenu(false);
                         }
@@ -2002,7 +2001,7 @@ export default function TrackerPage() {
                                   createCategoryMutation.mutate({
                                     name: newCategoryName.trim(),
                                     parentId: group.id,
-                                    visibility,
+                                    budgetScope,
                                     icon: newCategoryIcon.trim() || undefined,
                                   });
                                   setIconSuggestions([]);
@@ -2196,7 +2195,7 @@ export default function TrackerPage() {
                             createCategoryMutation.mutate({
                               name: newGroupName.trim(),
                               parentId: null,
-                              visibility,
+                              budgetScope,
                               type: tableType,
                               icon: newGroupIcon.trim() || undefined,
                             });
@@ -2731,7 +2730,7 @@ export default function TrackerPage() {
                             createFundMutation.mutate({
                               name: newFundName.trim(),
                               icon: newFundIcon.trim() || undefined,
-                              visibility,
+                              budgetScope,
                             });
                             setFundIconSuggestions([]);
                           }
@@ -2829,7 +2828,7 @@ export default function TrackerPage() {
                                   onChange={(e) => {
                                     const accountId = e.target.value || null;
                                     updateLinkedAccountMutation.mutate({
-                                      visibility,
+                                      budgetScope,
                                       linkedAccountId: accountId,
                                     });
                                   }}

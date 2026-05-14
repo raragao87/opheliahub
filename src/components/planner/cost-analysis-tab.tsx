@@ -14,7 +14,7 @@ import { fromCents } from "@/lib/money";
 interface CostAnalysisTabProps {
   month: number;
   year: number;
-  visibility: "SHARED" | "PERSONAL";
+  budgetScope: "SHARED" | "PERSONAL";
 }
 
 const PERIOD_PRESETS = [
@@ -24,11 +24,11 @@ const PERIOD_PRESETS = [
   { label: "All time", getRange: () => ({ from: undefined, to: undefined }) },
 ];
 
-export function CostAnalysisTab({ visibility }: CostAnalysisTabProps) {
+export function CostAnalysisTab({ budgetScope }: CostAnalysisTabProps) {
   const trpc = useTRPC();
 
   const categoryTreeQuery = useQuery(
-    trpc.category.tree.queryOptions({ visibility })
+    trpc.category.tree.queryOptions({ budgetScope })
   );
   const groups = categoryTreeQuery.data ?? [];
 
@@ -52,7 +52,7 @@ export function CostAnalysisTab({ visibility }: CostAnalysisTabProps) {
       categoryIds: activeCatIds,
       dateFrom: period.from,
       dateTo: period.to,
-      visibility,
+      budgetScope,
     }),
     enabled: activeCatIds.length > 0,
   });

@@ -8,7 +8,7 @@ export interface DashboardWhereOpts {
   userId: string;
   householdId: string;
   /** When set, scopes to PERSONAL or SHARED accounts. When undefined, includes both. */
-  visibility?: "SHARED" | "PERSONAL";
+  budgetScope?: "SHARED" | "PERSONAL";
   /** Inclusive date range. */
   dateRange?: { gte: Date; lte: Date };
   /** Defaults to false — initial-balance synthetic transactions are excluded by default. */
@@ -26,14 +26,14 @@ export interface DashboardWhereOpts {
  * privacy filter. See git history for the original spread-bug fix.
  *
  * Uses:
- *   - `transactionOwnershipFilter` when `visibility` is set (combined privacy + visibility)
- *   - `visibleTransactionsWhere` when `visibility` is undefined (privacy only)
+ *   - `transactionOwnershipFilter` when `budgetScope` is set (combined privacy + scope)
+ *   - `visibleTransactionsWhere` when `budgetScope` is undefined (privacy only)
  */
 export function dashboardTransactionsWhere(
   opts: DashboardWhereOpts
 ): Prisma.TransactionWhereInput {
-  const visibilityClause: Prisma.TransactionWhereInput = opts.visibility
-    ? transactionOwnershipFilter(opts.userId, opts.householdId, opts.visibility)
+  const visibilityClause: Prisma.TransactionWhereInput = opts.budgetScope
+    ? transactionOwnershipFilter(opts.userId, opts.householdId, opts.budgetScope)
     : visibleTransactionsWhere(opts.userId, opts.householdId);
 
   const clauses: Prisma.TransactionWhereInput[] = [visibilityClause];

@@ -17,14 +17,14 @@ export async function captureNetWorthSnapshot(
   prisma: PrismaClient,
   householdId: string,
   userId: string,
-  visibility: "SHARED" | "PERSONAL",
+  budgetScope: "SHARED" | "PERSONAL",
   year: number,
   month: number
 ) {
   // Fetch visible accounts based on visibility scope
   const accounts = await prisma.financialAccount.findMany({
     where:
-      visibility === "SHARED"
+      budgetScope === "SHARED"
         ? { householdId, ownership: "SHARED", isActive: true, deletedAt: null }
         : { ownerId: userId, ownership: "PERSONAL", isActive: true, deletedAt: null },
     select: {
@@ -53,12 +53,12 @@ export async function captureNetWorthSnapshot(
 
   return prisma.netWorthSnapshot.upsert({
     where: {
-      householdId_userId_year_month_visibility: {
+      householdId_userId_year_month_budgetScope: {
         householdId,
         userId,
         year,
         month,
-        visibility,
+        budgetScope,
       },
     },
     create: {
@@ -66,7 +66,7 @@ export async function captureNetWorthSnapshot(
       userId,
       year,
       month,
-      visibility,
+      budgetScope,
       totalAssets,
       totalLiabilities,
       netWorth,
@@ -115,12 +115,12 @@ export async function backfillNetWorthSnapshots(
   prisma: PrismaClient,
   householdId: string,
   userId: string,
-  visibility: "SHARED" | "PERSONAL",
+  budgetScope: "SHARED" | "PERSONAL",
   monthsBack: number
 ): Promise<number> {
   const accounts = await prisma.financialAccount.findMany({
     where:
-      visibility === "SHARED"
+      budgetScope === "SHARED"
         ? { householdId, ownership: "SHARED", isActive: true, deletedAt: null }
         : { ownerId: userId, ownership: "PERSONAL", isActive: true, deletedAt: null },
     select: { id: true, name: true, type: true, balance: true, currency: true },
@@ -161,11 +161,11 @@ export async function backfillNetWorthSnapshots(
 
     await prisma.netWorthSnapshot.upsert({
       where: {
-        householdId_userId_year_month_visibility: {
-          householdId, userId, year, month, visibility,
+        householdId_userId_year_month_budgetScope: {
+          householdId, userId, year, month, budgetScope,
         },
       },
-      create: { householdId, userId, year, month, visibility, totalAssets, totalLiabilities, netWorth, accountBreakdown: accountBreakdown as unknown as Prisma.InputJsonValue },
+      create: { householdId, userId, year, month, budgetScope, totalAssets, totalLiabilities, netWorth, accountBreakdown: accountBreakdown as unknown as Prisma.InputJsonValue },
       update: { totalAssets, totalLiabilities, netWorth, accountBreakdown: accountBreakdown as unknown as Prisma.InputJsonValue },
     });
     created++;

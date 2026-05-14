@@ -13,7 +13,7 @@ import { fromCents } from "@/lib/money";
 
 interface TagAnalysisPanelProps {
   target: { type: "group" | "tag"; id: string; name: string };
-  visibility: "SHARED" | "PERSONAL";
+  budgetScope: "SHARED" | "PERSONAL";
   onClose: () => void;
   onSelectTag?: (tagId: string, tagName: string) => void;
 }
@@ -41,7 +41,7 @@ const CHART_TOOLTIP_STYLE = {
   boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
 };
 
-export function TagAnalysisPanel({ target, visibility, onClose, onSelectTag }: TagAnalysisPanelProps) {
+export function TagAnalysisPanel({ target, budgetScope, onClose, onSelectTag }: TagAnalysisPanelProps) {
   const trpc = useTRPC();
   const [periodIdx, setPeriodIdx] = useState(0);
   const period = PERIOD_PRESETS[periodIdx].getRange();
@@ -49,7 +49,7 @@ export function TagAnalysisPanel({ target, visibility, onClose, onSelectTag }: T
   const groupQuery = useQuery({
     ...trpc.tag.getGroupAnalysis.queryOptions({
       tagGroupId: target.id,
-      visibility,
+      budgetScope,
       dateFrom: period.from,
       dateTo: period.to,
     }),
@@ -59,7 +59,7 @@ export function TagAnalysisPanel({ target, visibility, onClose, onSelectTag }: T
   const tagQuery = useQuery({
     ...trpc.tag.tagAnalysis.queryOptions({
       tagIds: [target.id],
-      visibility,
+      budgetScope,
       dateFrom: period.from,
       dateTo: period.to,
     }),

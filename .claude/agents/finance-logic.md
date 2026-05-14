@@ -54,14 +54,18 @@ The core budgeting method: every cent of income must be assigned a purpose.
 
 ## Funds / Sinking Funds
 
-Funds are virtual envelopes that accumulate over time (unlike expense categories that reset monthly):
+Funds are categories with `type = FUND`. They are NOT a separate model — they're
+regular Category records that accumulate balances across months (unlike EXPENSE
+categories that reset monthly).
 
-- A fund has a **running balance** that carries forward month-to-month
-- Monthly fund contribution = a budget line item that consumes income allocation
-- Running balance = sum(all contributions) − sum(all withdrawals)
-- Funds are backed by real account balances — they're a virtual layer, not separate bank accounts
-- A fund can optionally have a **target amount** and **target date** for goal tracking
+- A FUND-type category has a **running balance** that carries forward month-to-month
+- Monthly fund contribution is tracked via `FundTrackerAllocation` (references `categoryId`)
+- Running balance = sum(all contributions via allocations) − sum(all spending) + adjustments
+- Adjustments are tracked via `FundEntry` records (references `categoryId`)
+- Fund-type categories can have a `linkedAccountId` pointing to a real savings account for reconciliation
 - Fund contributions appear as expense-like line items in the zero-based budget
+- Assigning a FUND-type category to a transaction auto-sets `Transaction.type = "FUND"`
+- The fund router (`src/trpc/routers/fund.ts`) queries `Category WHERE type = "FUND"` — all CRUD operates on Category records
 
 ## Net Worth Calculation
 

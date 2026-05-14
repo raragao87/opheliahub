@@ -35,6 +35,7 @@ For EVERY data-access code path you review, verify all of the following:
 - [ ] Household membership is verified (user belongs to the household they're querying)
 - [ ] Transaction queries use `visibleTransactionsWhere()` or `transactionOwnershipFilter()` from `@/lib/privacy`
 - [ ] No code references `Transaction.visibility` (field doesn't exist)
+- [ ] No query references `fundId` (column no longer exists — funds are categories with `type = FUND`)
 - [ ] Budget-scoped queries filter by `account.ownership`, not transaction-level field
 - [ ] Account queries use `visibleAccountsWhere()` from `@/lib/privacy`
 - [ ] Any code that updates `FinancialAccount.ownership` also updates `householdId` atomically (the CHECK constraint `chk_ownership_household_consistency` will reject the row otherwise).
