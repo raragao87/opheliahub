@@ -44,3 +44,9 @@ next-env.d.ts
 
 # prisma
 prisma/migrations/migration_lock.toml
+
+# backups
+backup-*.sql
+
+# docs (generated, not source of truth)
+/docs/
