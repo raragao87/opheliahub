@@ -505,7 +505,7 @@ model FundTrackerAllocation {
   category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([trackerId, fundId])
-  @@index([trackerId, categoryId])
+  @@unique([trackerId, categoryId])
   @@map("fund_tracker_allocations")
 }
 

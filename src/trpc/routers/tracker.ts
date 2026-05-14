@@ -446,7 +446,7 @@ export const trackerRouter = router({
       // Compute and persist "to next month"
       // Formula: carryIn + actualIncome + actualInvestment - actualExpenses - fundAllocations
       const fundAllocated = await ctx.prisma.fundTrackerAllocation.aggregate({
-        where: { trackerId: tracker.id },
+        where: { trackerId: tracker.id, categoryId: { not: null } },
         _sum: { amount: true },
       }).then((r) => r._sum.amount ?? 0);
 
@@ -482,15 +482,15 @@ export const trackerRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.fundTrackerAllocation.upsert({
         where: {
-          trackerId_fundId: {
+          trackerId_categoryId: {
             trackerId: input.trackerId,
-            fundId: input.fundId,
+            categoryId: input.fundId,
           },
         },
         update: { amount: input.amount },
         create: {
           trackerId: input.trackerId,
-          fundId: input.fundId,
+          categoryId: input.fundId,
           amount: input.amount,
         },
       });
@@ -768,10 +768,10 @@ export const trackerRouter = router({
         );
       }
 
-      // Copy fund allocations
+      // Copy fund allocations (category-based)
       const prevFundAllocations =
         await ctx.prisma.fundTrackerAllocation.findMany({
-          where: { trackerId: prevTracker.id },
+          where: { trackerId: prevTracker.id, categoryId: { not: null } },
         });
 
       if (prevFundAllocations.length > 0) {
@@ -779,15 +779,15 @@ export const trackerRouter = router({
           prevFundAllocations.map((alloc) =>
             ctx.prisma.fundTrackerAllocation.upsert({
               where: {
-                trackerId_fundId: {
+                trackerId_categoryId: {
                   trackerId: currentTracker.id,
-                  fundId: alloc.fundId!,
+                  categoryId: alloc.categoryId!,
                 },
               },
               update: { amount: alloc.amount },
               create: {
                 trackerId: currentTracker.id,
-                fundId: alloc.fundId!,
+                categoryId: alloc.categoryId!,
                 amount: alloc.amount,
               },
             })
