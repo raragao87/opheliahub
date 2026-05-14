@@ -39,7 +39,7 @@ export const categoryRouter = router({
       z
         .object({
           visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
-          type: z.enum(["INCOME", "EXPENSE", "INVESTMENT"]).optional(),
+          type: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "FUND", "TRANSFER"]).optional(),
         })
         .optional()
     )
@@ -80,7 +80,7 @@ export const categoryRouter = router({
         color: z.string().optional(),
         parentId: z.string().nullable().optional(),
         visibility: z.enum(["SHARED", "PERSONAL"]).default("SHARED"),
-        type: z.enum(["INCOME", "EXPENSE", "INVESTMENT"]).default("EXPENSE"),
+        type: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "FUND", "TRANSFER"]).default("EXPENSE"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -94,8 +94,8 @@ export const categoryRouter = router({
         if (!parent) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Parent group not found." });
         }
-        // INCOME and INVESTMENT categories are flat — no subcategories allowed
-        if (parent.type === "INCOME" || parent.type === "INVESTMENT") {
+        if (parent.type === "INCOME" || parent.type === "INVESTMENT"
+            || parent.type === "FUND" || parent.type === "TRANSFER") {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: `${parent.type} categories cannot have subcategories.`,
@@ -103,7 +103,7 @@ export const categoryRouter = router({
         }
         // Children inherit parent visibility and type
         visibility = parent.visibility as "SHARED" | "PERSONAL";
-        type = parent.type as "INCOME" | "EXPENSE" | "INVESTMENT";
+        type = parent.type as "INCOME" | "EXPENSE" | "INVESTMENT" | "FUND" | "TRANSFER";
       }
 
       const maxSort = await ctx.prisma.category.aggregate({
@@ -135,7 +135,7 @@ export const categoryRouter = router({
         name: z.string().min(1).max(50).optional(),
         icon: z.string().optional(),
         color: z.string().optional(),
-        type: z.enum(["INCOME", "EXPENSE", "INVESTMENT"]).optional(),
+        type: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "FUND", "TRANSFER"]).optional(),
         sortOrder: z.number().int().optional(),
         parentId: z.string().nullable().optional(),
       })

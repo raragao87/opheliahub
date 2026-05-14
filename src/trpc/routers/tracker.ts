@@ -781,13 +781,13 @@ export const trackerRouter = router({
               where: {
                 trackerId_fundId: {
                   trackerId: currentTracker.id,
-                  fundId: alloc.fundId,
+                  fundId: alloc.fundId!,
                 },
               },
               update: { amount: alloc.amount },
               create: {
                 trackerId: currentTracker.id,
-                fundId: alloc.fundId,
+                fundId: alloc.fundId!,
                 amount: alloc.amount,
               },
             })

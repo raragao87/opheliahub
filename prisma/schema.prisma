@@ -211,6 +211,7 @@ model FinancialAccount {
   importBatches   ImportBatch[]
   recurringRules  RecurringRule[]
   linkedFunds     Fund[]
+  linkedFundCategories Category[] @relation("LinkedFundCategories")
 
   @@index([ownerId])
   @@index([householdId])
@@ -350,6 +351,8 @@ enum CategoryType {
   INCOME
   EXPENSE
   INVESTMENT  // flat categories for investment tracking
+  FUND        // envelope budgeting — accumulates balance across months
+  TRANSFER    // money movement between accounts (matched/unmatched)
 }
 
 model Category {
@@ -363,15 +366,22 @@ model Category {
   sortOrder   Int          @default(0)
   visibility  Visibility   @default(SHARED)
 
+  // Fund-specific fields (only relevant when type = FUND)
+  linkedAccountId String?
+  isArchived      Boolean    @default(false)
+
   parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
   children Category[] @relation("CategoryChildren")
 
   household           Household          @relation(fields: [householdId], references: [id])
+  linkedAccount       FinancialAccount?  @relation("LinkedFundCategories", fields: [linkedAccountId], references: [id])
   transactions        Transaction[]      @relation("UserCategory")
   opheliaTransactions Transaction[]      @relation("OpheliaCategory")
   allocations         TrackerAllocation[]
   recurringRules      RecurringRule[]
   lineItems           BudgetLineItem[]
+  fundEntries         FundEntry[]
+  fundTrackerAllocations FundTrackerAllocation[]
 
   @@unique([householdId, name, parentId, visibility])
   @@map("categories")
@@ -484,15 +494,18 @@ model TagTrackerAllocation {
 }
 
 model FundTrackerAllocation {
-  id        String @id @default(cuid())
-  trackerId String
-  fundId    String
-  amount    Int // cents allocated to this fund for this month
+  id         String  @id @default(cuid())
+  trackerId  String
+  fundId     String?
+  categoryId String?
+  amount     Int // cents allocated to this fund for this month
 
-  tracker Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
-  fund    Fund    @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  tracker  Tracker   @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  fund     Fund?     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([trackerId, fundId])
+  @@index([trackerId, categoryId])
   @@map("fund_tracker_allocations")
 }
 
@@ -717,18 +730,21 @@ model Fund {
 
 
 model FundEntry {
-  id        String        @id @default(cuid())
-  fundId    String
-  year      Int
-  month     Int
-  type      FundEntryType
-  amount    Int           // cents — always positive
-  note      String?
-  createdAt DateTime      @default(now())
+  id         String        @id @default(cuid())
+  fundId     String?
+  categoryId String?
+  year       Int
+  month      Int
+  type       FundEntryType
+  amount     Int           // cents — always positive
+  note       String?
+  createdAt  DateTime      @default(now())
 
-  fund Fund @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  fund     Fund?     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@index([fundId, year, month])
+  @@index([categoryId, year, month])
   @@map("fund_entries")
 }
 
