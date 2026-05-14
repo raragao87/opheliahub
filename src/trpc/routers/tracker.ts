@@ -446,9 +446,9 @@ export const trackerRouter = router({
       // Compute and persist "to next month"
       // Formula: carryIn + actualIncome + actualInvestment - actualExpenses - fundAllocations
       const fundAllocated = await ctx.prisma.fundTrackerAllocation.aggregate({
-        where: { trackerId: tracker.id, categoryId: { not: null } },
+        where: { trackerId: tracker.id },
         _sum: { amount: true },
-      }).then((r) => r._sum.amount ?? 0);
+      }).then((r) => r._sum?.amount ?? 0);
 
       const toNextMonth = carryIn + actualIncome + actualInvestment - totalActualExpenses - fundAllocated;
 
@@ -768,10 +768,10 @@ export const trackerRouter = router({
         );
       }
 
-      // Copy fund allocations (category-based)
+      // Copy fund allocations
       const prevFundAllocations =
         await ctx.prisma.fundTrackerAllocation.findMany({
-          where: { trackerId: prevTracker.id, categoryId: { not: null } },
+          where: { trackerId: prevTracker.id },
         });
 
       if (prevFundAllocations.length > 0) {
@@ -781,13 +781,13 @@ export const trackerRouter = router({
               where: {
                 trackerId_categoryId: {
                   trackerId: currentTracker.id,
-                  categoryId: alloc.categoryId!,
+                  categoryId: alloc.categoryId,
                 },
               },
               update: { amount: alloc.amount },
               create: {
                 trackerId: currentTracker.id,
-                categoryId: alloc.categoryId!,
+                categoryId: alloc.categoryId,
                 amount: alloc.amount,
               },
             })

@@ -45,7 +45,6 @@ interface Filters {
   search: string;
   accountIds: string[];
   categoryIds: string[];
-  fundIds: string[];
   tagIds: string[];
   type: string;
   transferType: string;
@@ -58,7 +57,6 @@ interface Filters {
   amountMax: string;
   liquidOnly: string;
   excludeTransfers: string;
-  fundId: string;
   uncategorized: boolean;
   opheliaUnconfirmed: boolean;
   noTags: boolean;
@@ -71,7 +69,6 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     search: sp.get("search") ?? "",
     accountIds: parseCSV(sp.get("accountIds") ?? sp.get("accountId")),
     categoryIds: parseCSV(sp.get("categoryIds") ?? sp.get("categoryId")),
-    fundIds: parseCSV(sp.get("fundIds")),
     tagIds: parseCSV(sp.get("tagIds")),
     type: sp.get("type") ?? "",
     transferType: sp.get("transferType") ?? "",
@@ -84,7 +81,6 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     amountMax: sp.get("amountMax") ?? "",
     liquidOnly: sp.get("liquidOnly") ?? "",
     excludeTransfers: sp.get("excludeTransfers") ?? "",
-    fundId: sp.get("fundId") ?? "",
     uncategorized: sp.get("uncategorized") === "true",
     opheliaUnconfirmed: sp.get("opheliaUnconfirmed") === "true",
     noTags: sp.get("noTags") === "true",
@@ -98,7 +94,6 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.search) sp.set("search", f.search);
   if (f.accountIds.length) sp.set("accountIds", toCSV(f.accountIds));
   if (f.categoryIds.length) sp.set("categoryIds", toCSV(f.categoryIds));
-  if (f.fundIds.length) sp.set("fundIds", toCSV(f.fundIds));
   if (f.tagIds.length) sp.set("tagIds", toCSV(f.tagIds));
   if (f.type) sp.set("type", f.type);
   if (f.transferType) sp.set("transferType", f.transferType);
@@ -111,7 +106,6 @@ function filtersToParams(f: Filters): URLSearchParams {
   if (f.amountMax) sp.set("amountMax", f.amountMax);
   if (f.liquidOnly) sp.set("liquidOnly", f.liquidOnly);
   if (f.excludeTransfers) sp.set("excludeTransfers", f.excludeTransfers);
-  if (f.fundId) sp.set("fundId", f.fundId);
   if (f.uncategorized) sp.set("uncategorized", "true");
   if (f.opheliaUnconfirmed) sp.set("opheliaUnconfirmed", "true");
   if (f.noTags) sp.set("noTags", "true");
@@ -125,7 +119,6 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.search === b.search &&
     a.accountIds.join(",") === b.accountIds.join(",") &&
     a.categoryIds.join(",") === b.categoryIds.join(",") &&
-    a.fundIds.join(",") === b.fundIds.join(",") &&
     a.tagIds.join(",") === b.tagIds.join(",") &&
     a.type === b.type &&
     a.transferType === b.transferType &&
@@ -138,7 +131,6 @@ function filtersEqual(a: Filters, b: Filters): boolean {
     a.amountMax === b.amountMax &&
     a.liquidOnly === b.liquidOnly &&
     a.excludeTransfers === b.excludeTransfers &&
-    a.fundId === b.fundId &&
     a.uncategorized === b.uncategorized &&
     a.opheliaUnconfirmed === b.opheliaUnconfirmed &&
     a.noTags === b.noTags &&
@@ -151,7 +143,6 @@ const EMPTY_FILTERS: Filters = {
   search: "",
   accountIds: [],
   categoryIds: [],
-  fundIds: [],
   tagIds: [],
   type: "",
   transferType: "",
@@ -164,7 +155,6 @@ const EMPTY_FILTERS: Filters = {
   amountMax: "",
   liquidOnly: "",
   excludeTransfers: "",
-  fundId: "",
   uncategorized: false,
   opheliaUnconfirmed: false,
   noTags: false,
@@ -249,9 +239,6 @@ function TransactionsContent() {
   const tagsQuery = useQuery(
     trpc.tag.list.queryOptions({ visibility: visibilityParam })
   );
-  const fundsQuery = useQuery(
-    trpc.fund.listForDropdown.queryOptions({ visibility: visibilityParam })
-  );
   const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
 
   // ── Build query input ──────────────────────────────────────────────
@@ -266,7 +253,6 @@ function TransactionsContent() {
       visibility: (filters.visibility as "SHARED" | "PERSONAL") || visibilityParam,
       accountIds: filters.accountIds.length ? filters.accountIds : undefined,
       categoryIds: !filters.uncategorized && !filters.opheliaUnconfirmed && filters.categoryIds.length ? filters.categoryIds : undefined,
-      fundIds: !filters.uncategorized && !filters.opheliaUnconfirmed && filters.fundIds.length ? filters.fundIds : undefined,
       type: (filters.type as "INCOME" | "EXPENSE" | "FUND" | "TRANSFER" | "INVESTMENT") || undefined,
       transferType: (filters.transferType as "INTERNAL" | "EXTERNAL") || undefined,
       dateFrom: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
@@ -277,7 +263,6 @@ function TransactionsContent() {
       amountMax: !isNaN(amountMaxCents ?? NaN) ? amountMaxCents : undefined,
       liquidOnly: filters.liquidOnly === "true" || undefined,
       excludeTransfers: filters.excludeTransfers === "true" || undefined,
-      fundId: filters.fundId || undefined,
       uncategorized: filters.uncategorized || undefined,
       opheliaUnconfirmed: filters.opheliaUnconfirmed || undefined,
       noTags: filters.noTags || undefined,
@@ -335,15 +320,17 @@ function TransactionsContent() {
   // Flatten category tree for inline editing + filter
   const flatCategories = useMemo(() => {
     const groups = categoriesQuery.data ?? [];
-    return groups.flatMap((group) =>
-      group.children.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        icon: cat.icon,
-        groupName: group.name,
-        categoryType: group.type as string,
-      }))
-    );
+    const result: Array<{ id: string; name: string; icon: string | null; groupName: string; categoryType: string }> = [];
+    for (const group of groups) {
+      if (group.children.length > 0) {
+        for (const cat of group.children) {
+          result.push({ id: cat.id, name: cat.name, icon: cat.icon, groupName: group.name, categoryType: group.type as string });
+        }
+      } else if (group.type === "FUND") {
+        result.push({ id: group.id, name: group.name, icon: group.icon, groupName: "Funds", categoryType: "FUND" });
+      }
+    }
+    return result;
   }, [categoriesQuery.data]);
 
   // ── Inline update mutation with optimistic updates ─────────────────
@@ -654,14 +641,26 @@ function TransactionsContent() {
   // Category filter groups (by parent group)
   const categoryFilterGroups: FilterOptionGroup[] = useMemo(() => {
     const groups = categoriesQuery.data ?? [];
-    return groups.map((group) => ({
-      label: group.name,
-      options: group.children.map((cat) => ({
-        value: cat.id,
-        label: cat.name,
-        icon: cat.icon ?? undefined,
-      })),
-    })).filter((g) => g.options.length > 0);
+    const result: FilterOptionGroup[] = [];
+    const fundOptions: FilterOptionGroup["options"] = [];
+    for (const group of groups) {
+      if (group.children.length > 0) {
+        result.push({
+          label: group.name,
+          options: group.children.map((cat) => ({
+            value: cat.id,
+            label: cat.name,
+            icon: cat.icon ?? undefined,
+          })),
+        });
+      } else if (group.type === "FUND") {
+        fundOptions.push({ value: group.id, label: group.name, icon: group.icon ?? undefined });
+      }
+    }
+    if (fundOptions.length > 0) {
+      result.push({ label: "Funds", options: fundOptions });
+    }
+    return result;
   }, [categoriesQuery.data]);
 
   // Tag filter groups (by tag group, or single flat group)
@@ -741,7 +740,6 @@ function TransactionsContent() {
     filters.search !== "" ||
     filters.accountIds.length > 0 ||
     filters.categoryIds.length > 0 ||
-    filters.fundIds.length > 0 ||
     filters.tagIds.length > 0 ||
     filters.type !== "" ||
     filters.transferType !== "" ||
@@ -754,7 +752,6 @@ function TransactionsContent() {
     filters.amountMax !== "" ||
     filters.liquidOnly !== "" ||
     filters.excludeTransfers !== "" ||
-    filters.fundId !== "" ||
     filters.uncategorized ||
     filters.opheliaUnconfirmed ||
     filters.noTags ||
@@ -764,7 +761,7 @@ function TransactionsContent() {
   const activeFilterCount = [
     filters.search !== "",
     filters.accountIds.length > 0,
-    filters.categoryIds.length > 0 || filters.fundIds.length > 0,
+    filters.categoryIds.length > 0,
     filters.tagIds.length > 0,
     filters.type !== "" || filters.transferType !== "",
     filters.dateFrom !== "" || filters.dateTo !== "",
@@ -973,18 +970,6 @@ function TransactionsContent() {
                 </button>
               </span>
             )}
-            {filters.fundId && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 font-medium">
-                Fund
-                <button
-                  onClick={() => setFilters((f) => ({ ...f, fundId: "" }))}
-                  className="ml-0.5 hover:text-violet-700 dark:hover:text-violet-300"
-                  title="Clear fund filter"
-                >
-                  ×
-                </button>
-              </span>
-            )}
             <span>{activeFilterCount} filter{activeFilterCount !== 1 ? "s" : ""} active</span>
             <span className="text-border">·</span>
             <span className="text-muted-foreground/70">
@@ -1080,7 +1065,6 @@ function TransactionsContent() {
           <TransactionTable
             transactions={transactions}
             flatCategories={flatCategories}
-            funds={fundsQuery.data ?? []}
             allTags={tagsQuery.data ?? []}
             onUpdate={handleUpdate}
             onDelete={handleDelete}
@@ -1093,7 +1077,6 @@ function TransactionsContent() {
               dateTo: filters.dateTo,
               accountIds: filters.accountIds,
               categoryIds: filters.categoryIds,
-              fundIds: filters.fundIds,
               tagIds: filters.tagIds,
               uncategorized: filters.uncategorized,
               opheliaUnconfirmed: filters.opheliaUnconfirmed,
@@ -1146,11 +1129,7 @@ function TransactionsContent() {
             selectedTransactions={selectedTransactions}
             onDeselectAll={() => setSelectedIds(new Set())}
             categoryGroups={categoryFilterGroups}
-            funds={fundsQuery.data ?? []}
-            onBulkChangeCategory={(value) => {
-              const categoryId = value?.startsWith("__FUND__")
-                ? value.replace("__FUND__", "")
-                : value;
+            onBulkChangeCategory={(categoryId) => {
               bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId });
             }}
             tagGroups={tagFilterGroups}

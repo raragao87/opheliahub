@@ -24,13 +24,11 @@ export const fundRouter = router({
         },
         include: {
           fundEntries: {
-            where: { categoryId: { not: null }, type: "ADJUSTMENT" },
+            where: { type: "ADJUSTMENT" },
             orderBy: { createdAt: "desc" },
             select: { id: true, amount: true, note: true, year: true, month: true, createdAt: true },
           },
-          fundTrackerAllocations: {
-            where: { categoryId: { not: null } },
-          },
+          fundTrackerAllocations: true,
           lineItems: { orderBy: { sortOrder: "asc" } },
           linkedAccount: {
             select: { id: true, name: true, balance: true, currency: true },

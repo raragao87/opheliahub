@@ -29,13 +29,6 @@ const CONSTRAINTS: DbConstraint[] = [
       "Privacy invariant: SHARED accounts must have a householdId, PERSONAL accounts must not. " +
       "See CLAUDE.md > Privacy Rules.",
   },
-  {
-    name: "chk_budget_line_item_parent",
-    table: "budget_line_items",
-    definition: `CHECK (num_nonnulls("categoryId", "fundId") = 1)`,
-    rationale:
-      "Each budget line item must belong to exactly one parent: either a category or a fund, never both, never neither.",
-  },
 ];
 
 async function constraintExists(table: string, name: string): Promise<boolean> {

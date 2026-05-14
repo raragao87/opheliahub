@@ -201,12 +201,6 @@ export const authRouter = router({
               data: { userId: partnerId },
             });
 
-            // Reassign shared funds to partner
-            await tx.fund.updateMany({
-              where: { userId, visibility: "SHARED" },
-              data: { userId: partnerId },
-            });
-
             // Reassign shared recurring rules to partner
             await tx.recurringRule.updateMany({
               where: { userId, householdId },
@@ -314,19 +308,6 @@ export const authRouter = router({
 
           // TagGroups (remaining after reassignment)
           await tx.tagGroup.deleteMany({ where: { userId } });
-
-          // Funds (remaining after shared fund reassignment — personal funds)
-          // Null out fundId on any transactions referencing these funds
-          const remainingFundIds = await tx.fund
-            .findMany({ where: { userId }, select: { id: true } })
-            .then((rows) => rows.map((r) => r.id));
-          if (remainingFundIds.length > 0) {
-            await tx.transaction.updateMany({
-              where: { fundId: { in: remainingFundIds } },
-              data: { fundId: null },
-            });
-          }
-          await tx.fund.deleteMany({ where: { userId } });
 
           // ChatConversation, NetWorthSnapshot, Note
           await tx.chatConversation.deleteMany({ where: { userId } });

@@ -127,8 +127,9 @@ export async function categorizeTransactionBatch(
       });
 
       // Split categories by visibility and type
-      const sharedCategories = categories.filter((c) => c.visibility === "SHARED" && c.type !== "INVESTMENT");
-      const personalCategories = categories.filter((c) => c.visibility === "PERSONAL" && c.type !== "INVESTMENT");
+      const excludedTypes = new Set(["INVESTMENT", "TRANSFER", "FUND"]);
+      const sharedCategories = categories.filter((c) => c.visibility === "SHARED" && !excludedTypes.has(c.type));
+      const personalCategories = categories.filter((c) => c.visibility === "PERSONAL" && !excludedTypes.has(c.type));
       const sharedInvestmentCategories = categories.filter((c) => c.visibility === "SHARED" && c.type === "INVESTMENT");
       const personalInvestmentCategories = categories.filter((c) => c.visibility === "PERSONAL" && c.type === "INVESTMENT");
 

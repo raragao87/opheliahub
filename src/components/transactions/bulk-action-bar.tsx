@@ -21,19 +21,12 @@ interface SelectedTransactionInfo {
   importBatchId?: string | null;
 }
 
-interface FundOption {
-  id: string;
-  name: string;
-  icon?: string | null;
-}
-
 interface BulkActionBarProps {
   selectedCount: number;
   selectedTransactions: SelectedTransactionInfo[];
   onDeselectAll: () => void;
   // Category action
   categoryGroups: FilterOptionGroup[];
-  funds?: FundOption[];
   onBulkChangeCategory: (categoryId: string | null) => void;
   // Tag actions
   tagGroups: FilterOptionGroup[];
@@ -52,7 +45,6 @@ export function BulkActionBar({
   selectedTransactions,
   onDeselectAll,
   categoryGroups,
-  funds = [],
   onBulkChangeCategory,
   tagGroups,
   onBulkAddTags,
@@ -155,7 +147,6 @@ export function BulkActionBar({
         {activeAction === "category" && (
           <CategoryPicker
             groups={categoryGroups}
-            funds={funds}
             onSelect={(id) => {
               onBulkChangeCategory(id);
               closeAction();
@@ -243,12 +234,10 @@ function ActionButton({
 
 function CategoryPicker({
   groups,
-  funds = [],
   onSelect,
   onClose,
 }: {
   groups: FilterOptionGroup[];
-  funds?: FundOption[];
   onSelect: (categoryId: string | null) => void;
   onClose: () => void;
 }) {
@@ -273,10 +262,6 @@ function CategoryPicker({
         }))
         .filter((g) => g.options.length > 0)
     : groups;
-
-  const filteredFunds = search
-    ? funds.filter((f) => f.name.toLowerCase().includes(lc))
-    : funds;
 
   const showHeaders = groups.length > 1;
 
@@ -325,29 +310,7 @@ function CategoryPicker({
           </div>
         ))}
 
-        {/* Funds section */}
-        {filteredFunds.length > 0 && (
-          <div className="mt-1 pt-1 border-t border-border/40">
-            <div className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 py-1">
-              Funds
-            </div>
-            {filteredFunds.map((fund) => (
-              <button
-                key={fund.id}
-                onClick={() => onSelect(`__FUND__${fund.id}`)}
-                className={cn(
-                  "flex items-center gap-2 w-full py-1 rounded text-sm hover:bg-muted/50 text-foreground transition-colors",
-                  showHeaders ? "pl-5 pr-2" : "px-2"
-                )}
-              >
-                <span className="text-xs shrink-0">{fund.icon ?? "💰"}</span>
-                <span className="truncate">{fund.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {filteredGroups.length === 0 && filteredFunds.length === 0 && (
+        {filteredGroups.length === 0 && (
           <p className="text-xs text-muted-foreground/50 text-center py-3">No matches</p>
         )}
       </div>

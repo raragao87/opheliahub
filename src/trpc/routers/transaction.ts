@@ -709,7 +709,6 @@ export const transactionRouter = router({
         include: {
           account: { select: { id: true, name: true } },
           category: { select: { id: true, name: true, icon: true } },
-          fund: { select: { id: true, name: true, icon: true } },
           investmentDetail: {
             include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
           },
@@ -1197,7 +1196,6 @@ export const transactionRouter = router({
         include: {
           account: { select: { id: true, name: true } },
           category: { select: { id: true, name: true, icon: true } },
-          fund: { select: { id: true, name: true, icon: true } },
           tags: { include: { tag: true } },
         },
       });

@@ -87,7 +87,6 @@ model User {
   dismissedPatterns     DismissedRecurringPattern[]
   feedback              Feedback[]
   netWorthSnapshots     NetWorthSnapshot[]
-  funds                 Fund[]
   chatConversations     ChatConversation[]
   duplicateAlerts       DuplicateAlert[]
   opheliaFeedback       OpheliaFeedback[] @relation("UserOpheliaFeedback")
@@ -112,7 +111,6 @@ model Household {
   dismissedPatterns     DismissedRecurringPattern[]
   opheliaFeedback       OpheliaFeedback[]
   netWorthSnapshots     NetWorthSnapshot[]
-  funds                 Fund[]
   investmentAssets      InvestmentAsset[]
 
   @@map("households")
@@ -210,7 +208,6 @@ model FinancialAccount {
   duplicateAlerts DuplicateAlert[]
   importBatches   ImportBatch[]
   recurringRules  RecurringRule[]
-  linkedFunds     Fund[]
   linkedFundCategories Category[] @relation("LinkedFundCategories")
 
   @@index([ownerId])
@@ -290,7 +287,6 @@ model Transaction {
   isInitialBalance    Boolean   @default(false) // true for the synthetic "Initial Balance" transaction created per account
   accountId           String
   categoryId          String?
-  fundId              String?
   userId              String // creator / owner
   importBatchId       String?
   externalId          String? // for duplicate detection on import
@@ -312,7 +308,6 @@ model Transaction {
 
   account          FinancialAccount  @relation(fields: [accountId], references: [id])
   category         Category?         @relation("UserCategory", fields: [categoryId], references: [id])
-  fund             Fund?             @relation(fields: [fundId], references: [id])
   opheliaCategory  Category?         @relation("OpheliaCategory", fields: [opheliaCategoryId], references: [id])
   user             User              @relation(fields: [userId], references: [id])
   importBatch      ImportBatch?      @relation(fields: [importBatchId], references: [id])
@@ -327,7 +322,6 @@ model Transaction {
   @@index([accountId, date])
   @@index([opheliaProcessedAt])
   @@index([categoryId, date])
-  @@index([fundId, date])
   @@index([effectiveCategoryId])
   @@index([deletedAt])
   @@map("transactions")
@@ -389,18 +383,15 @@ model Category {
 
 model BudgetLineItem {
   id          String  @id @default(cuid())
-  categoryId  String?
-  fundId      String?
+  categoryId  String
   description String
   period      Int
   amount      Int
   sortOrder   Int     @default(0)
 
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  fund     Fund?     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@index([categoryId])
-  @@index([fundId])
   @@map("budget_line_items")
 }
 
@@ -496,15 +487,12 @@ model TagTrackerAllocation {
 model FundTrackerAllocation {
   id         String  @id @default(cuid())
   trackerId  String
-  fundId     String?
-  categoryId String?
+  categoryId String
   amount     Int // cents allocated to this fund for this month
 
-  tracker  Tracker   @relation(fields: [trackerId], references: [id], onDelete: Cascade)
-  fund     Fund?     @relation(fields: [fundId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  tracker  Tracker  @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@unique([trackerId, fundId])
   @@unique([trackerId, categoryId])
   @@map("fund_tracker_allocations")
 }
@@ -697,42 +685,9 @@ model RecurringRule {
   @@map("recurring_rules")
 }
 
-// ─── FUNDS (ENVELOPE BUDGETING) ─────────────────────────────────────
-
-model Fund {
-  id              String     @id @default(cuid())
-  name            String
-  icon            String?
-  color           String?
-  householdId     String
-  userId          String
-  visibility      Visibility @default(SHARED)
-
-  // Link to a real account whose balance should match fund totals
-  linkedAccountId String?
-
-  sortOrder       Int        @default(0)
-  isArchived      Boolean    @default(false)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-
-  household     Household         @relation(fields: [householdId], references: [id])
-  user          User              @relation(fields: [userId], references: [id])
-  linkedAccount FinancialAccount? @relation(fields: [linkedAccountId], references: [id])
-  entries       FundEntry[]
-  lineItems     BudgetLineItem[]
-  transactions  Transaction[]
-  allocations   FundTrackerAllocation[]
-
-  @@unique([householdId, name, visibility])
-  @@map("funds")
-}
-
-
 model FundEntry {
   id         String        @id @default(cuid())
-  fundId     String?
-  categoryId String?
+  categoryId String
   year       Int
   month      Int
   type       FundEntryType
@@ -740,10 +695,8 @@ model FundEntry {
   note       String?
   createdAt  DateTime      @default(now())
 
-  fund     Fund?     @relation(fields: [fundId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@index([fundId, year, month])
   @@index([categoryId, year, month])
   @@map("fund_entries")
 }

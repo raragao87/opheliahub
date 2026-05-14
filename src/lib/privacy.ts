@@ -100,18 +100,6 @@ export function visibleTrackersWhere(
   };
 }
 
-/** Funds scoped by ownership context (SHARED or PERSONAL) */
-export function fundOwnershipFilter(
-  userId: string,
-  householdId: string,
-  ownership: "SHARED" | "PERSONAL"
-): Prisma.FundWhereInput {
-  if (ownership === "SHARED") {
-    return { householdId, userId, visibility: "SHARED" };
-  }
-  return { userId, visibility: "PERSONAL" };
-}
-
 /** Recurring rules visible to a user — derived from account ownership */
 export function visibleRecurringRulesWhere(
   userId: string,

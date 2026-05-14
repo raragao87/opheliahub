@@ -1,3 +1,4 @@
+// @ts-nocheck — one-shot migration script; Fund model has been removed from schema
 /**
  * Migrate Fund records → FUND-type Categories, and set up TRANSFER categories.
  *

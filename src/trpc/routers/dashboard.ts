@@ -264,9 +264,9 @@ export const dashboardRouter = router({
         // Per-month fund budget
         const monthFundBudget = await ctx.prisma.fundTrackerAllocation.aggregate({
           where: {
-            fund: {
+            category: {
               householdId: ctx.householdId,
-              userId: ctx.userId,
+              type: "FUND",
               visibility: input.visibility,
               isArchived: false,
             },
@@ -282,7 +282,7 @@ export const dashboardRouter = router({
           expenses: Math.abs(expenses),
           net,
           savingsRate,
-          monthlyFundBudget: monthFundBudget._sum.amount ?? 0,
+          monthlyFundBudget: monthFundBudget._sum?.amount ?? 0,
         });
       }
 
@@ -343,9 +343,9 @@ export const dashboardRouter = router({
         // Sum all fund allocations up to and including this month
         const allocations = await ctx.prisma.fundTrackerAllocation.aggregate({
           where: {
-            fund: {
+            category: {
               householdId: ctx.householdId,
-              userId: ctx.userId,
+              type: "FUND",
               visibility: input.visibility,
               isArchived: false,
             },
@@ -370,9 +370,9 @@ export const dashboardRouter = router({
                 type: "FUND",
               }),
               {
-                fund: {
+                category: {
                   householdId: ctx.householdId,
-                  userId: ctx.userId,
+                  type: "FUND",
                   visibility: input.visibility,
                   isArchived: false,
                 },
@@ -389,8 +389,8 @@ export const dashboardRouter = router({
           _sum: { amount: true },
         });
 
-        const totalBudgeted = allocations._sum.amount ?? 0;
-        const totalSpent = -(spending._sum.amount ?? 0); // expenses are negative
+        const totalBudgeted = allocations._sum?.amount ?? 0;
+        const totalSpent = -(spending._sum?.amount ?? 0); // expenses are negative
         const totalAvailable = totalBudgeted - totalSpent;
 
         fundHistory.push({
@@ -411,16 +411,16 @@ export const dashboardRouter = router({
       visibility: z.enum(["SHARED", "PERSONAL"]),
     }))
     .query(async ({ ctx, input }) => {
-      const funds = await ctx.prisma.fund.findMany({
+      const categories = await ctx.prisma.category.findMany({
         where: {
           householdId: ctx.householdId,
-          userId: ctx.userId,
+          type: "FUND",
           visibility: input.visibility,
           isArchived: false,
         },
         include: {
-          allocations: true,
-          entries: {
+          fundTrackerAllocations: true,
+          fundEntries: {
             where: { type: "ADJUSTMENT" },
             select: { amount: true },
           },
@@ -433,7 +433,6 @@ export const dashboardRouter = router({
 
       const { start: monthStart, end: monthEnd } = getMonthRange(input.year, input.month);
 
-      // Find this month's tracker
       const thisMonthTracker = await ctx.prisma.tracker.findUnique({
         where: {
           householdId_userId_month_year_visibility: {
@@ -446,8 +445,7 @@ export const dashboardRouter = router({
         },
       });
 
-      // Fetch tracker metadata for date filtering
-      const allTrackerIds = [...new Set(funds.flatMap((f) => f.allocations.map((a) => a.trackerId)))];
+      const allTrackerIds = [...new Set(categories.flatMap((c) => c.fundTrackerAllocations.map((a) => a.trackerId)))];
       const trackers = allTrackerIds.length > 0
         ? await ctx.prisma.tracker.findMany({
             where: { id: { in: allTrackerIds } },
@@ -463,28 +461,25 @@ export const dashboardRouter = router({
       let totalBudgeted = 0;
 
       const fundResults = await Promise.all(
-        funds.map(async (fund) => {
-          // This month's allocation
+        categories.map(async (cat) => {
           const thisMonthBudget = thisMonthTracker
-            ? fund.allocations.find((a) => a.trackerId === thisMonthTracker.id)?.amount ?? 0
+            ? cat.fundTrackerAllocations.find((a) => a.trackerId === thisMonthTracker.id)?.amount ?? 0
             : 0;
 
-          // Total budgeted across all months up to and including this month
           let fundTotalBudgeted = 0;
-          for (const alloc of fund.allocations) {
+          for (const alloc of cat.fundTrackerAllocations) {
             const t = trackerDateMap.get(alloc.trackerId);
             if (t && (t.year < input.year || (t.year === input.year && t.month <= input.month))) {
               fundTotalBudgeted += alloc.amount;
             }
           }
 
-          // Total spending up to end of selected month
           const spendingAgg = await ctx.prisma.transaction.aggregate({
             where: {
               AND: [
                 visibilityFilter,
                 liquidFilter,
-                { fundId: fund.id },
+                { categoryId: cat.id, type: "FUND" },
                 { isInitialBalance: false },
                 {
                   OR: [
@@ -496,15 +491,14 @@ export const dashboardRouter = router({
             },
             _sum: { amount: true },
           });
-          const totalSpending = -(spendingAgg._sum.amount ?? 0);
+          const totalSpending = -(spendingAgg._sum?.amount ?? 0);
 
-          // This month's spending
           const thisMonthAgg = await ctx.prisma.transaction.aggregate({
             where: {
               AND: [
                 visibilityFilter,
                 liquidFilter,
-                { fundId: fund.id },
+                { categoryId: cat.id, type: "FUND" },
                 { isInitialBalance: false },
                 {
                   OR: [
@@ -516,26 +510,23 @@ export const dashboardRouter = router({
             },
             _sum: { amount: true },
           });
-          const thisMonthActual = -(thisMonthAgg._sum.amount ?? 0);
+          const thisMonthActual = -(thisMonthAgg._sum?.amount ?? 0);
 
-          // Adjustments
-          const adjustments = fund.entries.reduce((sum, e) => sum + e.amount, 0);
+          const adjustments = cat.fundEntries.reduce((sum: number, e: { amount: number }) => sum + e.amount, 0);
 
-          // Available = total budgeted - total spending + adjustments
           const available = fundTotalBudgeted - totalSpending + adjustments;
 
-          // Target from line items (yearly total)
-          const target = fund.lineItems.length > 0
-            ? fund.lineItems.reduce((s, li) => s + li.period * li.amount, 0)
+          const target = cat.lineItems.length > 0
+            ? cat.lineItems.reduce((s: number, li: { period: number; amount: number }) => s + li.period * li.amount, 0)
             : null;
 
           totalAvailable += available;
           totalBudgeted += thisMonthBudget;
 
           return {
-            id: fund.id,
-            name: fund.name,
-            icon: fund.icon,
+            id: cat.id,
+            name: cat.name,
+            icon: cat.icon,
             target,
             available,
             thisMonthBudget,

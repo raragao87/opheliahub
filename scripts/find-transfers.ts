@@ -15,6 +15,20 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 const apply = process.argv.includes("--apply");
 
+async function getMatchedTransferCategoryId(
+  householdId: string,
+  visibility: "SHARED" | "PERSONAL",
+): Promise<string | null> {
+  const transferGroup = await prisma.category.findFirst({
+    where: { householdId, type: "TRANSFER" as never, parentId: null, visibility },
+  });
+  if (!transferGroup) return null;
+  const matched = await prisma.category.findFirst({
+    where: { parentId: transferGroup.id, name: "Matched" },
+  });
+  return matched?.id ?? null;
+}
+
 interface TxRow {
   id: string;
   amount: number;
@@ -126,24 +140,46 @@ async function main() {
   // 4. Apply: link pairs and update types + balances
   console.log(`\nLinking ${matches.length} pair(s)...\n`);
 
+  // Pre-fetch account ownership for Matched transfer category lookup
+  const accountIds = [...new Set(matches.flatMap((m) => [m.outflow.accountId, m.inflow.accountId]))];
+  const accounts = await prisma.financialAccount.findMany({
+    where: { id: { in: accountIds } },
+    select: { id: true, ownership: true, householdId: true },
+  });
+  const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+  // Cache matched transfer category IDs
+  const matchedCategoryCache = new Map<string, string | null>();
+
   for (const { outflow, inflow } of matches) {
+    const outAccount = accountMap.get(outflow.accountId);
+    const visibility = outAccount?.ownership ?? "SHARED";
+    const householdId = outAccount?.householdId;
+
+    let matchedCategoryId: string | null = null;
+    if (householdId) {
+      const cacheKey = `${householdId}:${visibility}`;
+      if (!matchedCategoryCache.has(cacheKey)) {
+        matchedCategoryCache.set(cacheKey, await getMatchedTransferCategoryId(householdId, visibility as "SHARED" | "PERSONAL"));
+      }
+      matchedCategoryId = matchedCategoryCache.get(cacheKey) ?? null;
+    }
+
     await prisma.$transaction(async (tx) => {
-      // Set outflow.linkedTransactionId → inflow.id
       await tx.transaction.update({
         where: { id: outflow.id },
         data: {
           linkedTransactionId: inflow.id,
           type: "TRANSFER",
-          categoryId: null,
+          categoryId: matchedCategoryId,
         },
       });
 
-      // Mark inflow as TRANSFER too
       await tx.transaction.update({
         where: { id: inflow.id },
         data: {
           type: "TRANSFER",
-          categoryId: null,
+          categoryId: matchedCategoryId,
         },
       });
     });

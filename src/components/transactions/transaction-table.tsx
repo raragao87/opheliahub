@@ -53,7 +53,6 @@ export interface TransactionItem {
   isInitialBalance?: boolean;
   account: TransactionAccount;
   category?: TransactionCategory | null;
-  fund?: { id: string; name: string; icon?: string | null } | null;
   tags: TransactionTag[];
   linkedTransaction?: TransactionLinked | null;
   linkedBy?: TransactionLinked | null;
@@ -95,7 +94,6 @@ export interface ColumnFilters {
   dateTo: string;
   accountIds: string[];
   categoryIds: string[];
-  fundIds: string[];
   tagIds: string[];
   uncategorized: boolean;
   opheliaUnconfirmed: boolean;
@@ -107,16 +105,9 @@ export interface ColumnFilters {
   transferType: string;
 }
 
-interface FundOption {
-  id: string;
-  name: string;
-  icon?: string | null;
-}
-
 interface TransactionTableProps {
   transactions: TransactionItem[];
   flatCategories: CategoryOption[];
-  funds?: FundOption[];
   allTags: TagOption[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   updatingId?: string;
@@ -722,7 +713,6 @@ function ColumnAmountRange({
 export function TransactionTable({
   transactions,
   flatCategories,
-  funds = [],
   allTags,
   onUpdate,
   updatingId,
@@ -773,24 +763,10 @@ export function TransactionTable({
     onSelectionChange(next);
   };
 
-  const categoryOptions = [
-    ...flatCategories.map((c) => ({
-      value: c.id,
-      label: `${c.icon ?? ""} ${c.name}`.trim(),
-    })),
-    ...funds.map((f) => ({
-      value: `__FUND__${f.id}`,
-      label: `${f.icon ?? "💰"} ${f.name}`.trim(),
-    })),
-  ];
-
-  const fundOptions = useMemo(() =>
-    funds.map((f) => ({
-      value: `__FUND__${f.id}`,
-      label: `${f.icon ?? "💰"} ${f.name}`.trim(),
-    })),
-    [funds]
-  );
+  const categoryOptions = flatCategories.map((c) => ({
+    value: c.id,
+    label: `${c.icon ?? ""} ${c.name}`.trim(),
+  }));
 
   const categoryOptionGroups = useMemo(() => {
     const groupMap = new Map<string, { value: string; label: string }[]>();
@@ -799,13 +775,8 @@ export function TransactionTable({
       if (!groupMap.has(group)) groupMap.set(group, []);
       groupMap.get(group)!.push({ value: c.id, label: `${c.icon ?? ""} ${c.name}`.trim() });
     }
-    const groups = Array.from(groupMap.entries()).map(([label, options]) => ({ label, options }));
-    // Add funds as a separate group at the bottom
-    if (fundOptions.length > 0) {
-      groups.push({ label: "💰 Funds", options: fundOptions });
-    }
-    return groups;
-  }, [flatCategories, fundOptions]);
+    return Array.from(groupMap.entries()).map(([label, options]) => ({ label, options }));
+  }, [flatCategories]);
 
   // Compute amount bounds from loaded transactions (display values, not cents)
   const amountBounds = useMemo(() => {
@@ -902,65 +873,43 @@ export function TransactionTable({
               {cf && setCf && onTypeChange ? (
                 <ColumnHeaderFilter
                   label="Category"
-                  active={cf.categoryIds.length > 0 || cf.fundIds.length > 0 || cf.uncategorized || cf.opheliaUnconfirmed || cf.type === "TRANSFER"}
+                  active={cf.categoryIds.length > 0 || cf.uncategorized || cf.opheliaUnconfirmed || cf.type === "TRANSFER"}
                 >
-                  {(close) => {
-                    // Merge category groups + funds group for the multi-select
-                    const FUND_PREFIX = "fund:";
-                    const combinedGroups = [
-                      ...categoryFilterGroups,
-                      ...(funds.length > 0 ? [{
-                        label: "Funds",
-                        options: funds.map((f) => ({
-                          value: `${FUND_PREFIX}${f.id}`,
-                          label: f.name,
-                          icon: f.icon ?? "💰",
-                        })),
-                      }] : []),
-                    ];
-                    const combinedSelected = [
-                      ...cf.categoryIds,
-                      ...cf.fundIds.map((id) => `${FUND_PREFIX}${id}`),
-                    ];
-                    return (
-                      <ColumnMultiSelect
-                        groups={combinedGroups}
-                        selected={(cf.uncategorized || cf.opheliaUnconfirmed) ? [] : combinedSelected}
-                        onChange={(ids) => {
-                          const catIds = ids.filter((id) => !id.startsWith(FUND_PREFIX));
-                          const fIds = ids.filter((id) => id.startsWith(FUND_PREFIX)).map((id) => id.slice(FUND_PREFIX.length));
-                          setCf("categoryIds", catIds);
-                          setCf("fundIds", fIds);
-                          if (cf.uncategorized) setCf("uncategorized", false);
-                          if (cf.opheliaUnconfirmed) setCf("opheliaUnconfirmed", false);
-                        }}
-                        toggleLabel="Uncategorized"
-                        toggleActive={cf.uncategorized}
-                        onToggle={() => { setCf("uncategorized", !cf.uncategorized); setCf("opheliaUnconfirmed", false); setCf("categoryIds", []); setCf("fundIds", []); }}
-                        extraToggles={[
-                          {
-                            label: "Needs confirmation",
-                            active: cf.opheliaUnconfirmed,
-                            onToggle: () => { setCf("opheliaUnconfirmed", !cf.opheliaUnconfirmed); setCf("uncategorized", false); setCf("categoryIds", []); setCf("fundIds", []); },
-                            icon: <Sparkles className={cn("h-3.5 w-3.5 shrink-0", cf.opheliaUnconfirmed ? "text-amber-500" : "text-muted-foreground")} />,
-                          },
-                          {
-                            label: "Fund",
-                            active: cf.type === "FUND",
-                            onToggle: () => onTypeChange(cf.type === "FUND" ? "" : "FUND", ""),
-                            icon: <Wallet className={cn("h-3.5 w-3.5 shrink-0", cf.type === "FUND" ? "text-amber-500" : "text-muted-foreground")} />,
-                          },
-                          {
-                            label: "Transfer",
-                            active: cf.type === "TRANSFER",
-                            onToggle: () => onTypeChange(cf.type === "TRANSFER" ? "" : "TRANSFER", cf.type === "TRANSFER" ? "" : cf.transferType),
-                            icon: <ArrowLeftRight className={cn("h-3.5 w-3.5 shrink-0", cf.type === "TRANSFER" ? "text-primary" : "text-muted-foreground")} />,
-                          },
-                        ]}
-                        close={close}
-                      />
-                    );
-                  }}
+                  {(close) => (
+                    <ColumnMultiSelect
+                      groups={categoryFilterGroups}
+                      selected={(cf.uncategorized || cf.opheliaUnconfirmed) ? [] : cf.categoryIds}
+                      onChange={(ids) => {
+                        setCf("categoryIds", ids);
+                        if (cf.uncategorized) setCf("uncategorized", false);
+                        if (cf.opheliaUnconfirmed) setCf("opheliaUnconfirmed", false);
+                      }}
+                      toggleLabel="Uncategorized"
+                      toggleActive={cf.uncategorized}
+                      onToggle={() => { setCf("uncategorized", !cf.uncategorized); setCf("opheliaUnconfirmed", false); setCf("categoryIds", []); }}
+                      extraToggles={[
+                        {
+                          label: "Needs confirmation",
+                          active: cf.opheliaUnconfirmed,
+                          onToggle: () => { setCf("opheliaUnconfirmed", !cf.opheliaUnconfirmed); setCf("uncategorized", false); setCf("categoryIds", []); },
+                          icon: <Sparkles className={cn("h-3.5 w-3.5 shrink-0", cf.opheliaUnconfirmed ? "text-amber-500" : "text-muted-foreground")} />,
+                        },
+                        {
+                          label: "Fund",
+                          active: cf.type === "FUND",
+                          onToggle: () => onTypeChange(cf.type === "FUND" ? "" : "FUND", ""),
+                          icon: <Wallet className={cn("h-3.5 w-3.5 shrink-0", cf.type === "FUND" ? "text-amber-500" : "text-muted-foreground")} />,
+                        },
+                        {
+                          label: "Transfer",
+                          active: cf.type === "TRANSFER",
+                          onToggle: () => onTypeChange(cf.type === "TRANSFER" ? "" : "TRANSFER", cf.type === "TRANSFER" ? "" : cf.transferType),
+                          icon: <ArrowLeftRight className={cn("h-3.5 w-3.5 shrink-0", cf.type === "TRANSFER" ? "text-primary" : "text-muted-foreground")} />,
+                        },
+                      ]}
+                      close={close}
+                    />
+                  )}
                 </ColumnHeaderFilter>
               ) : (
                 <span className="text-left font-medium text-xs text-muted-foreground">Category</span>
@@ -1156,7 +1105,6 @@ function TransactionRow({
   const categoryDisplay = isTransfer
     ? partnerAccount ? "↔" : "→"
     : isAssetsDebts && AccountIcon ? ""
-    : txn.fund ? `${txn.fund.icon ?? "💰"} ${txn.fund.name}`.trim()
     : txn.category ? `${txn.category.icon ?? ""} ${txn.category.name}`.trim() : "";
 
   const categoryIcon = isTransfer ? (
@@ -1165,10 +1113,7 @@ function TransactionRow({
     <AccountIcon className="h-4 w-4 inline-block text-muted-foreground" />
   ) : null;
 
-  // Ophelia suggestion — only relevant when user hasn't set a category or fund.
-  // Use the pre-loaded opheliaCategory relation directly (avoids visibility mismatch
-  // where a PERSONAL-category suggestion wouldn't be found in the SHARED categoryOptions).
-  const opheliaCatLabel = !txn.category && !txn.fund && txn.opheliaCategory
+  const opheliaCatLabel = !txn.category && txn.opheliaCategory
     ? txn.opheliaCategory.name
     : null;
   const opheliaConf = txn.opheliaConfidence ?? null;
@@ -1266,11 +1211,7 @@ function TransactionRow({
                 topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
                 onSave={(value) => {
                   if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
-                  if (value.startsWith("__FUND__")) {
-                    onUpdate(txn.id, { fundId: value.replace("__FUND__", ""), categoryId: null });
-                  } else {
-                    onUpdate(txn.id, { categoryId: value || null, fundId: null });
-                  }
+                  onUpdate(txn.id, { categoryId: value || null });
                 }}
                 emptyLabel="Uncategorized"
                 placeholder="—"
@@ -1286,18 +1227,14 @@ function TransactionRow({
             </div>
           ) : (
             <InlineSelectEdit
-              value={txn.fund ? `__FUND__${txn.fund.id}` : txn.category?.id ?? ""}
+              value={txn.category?.id ?? ""}
               displayValue={categoryDisplay}
               options={categoryOptions}
               optionGroups={categoryOptionGroups}
               topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
               onSave={(value) => {
                 if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
-                if (value.startsWith("__FUND__")) {
-                  onUpdate(txn.id, { fundId: value.replace("__FUND__", ""), categoryId: null });
-                } else {
-                  onUpdate(txn.id, { categoryId: value || null, fundId: null });
-                }
+                onUpdate(txn.id, { categoryId: value || null });
               }}
               emptyLabel="Uncategorized"
               placeholder="—"

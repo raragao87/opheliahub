@@ -200,7 +200,7 @@ function buildFundTransactionsUrl(
   const lastDay = new Date(period.year, period.month, 0).getDate();
   const accrualDateFrom = `${period.year}-${mm}-01`;
   const accrualDateTo = `${period.year}-${mm}-${String(lastDay).padStart(2, "0")}`;
-  return `/transactions?fundId=${fundId}&accrualDateFrom=${accrualDateFrom}&accrualDateTo=${accrualDateTo}&liquidOnly=true`;
+  return `/transactions?categoryIds=${fundId}&accrualDateFrom=${accrualDateFrom}&accrualDateTo=${accrualDateTo}&liquidOnly=true`;
 }
 
 // ── Main Component ────────────────────────────────────────────────
