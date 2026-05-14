@@ -50,3 +50,4 @@ backup-*.sql
 
 # docs (generated, not source of truth)
 /docs/
+.claude/worktrees/
