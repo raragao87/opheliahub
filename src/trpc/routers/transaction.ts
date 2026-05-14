@@ -1,11 +1,31 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
-import { Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { router, householdProcedure } from "../init";
 import { visibleTransactionsWhere, visibleAccountsWhere } from "@/lib/privacy";
 import { SPENDING_ACCOUNT_TYPES, ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
 import { computeEffectiveCategoryId } from "@/lib/effective-category";
+
+async function getTransferCategoryId(
+  prisma: PrismaClient,
+  householdId: string,
+  visibility: "SHARED" | "PERSONAL",
+  matched: boolean,
+): Promise<string | null> {
+  const name = matched ? "Matched" : "Unmatched";
+  const category = await prisma.category.findFirst({
+    where: {
+      householdId,
+      type: "TRANSFER",
+      name,
+      parentId: { not: null },
+      visibility,
+    },
+    select: { id: true },
+  });
+  return category?.id ?? null;
+}
 
 export const transactionRouter = router({
   list: householdProcedure
@@ -20,8 +40,6 @@ export const transactionRouter = router({
         visibility: z.enum(["SHARED", "PERSONAL"]).optional(),
         tagId: z.string().optional(),
         tagIds: z.array(z.string()).optional(),
-        fundId: z.string().optional(),
-        fundIds: z.array(z.string()).optional(),
         uncategorized: z.boolean().optional(),
         opheliaUnconfirmed: z.boolean().optional(),
         noTags: z.boolean().optional(),
@@ -75,7 +93,6 @@ export const transactionRouter = router({
               : input.type
                 ? { type: input.type }
                 : {}),
-            ...(!input.fundIds?.length && input.fundId && { fundId: input.fundId }),
             ...(input.noTags
               ? { tags: { none: {} } }
               : input.tagIds?.length
@@ -101,23 +118,17 @@ export const transactionRouter = router({
 
           // Category filter (separate AND entry)
           ...(input.opheliaUnconfirmed
-            ? [{ categoryId: { equals: null }, fundId: { equals: null },
+            ? [{ categoryId: { equals: null },
                  opheliaCategoryId: { not: null }, opheliaCategory: { isNot: null },
-                 type: { in: ["INCOME", "EXPENSE"] as ("INCOME" | "EXPENSE")[] } }]
+                 type: { in: ["INCOME", "EXPENSE", "FUND"] as ("INCOME" | "EXPENSE" | "FUND")[] } }]
             : input.uncategorized
-              ? [{ effectiveCategoryId: { equals: null }, fundId: { equals: null } }]
-              : input.categoryIds?.length && input.fundIds?.length
-                ? [{ OR: [
-                    { effectiveCategoryId: { in: input.categoryIds } },
-                    { fundId: { in: input.fundIds } },
-                  ] }]
-                : input.categoryIds?.length
-                  ? [{ effectiveCategoryId: { in: input.categoryIds } }]
-                  : input.fundIds?.length
-                    ? [{ fundId: { in: input.fundIds } }]
-                    : input.categoryId
-                      ? [{ effectiveCategoryId: input.categoryId }]
-                      : []),
+              ? [{ effectiveCategoryId: { equals: null },
+                   type: { notIn: ["TRANSFER"] as ("TRANSFER")[] } }]
+              : input.categoryIds?.length
+                ? [{ effectiveCategoryId: { in: input.categoryIds } }]
+                : input.categoryId
+                  ? [{ effectiveCategoryId: input.categoryId }]
+                  : []),
 
           // Date filter (uses OR — separate AND entry)
           ...(input.dateFrom || input.dateTo
@@ -199,7 +210,6 @@ export const transactionRouter = router({
         include: {
           account: { select: { id: true, name: true, type: true, institution: true, ownership: true } },
           category: { select: { id: true, name: true, icon: true, color: true } },
-          fund: { select: { id: true, name: true, icon: true } },
           opheliaCategory: { select: { id: true, name: true } },
           investmentDetail: {
             include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
@@ -263,7 +273,6 @@ export const transactionRouter = router({
         accountId: z.string(),
         toAccountId: z.string().optional(),
         categoryId: z.string().optional(),
-        fundId: z.string().optional(),
         investmentAssetId: z.string().optional(),
         quantity: z.number().optional(),
         unitPrice: z.number().int().optional(),
@@ -320,6 +329,15 @@ export const transactionRouter = router({
 
         const absAmount = Math.abs(input.amount);
 
+        const sourceAccount = await ctx.prisma.financialAccount.findFirst({
+          where: { id: input.accountId },
+          select: { ownership: true },
+        });
+        const transferVisibility = (sourceAccount?.ownership ?? "SHARED") as "SHARED" | "PERSONAL";
+        const matchedCatId = await getTransferCategoryId(
+          ctx.prisma, ctx.householdId, transferVisibility, true,
+        );
+
         return ctx.prisma.$transaction(async (tx) => {
           // 1. Create inflow (positive) on target account
           const inflow = await tx.transaction.create({
@@ -333,7 +351,8 @@ export const transactionRouter = router({
               accountId: input.toAccountId!,
               userId: ctx.userId,
               notes: input.notes,
-              effectiveCategoryId: null,
+              categoryId: matchedCatId,
+              effectiveCategoryId: matchedCatId,
             },
           });
 
@@ -350,7 +369,8 @@ export const transactionRouter = router({
               userId: ctx.userId,
               notes: input.notes,
               linkedTransactionId: inflow.id,
-              effectiveCategoryId: null,
+              categoryId: matchedCatId,
+              effectiveCategoryId: matchedCatId,
             },
             include: {
               account: { select: { id: true, name: true } },
@@ -409,7 +429,6 @@ export const transactionRouter = router({
           include: {
             account: { select: { id: true, name: true } },
             category: { select: { id: true, name: true, icon: true } },
-            fund: { select: { id: true, name: true, icon: true } },
             investmentDetail: {
               include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
             },
@@ -439,7 +458,6 @@ export const transactionRouter = router({
         date: z.coerce.date().optional(),
         accrualDate: z.coerce.date().nullable().optional(),
         categoryId: z.string().nullable().optional(),
-        fundId: z.string().nullable().optional(),
         investmentAssetId: z.string().nullable().optional(),
         quantity: z.number().nullable().optional(),
         unitPrice: z.number().int().nullable().optional(),
@@ -575,14 +593,22 @@ export const transactionRouter = router({
       // ── Non-transfer: existing logic ────────────────────────────────
       const { id, tagIds, ...data } = restInput;
 
-      // Auto-set type based on fund assignment
-      if (data.fundId !== undefined) {
-        if (data.fundId) {
-          data.type = "FUND";
-          data.categoryId = null;
-        } else if (existing.type === "FUND") {
-          // Clearing fund — revert to EXPENSE
-          data.type = "EXPENSE";
+      // Auto-derive transaction type from category type
+      if (data.categoryId !== undefined && data.categoryId !== null) {
+        const targetCategory = await ctx.prisma.category.findFirst({
+          where: { id: data.categoryId },
+          select: { type: true },
+        });
+        if (targetCategory) {
+          const typeMap: Record<string, typeof data.type> = {
+            FUND: "FUND",
+            INVESTMENT: "INVESTMENT",
+            INCOME: "INCOME",
+            EXPENSE: "EXPENSE",
+          };
+          if (typeMap[targetCategory.type]) {
+            data.type = typeMap[targetCategory.type];
+          }
         }
       }
 
@@ -773,7 +799,6 @@ export const transactionRouter = router({
       z.object({
         ids: z.array(z.string()).min(1).max(500),
         categoryId: z.string().nullable(),
-        fundId: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -793,23 +818,31 @@ export const transactionRouter = router({
         });
       }
 
-      // Category and fund are mutually exclusive
-      const data: { categoryId: string | null; fundId?: string | null; effectiveCategoryId?: string | null; type?: "INCOME" | "EXPENSE" | "FUND" | "TRANSFER" | "INVESTMENT" } = {
+      const data: {
+        categoryId: string | null;
+        effectiveCategoryId?: string | null;
+        type?: "INCOME" | "EXPENSE" | "FUND" | "TRANSFER" | "INVESTMENT";
+      } = {
         categoryId: input.categoryId,
       };
-      if (input.fundId !== undefined) {
-        data.fundId = input.fundId;
-        if (input.fundId) {
-          data.categoryId = null; // fund clears category
-          data.type = "FUND";
-        }
-      }
+
       if (input.categoryId) {
-        data.fundId = null; // category clears fund
-        data.type = "EXPENSE"; // revert to EXPENSE when assigning category
-      }
-      if (data.categoryId) {
-        data.effectiveCategoryId = data.categoryId;
+        const targetCategory = await ctx.prisma.category.findFirst({
+          where: { id: input.categoryId },
+          select: { type: true },
+        });
+        if (targetCategory) {
+          const typeMap: Record<string, string> = {
+            FUND: "FUND",
+            INVESTMENT: "INVESTMENT",
+            INCOME: "INCOME",
+            EXPENSE: "EXPENSE",
+          };
+          if (typeMap[targetCategory.type]) {
+            data.type = typeMap[targetCategory.type] as typeof data.type;
+          }
+        }
+        data.effectiveCategoryId = input.categoryId;
       }
 
       await ctx.prisma.transaction.updateMany({
@@ -817,7 +850,7 @@ export const transactionRouter = router({
         data,
       });
 
-      if (!data.categoryId) {
+      if (!input.categoryId) {
         await ctx.prisma.$executeRaw`
           UPDATE transactions
           SET "effectiveCategoryId" = "opheliaCategoryId"
@@ -831,7 +864,7 @@ export const transactionRouter = router({
           entityType: "Transaction",
           entityId: accessibleIds.join(","),
           userId: ctx.userId,
-          metadata: { categoryId: input.categoryId, fundId: input.fundId ?? null, count: accessibleIds.length },
+          metadata: { categoryId: input.categoryId, count: accessibleIds.length },
         },
       });
 
@@ -1000,7 +1033,6 @@ export const transactionRouter = router({
           {
             account: { ownership: input.visibility },
             categoryId: null,
-            fundId: null,
             opheliaCategoryId: { not: null },
             ...(input.transactionIds?.length && { id: { in: input.transactionIds } }),
           },
@@ -1332,21 +1364,52 @@ export const transactionRouter = router({
         const outflow = txn.amount < 0 ? txn : partner;
         const inflow = txn.amount < 0 ? partner : txn;
 
+        const account = await ctx.prisma.financialAccount.findFirst({
+          where: { id: txn.accountId },
+          select: { ownership: true },
+        });
+        const visibility = (account?.ownership ?? "SHARED") as "SHARED" | "PERSONAL";
+        const matchedCategoryId = await getTransferCategoryId(
+          ctx.prisma, ctx.householdId, visibility, true,
+        );
+
         await ctx.prisma.$transaction([
           ctx.prisma.transaction.update({
             where: { id: outflow.id },
-            data: { type: "TRANSFER", categoryId: null, effectiveCategoryId: null, linkedTransactionId: inflow.id },
+            data: {
+              type: "TRANSFER",
+              categoryId: matchedCategoryId,
+              effectiveCategoryId: matchedCategoryId,
+              linkedTransactionId: inflow.id,
+            },
           }),
           ctx.prisma.transaction.update({
             where: { id: inflow.id },
-            data: { type: "TRANSFER", categoryId: null, effectiveCategoryId: null },
+            data: {
+              type: "TRANSFER",
+              categoryId: matchedCategoryId,
+              effectiveCategoryId: matchedCategoryId,
+            },
           }),
         ]);
       } else {
         // Unlinked transfer (e.g. cash withdrawal)
+        const account = await ctx.prisma.financialAccount.findFirst({
+          where: { id: txn.accountId },
+          select: { ownership: true },
+        });
+        const visibility = (account?.ownership ?? "SHARED") as "SHARED" | "PERSONAL";
+        const unmatchedCategoryId = await getTransferCategoryId(
+          ctx.prisma, ctx.householdId, visibility, false,
+        );
+
         await ctx.prisma.transaction.update({
           where: { id: input.transactionId },
-          data: { type: "TRANSFER", categoryId: null, effectiveCategoryId: null },
+          data: {
+            type: "TRANSFER",
+            categoryId: unmatchedCategoryId,
+            effectiveCategoryId: unmatchedCategoryId,
+          },
         });
       }
 
@@ -1362,6 +1425,7 @@ export const transactionRouter = router({
     .mutation(async ({ ctx, input }) => {
       const txn = await ctx.prisma.transaction.findFirst({
         where: { id: input.transactionId, ...visibleTransactionsWhere(ctx.userId, ctx.householdId) },
+        select: { id: true, type: true, linkedTransactionId: true, accountId: true, amount: true, opheliaCategoryId: true },
       });
       if (!txn) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
@@ -1374,27 +1438,44 @@ export const transactionRouter = router({
       const partnerId = txn.linkedTransactionId;
       const linkedByTxn = partnerId
         ? null
-        : await ctx.prisma.transaction.findFirst({ where: { linkedTransactionId: txn.id } });
+        : await ctx.prisma.transaction.findFirst({
+            where: { linkedTransactionId: txn.id },
+            select: { id: true, opheliaCategoryId: true },
+          });
       const actualPartnerId = partnerId ?? linkedByTxn?.id;
 
       if (actualPartnerId) {
         const partnerType = input.newType === "INCOME" ? "EXPENSE" : "INCOME";
+        const partnerOphelia = linkedByTxn?.opheliaCategoryId ?? null;
         await ctx.prisma.$transaction([
           // Unlink: clear the FK on whichever side holds it
           ctx.prisma.transaction.update({
             where: { id: partnerId ? txn.id : actualPartnerId },
-            data: { linkedTransactionId: null, type: partnerId ? input.newType : partnerType },
+            data: {
+              linkedTransactionId: null,
+              type: partnerId ? input.newType : partnerType,
+              categoryId: null,
+              effectiveCategoryId: computeEffectiveCategoryId(null, partnerId ? txn.opheliaCategoryId : partnerOphelia),
+            },
           }),
           ctx.prisma.transaction.update({
             where: { id: partnerId ? actualPartnerId : txn.id },
-            data: { type: partnerId ? partnerType : input.newType },
+            data: {
+              type: partnerId ? partnerType : input.newType,
+              categoryId: null,
+              effectiveCategoryId: computeEffectiveCategoryId(null, partnerId ? partnerOphelia : txn.opheliaCategoryId),
+            },
           }),
         ]);
       } else {
         // Unlinked transfer — just change the type
         await ctx.prisma.transaction.update({
           where: { id: input.transactionId },
-          data: { type: input.newType },
+          data: {
+            type: input.newType,
+            categoryId: null,
+            effectiveCategoryId: computeEffectiveCategoryId(null, txn.opheliaCategoryId),
+          },
         });
       }
 

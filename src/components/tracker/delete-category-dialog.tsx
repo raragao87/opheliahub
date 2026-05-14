@@ -65,8 +65,8 @@ export function DeleteCategoryDialog({ category, open, onClose, categories, fund
     } else if (targetId.startsWith("fund_")) {
       deleteMutation.mutate({
         id: category.id,
-        reassignTo: "fund",
-        targetFundId: targetId.replace("fund_", ""),
+        reassignTo: "category",
+        targetCategoryId: targetId.replace("fund_", ""),
       });
     }
   };

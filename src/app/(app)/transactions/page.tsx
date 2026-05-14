@@ -388,16 +388,6 @@ function TransactionsContent() {
                           return { id: variables.categoryId, name: "…", icon: null, color: null };
                         })(),
                       }),
-                      // Fund: clear when setting a category, set when assigning a fund
-                      ...("fundId" in variables && {
-                        fundId: variables.fundId ?? null,
-                        fund: (() => {
-                          if (!variables.fundId) return null;
-                          const f = (fundsQuery.data ?? []).find((fd: { id: string }) => fd.id === variables.fundId);
-                          if (f) return { id: f.id, name: f.name, icon: f.icon ?? null };
-                          return { id: variables.fundId as string, name: "…", icon: null };
-                        })(),
-                      }),
                       ...(variables.tagIds !== undefined && {
                         tags: variables.tagIds.map((tagId: string) => {
                           const tag = (tagsQuery.data ?? []).find((t) => t.id === tagId);
@@ -431,7 +421,6 @@ function TransactionsContent() {
     if (txn) {
       for (const key of Object.keys(data)) {
         if (key === "categoryId") previousData.categoryId = txn.category?.id ?? null;
-        else if (key === "fundId") previousData.fundId = (txn as Record<string, unknown>).fundId ?? null;
         else if (key === "tagIds") previousData.tagIds = txn.tags?.map((t: { tag: { id: string } }) => t.tag.id) ?? [];
         else if (key in txn) previousData[key] = (txn as Record<string, unknown>)[key];
       }
@@ -1159,12 +1148,10 @@ function TransactionsContent() {
             categoryGroups={categoryFilterGroups}
             funds={fundsQuery.data ?? []}
             onBulkChangeCategory={(value) => {
-              if (value?.startsWith("__FUND__")) {
-                const fundId = value.replace("__FUND__", "");
-                bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId: null, fundId });
-              } else {
-                bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId: value, fundId: null });
-              }
+              const categoryId = value?.startsWith("__FUND__")
+                ? value.replace("__FUND__", "")
+                : value;
+              bulkCategoryMutation.mutate({ ids: selectedIdsArray, categoryId });
             }}
             tagGroups={tagFilterGroups}
             onBulkAddTags={(tagIds) =>

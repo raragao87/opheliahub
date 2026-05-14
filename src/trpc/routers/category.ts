@@ -158,9 +158,8 @@ export const categoryRouter = router({
     .input(
       z.object({
         id: z.string(),
-        reassignTo: z.enum(["uncategorized", "category", "fund"]).optional(),
+        reassignTo: z.enum(["uncategorized", "category"]).optional(),
         targetCategoryId: z.string().optional(),
-        targetFundId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -205,17 +204,6 @@ export const categoryRouter = router({
           await ctx.prisma.transaction.updateMany({
             where: { categoryId: input.id },
             data: { categoryId: input.targetCategoryId, effectiveCategoryId: input.targetCategoryId },
-          });
-        } else if (input.reassignTo === "fund" && input.targetFundId) {
-          const targetFund = await ctx.prisma.fund.findFirst({
-            where: { id: input.targetFundId, householdId: ctx.householdId },
-          });
-          if (!targetFund) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Target fund not found." });
-          }
-          await ctx.prisma.transaction.updateMany({
-            where: { categoryId: input.id },
-            data: { categoryId: null, effectiveCategoryId: null, fundId: input.targetFundId },
           });
         }
       }
