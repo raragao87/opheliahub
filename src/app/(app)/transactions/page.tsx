@@ -233,6 +233,23 @@ function TransactionsContent() {
   );
 
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
+
+  // Clear account filter when scope changes and filtered accounts don't match
+  const prevScopeRef = useRef(budgetScopeParam);
+  useEffect(() => {
+    if (prevScopeRef.current !== budgetScopeParam) {
+      prevScopeRef.current = budgetScopeParam;
+      setFilters((prev) => {
+        if (!prev.accountIds.length) return prev;
+        const accounts = accountsQuery.data ?? [];
+        const scopeIds = new Set(accounts.filter((a) => a.ownership === budgetScopeParam).map((a) => a.id));
+        const kept = prev.accountIds.filter((id) => scopeIds.has(id));
+        if (kept.length === prev.accountIds.length) return prev;
+        return { ...prev, accountIds: kept };
+      });
+    }
+  }, [budgetScopeParam, accountsQuery.data]);
+
   const categoriesQuery = useQuery(
     trpc.category.tree.queryOptions({ budgetScope: budgetScopeParam })
   );
