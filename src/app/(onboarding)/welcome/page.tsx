@@ -15,7 +15,9 @@ import {
   X,
   ChevronLeft,
   Loader2,
+  LogOut,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
 import { t, type Language } from "@/lib/translations";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 
@@ -138,12 +140,22 @@ export default function WelcomePage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-center pt-10 pb-4">
+      <header className="flex items-center justify-between pt-10 pb-4 px-6">
+        <div className="w-20" />
         <div className="flex items-center gap-2.5">
           <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-ambient">
             <span className="text-primary-foreground font-bold text-sm">OH</span>
           </div>
           <span className="text-xl font-display font-bold text-foreground tracking-tight">OpheliaHub</span>
+        </div>
+        <div className="w-20 flex justify-end">
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Sign out
+          </button>
         </div>
       </header>
 
