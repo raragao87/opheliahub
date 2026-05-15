@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -65,7 +64,6 @@ function UserAvatar({ src, name, size = 64 }: { src?: string | null; name?: stri
 
 export default function WelcomePage() {
   const trpc = useTRPC();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
@@ -112,7 +110,7 @@ export default function WelcomePage() {
     trpc.household.acceptInvite.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       },
     })
   );
@@ -397,7 +395,7 @@ export default function WelcomePage() {
                 <Button
                   variant="ghost"
                   className="w-full text-muted-foreground hover:text-foreground"
-                  onClick={() => router.push("/dashboard")}
+                  onClick={() => { window.location.href = "/dashboard"; }}
                 >
                   {t(lang, "onboarding.skipToDashboard")}
                   <ArrowRight className="h-4 w-4 ml-2" />
