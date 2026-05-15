@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { toCents } from "@/lib/money";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
+import { CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
 
 const LIABILITY_TYPES = new Set(
   Object.entries(ACCOUNT_TYPE_META)
@@ -29,7 +30,7 @@ export default function NewAccountPage() {
     type: searchParams.get("type") ?? "CHECKING",
     ownership: "PERSONAL" as const,
     institution: "",
-    currency: "EUR",
+    currency: DEFAULT_CURRENCY,
     balance: "",
   });
 
@@ -163,9 +164,11 @@ export default function NewAccountPage() {
                   value={form.currency}
                   onChange={(e) => setForm({ ...form, currency: e.target.value })}
                 >
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.symbol} {c.code} — {c.name}
+                    </option>
+                  ))}
                 </Select>
               </div>
             </div>

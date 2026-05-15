@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
+import { CURRENCIES } from "@/lib/currencies";
 import { fromCents, toCents } from "@/lib/money";
 import {
   Save,
@@ -242,9 +243,11 @@ export function AccountEditDialog({ accountId, open, onClose }: AccountEditDialo
                 value={editForm.currency}
                 onChange={(e) => setEditForm({ ...editForm, currency: e.target.value })}
               >
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-                <option value="GBP">GBP</option>
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} {c.code} — {c.name}
+                  </option>
+                ))}
               </Select>
             </div>
 
