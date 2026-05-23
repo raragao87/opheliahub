@@ -7,6 +7,7 @@ export interface ColumnMapping {
   amount: string;
   debit?: string; // Some banks use separate debit/credit columns
   credit?: string;
+  currency?: string;
 }
 
 export interface ParsedTransaction {
@@ -14,6 +15,7 @@ export interface ParsedTransaction {
   description: string;
   amount: number; // cents
   type: "INCOME" | "EXPENSE" | "TRANSFER";
+  currency?: string; // ISO 4217 code; omitted → use account default
   externalId?: string;
   rawRow?: Record<string, string>;
 }
@@ -85,12 +87,24 @@ export function parseCsvFile(
   };
 }
 
+const CURRENCY_SYMBOL_MAP: Record<string, string> = {
+  "€": "EUR", "$": "USD", "£": "GBP", "R$": "BRL",
+  "¥": "JPY", "₹": "INR", "₿": "BTC",
+};
+
+function normalizeCurrencyCode(raw: string): string {
+  const trimmed = raw.trim();
+  if (CURRENCY_SYMBOL_MAP[trimmed]) return CURRENCY_SYMBOL_MAP[trimmed];
+  return trimmed.toUpperCase();
+}
+
 /** Transform parsed CSV rows into transactions using a column mapping */
 export function transformCsvToTransactions(
   rows: Record<string, string>[],
   mapping: ColumnMapping,
   dateFormat: string = "dd/MM/yyyy",
-  amountHints?: AmountColumnHints
+  amountHints?: AmountColumnHints,
+  accountCurrency?: string,
 ): CsvTransformResult {
   const transactions: ParsedTransaction[] = [];
   const errors: { row: number; message: string }[] = [];
@@ -192,11 +206,18 @@ export function transformCsvToTransactions(
       // Determine type from amount sign
       const type = amountCents > 0 ? "INCOME" : amountCents < 0 ? "EXPENSE" : "TRANSFER";
 
+      // Parse currency
+      const rawCurrency = mapping.currency ? row[mapping.currency]?.trim() : undefined;
+      const currency = rawCurrency
+        ? normalizeCurrencyCode(rawCurrency)
+        : accountCurrency;
+
       transactions.push({
         date: date!,
         description,
         amount: amountCents,
         type,
+        ...(currency && { currency }),
         rawRow: row,
       });
     } catch (err) {

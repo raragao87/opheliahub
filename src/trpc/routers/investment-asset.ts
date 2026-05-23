@@ -16,7 +16,7 @@ export const investmentAssetRouter = router({
         ticker: z.string().max(20).nullable().optional(),
         name: z.string().min(1).max(200),
         currency: z.string().length(3).default("EUR"),
-        type: z.enum(["STOCK", "ETF", "BOND", "CRYPTO", "COMMODITY", "FUND", "OTHER"]),
+        type: z.enum(["STOCK", "ETF", "BOND", "CRYPTO", "COMMODITY", "FUND", "CFD", "OTHER"]),
         isin: z.string().max(12).nullable().optional(),
       })
     )
@@ -38,7 +38,7 @@ export const investmentAssetRouter = router({
         ticker: z.string().max(20).nullable().optional(),
         name: z.string().min(1).max(200).optional(),
         currency: z.string().length(3).optional(),
-        type: z.enum(["STOCK", "ETF", "BOND", "CRYPTO", "COMMODITY", "FUND", "OTHER"]).optional(),
+        type: z.enum(["STOCK", "ETF", "BOND", "CRYPTO", "COMMODITY", "FUND", "CFD", "OTHER"]).optional(),
         isin: z.string().max(12).nullable().optional(),
       })
     )

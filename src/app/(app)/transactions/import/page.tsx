@@ -129,6 +129,11 @@ export default function ImportPage() {
   // Profile persistence
   const [savedProfileLoaded, setSavedProfileLoaded] = useState(false);
 
+  const selectedAccount = useMemo(
+    () => (accountsQuery.data ?? []).find((a) => a.id === accountId),
+    [accountsQuery.data, accountId]
+  );
+
   // Smart duplicate detection state
   type DuplicateFlag = "duplicate" | "sameAmount" | "similar" | null;
   const [duplicateFlags, setDuplicateFlags] = useState<DuplicateFlag[]>([]);
@@ -264,6 +269,7 @@ export default function ImportPage() {
         const amtF = byMapped("amount");
         const debitF = byMapped("debit");
         const creditF = byMapped("credit");
+        const currencyF = byMapped("currency");
 
         if (debitF && creditF) {
           setAmountMode("SPLIT");
@@ -273,6 +279,7 @@ export default function ImportPage() {
             amount: "",
             debit: String(debitF.sourceColumn),
             credit: String(creditF.sourceColumn),
+            currency: currencyF ? String(currencyF.sourceColumn) : undefined,
           });
         } else {
           setAmountMode("SINGLE");
@@ -280,6 +287,7 @@ export default function ImportPage() {
             date: dateF ? String(dateF.sourceColumn) : "",
             description: descF ? String(descF.sourceColumn) : "",
             amount: amtF ? String(amtF.sourceColumn) : "",
+            currency: currencyF ? String(currencyF.sourceColumn) : undefined,
           });
         }
       },
@@ -628,6 +636,7 @@ export default function ImportPage() {
             amount: savedMapping.amount ?? "",
             debit: savedMapping.debit,
             credit: savedMapping.credit,
+            currency: savedMapping.currency,
           });
           setAmountMode(profile.amountMode as "SINGLE" | "SPLIT");
           setInvertAmounts(profile.invertAmounts);
@@ -810,6 +819,7 @@ export default function ImportPage() {
         displayName: displayNameOverrides[originalIdx],
         amount: tx.amount,
         type: tx.type,
+        currency: tx.currency,
         categoryId: categoryOverrides[originalIdx] || undefined,
         tagIds: tagOverrides[originalIdx] ?? [],
         externalId: tx.externalId,
@@ -1215,6 +1225,25 @@ export default function ImportPage() {
                       </div>
                     </div>
                   )}
+                  {/* Currency column (optional) */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1.5">
+                      Currency Column
+                      <span className="text-xs text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Select
+                      value={mapping.currency ?? ""}
+                      onChange={(e) => setMapping({ ...mapping, currency: e.target.value || undefined })}
+                    >
+                      <option value="">Use account default ({selectedAccount?.currency ?? "EUR"})</option>
+                      {csvHeaders.map((h) => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      If your bank file has a currency column, map it here.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Preview first 3 rows */}
@@ -1533,7 +1562,8 @@ export default function ImportPage() {
                     filteredCsvRows,
                     mapping,
                     opheliaAnalysis?.dateFormat,
-                    amountHints
+                    amountHints,
+                    selectedAccount?.currency,
                   );
                   handleGoToPreview(result.transactions, result.errors);
                 }}

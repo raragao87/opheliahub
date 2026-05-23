@@ -34,6 +34,7 @@ export default function NewTransactionPage() {
     investmentAssetId: "",
     quantity: "",
     unitPrice: "",
+    fxRate: "",
   });
 
   const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
@@ -81,8 +82,9 @@ export default function NewTransactionPage() {
         quantity: parseFloat(form.quantity),
       }),
       ...(isInvestmentAccount && form.unitPrice && {
-        unitPrice: Math.round(parseFloat(form.unitPrice) * 100),
+        unitPrice: parseFloat(form.unitPrice),
       }),
+      fxRate: form.fxRate ? parseFloat(form.fxRate) : null,
     });
   };
 
@@ -190,6 +192,26 @@ export default function NewTransactionPage() {
                       </option>
                     ))}
                 </Select>
+              </div>
+            )}
+
+            {/* FX rate — shown for foreign-currency accounts */}
+            {selectedAccount && selectedAccount.currency !== "EUR" && (
+              <div className="space-y-2">
+                <Label htmlFor="fxRate">
+                  Exchange rate (1 EUR = ? {selectedAccount.currency})
+                </Label>
+                <Input
+                  id="fxRate"
+                  type="number"
+                  step="0.0001"
+                  placeholder="e.g., 1.0842"
+                  value={form.fxRate}
+                  onChange={(e) => setForm({ ...form, fxRate: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The rate you actually received. Leave blank to use the market rate.
+                </p>
               </div>
             )}
 

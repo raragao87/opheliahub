@@ -44,6 +44,7 @@ export default function EditTransactionPage({
     investmentAssetId: string;
     quantity: string;
     unitPrice: string;
+    fxRate: string;
   } | null>(null);
 
   const [showDelete, setShowDelete] = useState(false);
@@ -64,7 +65,8 @@ export default function EditTransactionPage({
         tagIds: txn.tags.map((t: { tag: { id: string } }) => t.tag.id),
         investmentAssetId: txn.investmentDetail?.investmentAssetId ?? "",
         quantity: txn.investmentDetail?.quantity ? String(txn.investmentDetail.quantity) : "",
-        unitPrice: txn.investmentDetail?.unitPrice != null ? String(fromCents(txn.investmentDetail.unitPrice)) : "",
+        unitPrice: txn.investmentDetail?.unitPrice != null ? String(txn.investmentDetail.unitPrice) : "",
+        fxRate: txn.fxRate != null ? String(txn.fxRate) : "",
       });
     }
   }, [txnQuery.data, form]);
@@ -107,7 +109,8 @@ export default function EditTransactionPage({
       tagIds: form.tagIds,
       investmentAssetId: form.investmentAssetId || null,
       quantity: form.quantity ? parseFloat(form.quantity) : null,
-      unitPrice: form.unitPrice ? toCents(parseFloat(form.unitPrice)) : null,
+      unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : null,
+      fxRate: form.fxRate ? parseFloat(form.fxRate) : null,
     });
   };
 
@@ -267,6 +270,26 @@ export default function EditTransactionPage({
                 Set this to move the transaction to a different month&apos;s budget without changing the original date.
               </p>
             </div>
+
+            {/* FX rate — shown for foreign-currency accounts */}
+            {txn.account.currency !== "EUR" && (
+              <div className="space-y-2">
+                <Label htmlFor="fxRate">
+                  Exchange rate (1 EUR = ? {txn.account.currency})
+                </Label>
+                <Input
+                  id="fxRate"
+                  type="number"
+                  step="0.0001"
+                  placeholder="e.g., 1.0842"
+                  value={form.fxRate}
+                  onChange={(e) => setForm({ ...form, fxRate: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The rate you actually received. Leave blank to use the market rate.
+                </p>
+              </div>
+            )}
 
             {/* Category — hidden for transfers and illiquid accounts */}
             {!isTransfer && !isIlliquid && (

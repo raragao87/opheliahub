@@ -6,6 +6,7 @@ import { visibleTransactionsWhere, visibleAccountsWhere } from "@/lib/privacy";
 import { SPENDING_ACCOUNT_TYPES, ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
 import { computeEffectiveCategoryId } from "@/lib/effective-category";
+import { computeAccountFxPoolRate } from "@/lib/finance/currency-pool";
 
 async function getTransferCategoryId(
   prisma: PrismaClient,
@@ -226,12 +227,13 @@ export const transactionRouter = router({
         take: input.limit + 1,
         ...(input.cursor && { cursor: { id: input.cursor }, skip: 1 }),
         include: {
-          account: { select: { id: true, name: true, type: true, institution: true, ownership: true } },
+          account: { select: { id: true, name: true, type: true, institution: true, ownership: true, currency: true } },
           category: { select: { id: true, name: true, icon: true, color: true } },
           opheliaCategory: { select: { id: true, name: true } },
           investmentDetail: {
             include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
           },
+          relatedAsset: { select: { id: true, name: true, ticker: true } },
           tags: {
             include: {
               tag: { select: { id: true, name: true, color: true } },
@@ -267,6 +269,7 @@ export const transactionRouter = router({
           investmentDetail: {
             include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
           },
+          relatedAsset: { select: { id: true, name: true, ticker: true } },
           tags: { include: { tag: true } },
           user: { select: { id: true, name: true, image: true } },
           linkedTransaction: { include: { account: true } },
@@ -293,7 +296,11 @@ export const transactionRouter = router({
         categoryId: z.string().optional(),
         investmentAssetId: z.string().optional(),
         quantity: z.number().optional(),
-        unitPrice: z.number().int().optional(),
+        unitPrice: z.number().optional(),
+        purchaseFxRate: z.number().optional(),
+        feeAmount: z.number().optional(),
+        fxRate: z.number().nullable().optional(),
+        relatedAssetId: z.string().nullable().optional(),
         notes: z.string().optional(),
         tagIds: z.array(z.string()).default([]),
       })
@@ -426,8 +433,39 @@ export const transactionRouter = router({
         investmentAssetId,
         quantity,
         unitPrice,
+        purchaseFxRate: inputPurchaseFxRate,
+        feeAmount,
+        fxRate,
+        relatedAssetId,
         ...data
       } = input;
+
+      let purchaseFxRate = inputPurchaseFxRate ?? null;
+      if (!purchaseFxRate && investmentAssetId) {
+        const asset = await ctx.prisma.investmentAsset.findFirst({
+          where: { id: investmentAssetId },
+          select: { currency: true },
+        });
+        if (asset && asset.currency === "EUR") {
+          purchaseFxRate = 1.0;
+        } else if (asset) {
+          const poolRate = await computeAccountFxPoolRate(
+            ctx.prisma, input.accountId, asset.currency, input.date,
+          );
+          if (poolRate) {
+            purchaseFxRate = poolRate;
+          } else {
+            const rate = await ctx.prisma.currencyRate.findFirst({
+              where: { currency: asset.currency, baseCurrency: "EUR" },
+              orderBy: { date: "desc" },
+              select: { rate: true },
+            });
+            if (rate) {
+              purchaseFxRate = Number(rate.rate) / 1_000_000;
+            }
+          }
+        }
+      }
 
       const transaction = await ctx.prisma.$transaction(async (tx) => {
         const txn = await tx.transaction.create({
@@ -437,12 +475,20 @@ export const transactionRouter = router({
             displayName: extractDisplayName(data.description),
             originalDescription: data.description,
             effectiveCategoryId: computeEffectiveCategoryId(data.categoryId, null),
+            fxRate: fxRate ?? null,
+            relatedAssetId: relatedAssetId ?? null,
             tags: tagIds.length > 0
               ? { create: tagIds.map((tagId) => ({ tagId })) }
               : undefined,
             ...(investmentAssetId && quantity != null && unitPrice != null && {
               investmentDetail: {
-                create: { investmentAssetId, quantity, unitPrice },
+                create: {
+                  investmentAssetId,
+                  quantity,
+                  unitPrice,
+                  purchaseFxRate,
+                  feeAmount: feeAmount ?? null,
+                },
               },
             }),
           },
@@ -452,6 +498,7 @@ export const transactionRouter = router({
             investmentDetail: {
               include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
             },
+            relatedAsset: { select: { id: true, name: true, ticker: true } },
             tags: { include: { tag: true } },
           },
         });
@@ -480,7 +527,11 @@ export const transactionRouter = router({
         categoryId: z.string().nullable().optional(),
         investmentAssetId: z.string().nullable().optional(),
         quantity: z.number().nullable().optional(),
-        unitPrice: z.number().int().nullable().optional(),
+        unitPrice: z.number().nullable().optional(),
+        purchaseFxRate: z.number().nullable().optional(),
+        feeAmount: z.number().nullable().optional(),
+        fxRate: z.number().nullable().optional(),
+        relatedAssetId: z.string().nullable().optional(),
         notes: z.string().nullable().optional(),
         tagIds: z.array(z.string()).optional(),
       })
@@ -490,6 +541,10 @@ export const transactionRouter = router({
         investmentAssetId: inputAssetId,
         quantity: inputQuantity,
         unitPrice: inputUnitPrice,
+        purchaseFxRate: inputPurchaseFxRate,
+        feeAmount: inputFeeAmount,
+        fxRate: inputFxRate,
+        relatedAssetId: inputRelatedAssetId,
         ...restInput
       } = input;
 
@@ -702,23 +757,43 @@ export const transactionRouter = router({
           existing.opheliaCategoryId,
         );
       }
+      if (inputFxRate !== undefined) {
+        updateData.fxRate = inputFxRate;
+      }
+      if (inputRelatedAssetId !== undefined) {
+        updateData.relatedAssetId = inputRelatedAssetId;
+      }
 
       // Handle InvestmentDetail upsert/delete
       if (inputAssetId !== undefined) {
         if (inputAssetId && inputQuantity != null && inputUnitPrice != null) {
           await ctx.prisma.investmentDetail.upsert({
             where: { transactionId: id },
-            update: { investmentAssetId: inputAssetId, quantity: inputQuantity, unitPrice: inputUnitPrice },
-            create: { transactionId: id, investmentAssetId: inputAssetId, quantity: inputQuantity, unitPrice: inputUnitPrice },
+            update: {
+              investmentAssetId: inputAssetId,
+              quantity: inputQuantity,
+              unitPrice: inputUnitPrice,
+              ...(inputPurchaseFxRate !== undefined && { purchaseFxRate: inputPurchaseFxRate }),
+              ...(inputFeeAmount !== undefined && { feeAmount: inputFeeAmount }),
+            },
+            create: {
+              transactionId: id,
+              investmentAssetId: inputAssetId,
+              quantity: inputQuantity,
+              unitPrice: inputUnitPrice,
+              purchaseFxRate: inputPurchaseFxRate ?? null,
+              feeAmount: inputFeeAmount ?? null,
+            },
           });
         } else if (inputAssetId) {
-          // Partial update — only asset (and optionally qty/price) changed
           await ctx.prisma.investmentDetail.updateMany({
             where: { transactionId: id },
             data: {
               investmentAssetId: inputAssetId,
               ...(inputQuantity != null && { quantity: inputQuantity }),
               ...(inputUnitPrice != null && { unitPrice: inputUnitPrice }),
+              ...(inputPurchaseFxRate !== undefined && { purchaseFxRate: inputPurchaseFxRate }),
+              ...(inputFeeAmount !== undefined && { feeAmount: inputFeeAmount }),
             },
           });
         } else if (inputAssetId === null) {
@@ -735,6 +810,7 @@ export const transactionRouter = router({
           investmentDetail: {
             include: { investmentAsset: { select: { id: true, ticker: true, name: true, type: true } } },
           },
+          relatedAsset: { select: { id: true, name: true, ticker: true } },
           tags: { include: { tag: true } },
         },
       });

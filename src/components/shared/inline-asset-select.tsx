@@ -26,6 +26,7 @@ const TYPE_LABELS: Record<string, string> = {
   CRYPTO: "Crypto",
   COMMODITY: "Commodity",
   FUND: "Fund",
+  CFD: "CFD",
   OTHER: "Other",
 };
 
