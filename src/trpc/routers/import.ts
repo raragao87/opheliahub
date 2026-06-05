@@ -272,7 +272,7 @@ export const importRouter = router({
         });
 
         return { batchId: batch.id, importedRows };
-      });
+      }, { timeout: 60_000 });
 
       // Fire-and-forget: kick off Ophelia for newly imported transactions.
       // Not awaited — doesn't slow down the commit response.
