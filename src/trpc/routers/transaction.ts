@@ -301,6 +301,7 @@ export const transactionRouter = router({
         feeAmount: z.number().optional(),
         fxRate: z.number().nullable().optional(),
         relatedAssetId: z.string().nullable().optional(),
+        currency: z.string().length(3).optional(),
         notes: z.string().optional(),
         tagIds: z.array(z.string()).default([]),
       })
@@ -376,6 +377,7 @@ export const transactionRouter = router({
               originalDescription: input.description,
               date: input.date,
               accountId: input.toAccountId!,
+              currency: toAccount.currency || "EUR",
               userId: ctx.userId,
               notes: input.notes,
               categoryId: matchedCatId,
@@ -393,6 +395,7 @@ export const transactionRouter = router({
               originalDescription: input.description,
               date: input.date,
               accountId: input.accountId,
+              currency: account.currency || "EUR",
               userId: ctx.userId,
               notes: input.notes,
               linkedTransactionId: inflow.id,
@@ -437,8 +440,11 @@ export const transactionRouter = router({
         feeAmount,
         fxRate,
         relatedAssetId,
+        currency: inputCurrency,
         ...data
       } = input;
+
+      const currency = inputCurrency || account.currency || "EUR";
 
       let purchaseFxRate = inputPurchaseFxRate ?? null;
       if (!purchaseFxRate && investmentAssetId) {
@@ -471,6 +477,7 @@ export const transactionRouter = router({
         const txn = await tx.transaction.create({
           data: {
             ...data,
+            currency,
             userId: ctx.userId,
             displayName: extractDisplayName(data.description),
             originalDescription: data.description,
@@ -532,6 +539,7 @@ export const transactionRouter = router({
         feeAmount: z.number().nullable().optional(),
         fxRate: z.number().nullable().optional(),
         relatedAssetId: z.string().nullable().optional(),
+        currency: z.string().length(3).optional(),
         notes: z.string().nullable().optional(),
         tagIds: z.array(z.string()).optional(),
       })
@@ -602,6 +610,7 @@ export const transactionRouter = router({
             if (data.date !== undefined) updateData.date = data.date;
             if (data.accrualDate !== undefined) updateData.accrualDate = data.accrualDate;
             if (data.notes !== undefined) updateData.notes = data.notes;
+            if (data.currency !== undefined) updateData.currency = data.currency;
             if (data.amount !== undefined) {
               updateData.amount = isOutflow ? -newAbs : newAbs;
             }

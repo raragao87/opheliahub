@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { CategorySelect } from "@/components/shared/category-select";
+import { CurrencySelect } from "@/components/shared/currency-select";
 import { fromCents, toCents } from "@/lib/money";
 import { formatDate } from "@/lib/date";
 import { ArrowLeft, ArrowLeftRight, Trash2, Save, Sparkles } from "lucide-react";
@@ -41,6 +42,7 @@ export default function EditTransactionPage({
     categoryId: string;
     notes: string;
     tagIds: string[];
+    currency: string;
     investmentAssetId: string;
     quantity: string;
     unitPrice: string;
@@ -63,6 +65,7 @@ export default function EditTransactionPage({
         categoryId: txn.categoryId ?? "",
         notes: txn.notes ?? "",
         tagIds: txn.tags.map((t: { tag: { id: string } }) => t.tag.id),
+        currency: txn.currency || txn.account.currency || "EUR",
         investmentAssetId: txn.investmentDetail?.investmentAssetId ?? "",
         quantity: txn.investmentDetail?.quantity ? String(txn.investmentDetail.quantity) : "",
         unitPrice: txn.investmentDetail?.unitPrice != null ? String(txn.investmentDetail.unitPrice) : "",
@@ -111,6 +114,7 @@ export default function EditTransactionPage({
       quantity: form.quantity ? parseFloat(form.quantity) : null,
       unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : null,
       fxRate: form.fxRate ? parseFloat(form.fxRate) : null,
+      currency: form.currency || undefined,
     });
   };
 
@@ -269,6 +273,16 @@ export default function EditTransactionPage({
               <p className="text-xs text-muted-foreground">
                 Set this to move the transaction to a different month&apos;s budget without changing the original date.
               </p>
+            </div>
+
+            {/* Currency */}
+            <div className="space-y-2">
+              <Label htmlFor="currency">Currency</Label>
+              <CurrencySelect
+                id="currency"
+                value={form.currency}
+                onChange={(code) => setForm({ ...form, currency: code })}
+              />
             </div>
 
             {/* FX rate — shown for foreign-currency accounts */}

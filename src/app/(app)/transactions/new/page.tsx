@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { CategorySelect } from "@/components/shared/category-select";
+import { CurrencySelect } from "@/components/shared/currency-select";
 import { toCents } from "@/lib/money";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 
@@ -31,6 +32,7 @@ export default function NewTransactionPage() {
     categoryId: "",
     notes: "",
     tagIds: [] as string[],
+    currency: "",
     investmentAssetId: "",
     quantity: "",
     unitPrice: "",
@@ -85,6 +87,7 @@ export default function NewTransactionPage() {
         unitPrice: parseFloat(form.unitPrice),
       }),
       fxRate: form.fxRate ? parseFloat(form.fxRate) : null,
+      currency: form.currency || undefined,
     });
   };
 
@@ -161,7 +164,10 @@ export default function NewTransactionPage() {
               <Select
                 id="account"
                 value={form.accountId}
-                onChange={(e) => setForm({ ...form, accountId: e.target.value })}
+                onChange={(e) => {
+                  const acct = (accountsQuery.data ?? []).find((a) => a.id === e.target.value);
+                  setForm({ ...form, accountId: e.target.value, currency: acct?.currency || "EUR" });
+                }}
                 required
               >
                 <option value="">Select account...</option>
@@ -192,6 +198,18 @@ export default function NewTransactionPage() {
                       </option>
                     ))}
                 </Select>
+              </div>
+            )}
+
+            {/* Currency — defaults to account's currency */}
+            {selectedAccount && (
+              <div className="space-y-2">
+                <Label htmlFor="currency">Currency</Label>
+                <CurrencySelect
+                  id="currency"
+                  value={form.currency || selectedAccount.currency || "EUR"}
+                  onChange={(code) => setForm({ ...form, currency: code })}
+                />
               </div>
             )}
 

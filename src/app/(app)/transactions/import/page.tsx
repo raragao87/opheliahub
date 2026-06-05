@@ -1845,7 +1845,7 @@ export default function ImportPage() {
                       </div>
 
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <MoneyDisplay amount={tx.amount} className="text-sm font-medium" />
+                        <MoneyDisplay amount={tx.amount} currency={tx.currency || selectedAccount?.currency || "EUR"} className="text-sm font-medium" />
                         {isDefiniteDup && (
                           <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">Duplicate</Badge>
                         )}

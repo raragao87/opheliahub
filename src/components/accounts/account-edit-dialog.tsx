@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { CurrencySelect } from "@/components/shared/currency-select";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
-import { CURRENCIES } from "@/lib/currencies";
 import { fromCents, toCents } from "@/lib/money";
 import {
   Save,
@@ -238,17 +238,11 @@ export function AccountEditDialog({ accountId, open, onClose }: AccountEditDialo
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="dlg-currency">Currency</Label>
-              <Select
+              <CurrencySelect
                 id="dlg-currency"
                 value={editForm.currency}
-                onChange={(e) => setEditForm({ ...editForm, currency: e.target.value })}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.symbol} {c.code} — {c.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={(code) => setEditForm({ ...editForm, currency: code })}
+              />
             </div>
 
             <div className="space-y-2">

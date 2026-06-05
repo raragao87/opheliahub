@@ -443,6 +443,36 @@ export const accountRouter = router({
       return updated;
     }),
 
+  /** Recompute balance from the sum of all active transactions */
+  rebalance: householdProcedure
+    .input(z.object({ id: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const where = {
+        ...visibleAccountsWhere(ctx.userId, ctx.householdId),
+        ...(input.id && { id: input.id }),
+      };
+      const accounts = await ctx.prisma.financialAccount.findMany({ where, select: { id: true, name: true, balance: true } });
+
+      const results: { name: string; old: number; new: number; diff: number }[] = [];
+
+      for (const acct of accounts) {
+        const agg = await ctx.prisma.transaction.aggregate({
+          where: { accountId: acct.id, deletedAt: null },
+          _sum: { amount: true },
+        });
+        const computed = agg._sum.amount ?? 0;
+        if (computed !== acct.balance) {
+          await ctx.prisma.financialAccount.update({
+            where: { id: acct.id },
+            data: { balance: computed },
+          });
+          results.push({ name: acct.name, old: acct.balance, new: computed, diff: computed - acct.balance });
+        }
+      }
+
+      return { checked: accounts.length, fixed: results };
+    }),
+
   /** Generate an AI description and suggested links for an account */
   generateDescription: householdProcedure
     .input(z.object({ id: z.string() }))
