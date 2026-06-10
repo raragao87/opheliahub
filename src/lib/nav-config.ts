@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   PiggyBank,
   ClipboardList,
+  ChartPie,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -23,6 +24,7 @@ export const navSections: NavSection[] = [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { name: "Tracker", href: "/tracker", icon: PiggyBank },
       { name: "Planner", href: "/planner", icon: ClipboardList },
+      { name: "Portfolio", href: "/portfolio", icon: ChartPie },
     ],
   },
 ];
