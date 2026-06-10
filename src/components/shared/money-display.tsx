@@ -27,7 +27,7 @@ export function MoneyDisplay({
   return (
     <span
       className={cn(
-        "font-mono tabular-nums",
+        "font-mono tabular-nums whitespace-nowrap",
         colorize && amount > 0 && "text-green-600 dark:text-green-400",
         colorize && amount < 0 && "text-red-600 dark:text-red-400",
         className

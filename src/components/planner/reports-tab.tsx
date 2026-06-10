@@ -9,7 +9,7 @@ import { Loader2, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-rea
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { fromCents } from "@/lib/money";
+import { fromCents, formatMoney } from "@/lib/money";
 
 interface ReportsTabProps {
   month: number;
@@ -26,15 +26,20 @@ function getPrevMonth(year: number, month: number) {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
-function DeltaChip({ value, suffix = "" }: { value: number; suffix?: string }) {
+function DeltaChip({ value, suffix = "", invert = false }: { value: number; suffix?: string; invert?: boolean }) {
   if (Math.abs(value) < 0.5) return <span className="text-[10px] text-muted-foreground">—</span>;
   const isPositive = value > 0;
+  // invert: a rise is bad (e.g. expenses) — color flips, arrow stays truthful
+  const isGood = invert ? !isPositive : isPositive;
+  const display = suffix === "pp"
+    ? `${isPositive ? "+" : ""}${value.toFixed(1)}${suffix}`
+    : `${isPositive ? "+" : "-"}${formatMoney(Math.round(Math.abs(value) * 100))}`;
   return (
-    <span className={cn("text-[10px] font-medium inline-flex items-center gap-0.5",
-      isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+    <span className={cn("text-[10px] font-medium inline-flex items-center gap-0.5 whitespace-nowrap",
+      isGood ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
     )}>
       {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-      {isPositive ? "+" : ""}{value.toFixed(suffix === "pp" ? 1 : 0)}{suffix}
+      {display}
     </span>
   );
 }
@@ -101,7 +106,7 @@ export function ReportsTab({ month, year, budgetScope }: ReportsTabProps) {
         <div className="rounded-lg border bg-card p-3">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Expenses</p>
           <MoneyDisplay amount={current.totalExpenses} colorize={false} className="text-lg font-bold text-red-600 dark:text-red-400" />
-          {deltas && <DeltaChip value={-fromCents(Math.abs(deltas.expensesChange))} />}
+          {deltas && <DeltaChip value={fromCents(deltas.expensesChange)} invert />}
         </div>
 
         {/* Net savings */}
@@ -140,7 +145,7 @@ export function ReportsTab({ month, year, budgetScope }: ReportsTabProps) {
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
                 <Bar dataKey="income" fill="hsl(142 71% 45%)" radius={[3, 3, 0, 0]} name="Income" />
-                <Bar dataKey="expenses" fill="hsl(var(--destructive))" radius={[3, 3, 0, 0]} name="Expenses" />
+                <Bar dataKey="expenses" fill="var(--color-destructive)" radius={[3, 3, 0, 0]} name="Expenses" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -164,12 +169,12 @@ export function ReportsTab({ month, year, budgetScope }: ReportsTabProps) {
                       <MoneyDisplay amount={cat.compareAmount} className="text-xs text-muted-foreground shrink-0 tabular-nums whitespace-nowrap w-20 text-right" colorize={false} />
                     </>
                   )}
-                  <div className="w-16 shrink-0 text-right">
+                  <div className="w-20 shrink-0 text-right">
                     {Math.abs(cat.change) > 50 ? ( // >€0.50 threshold
-                      <span className={cn("text-[10px] font-medium",
-                        cat.change < 0 ? "text-red-500" : "text-green-500" // more negative = more spending = red
+                      <span className={cn("text-[10px] font-medium whitespace-nowrap",
+                        cat.change > 0 ? "text-red-500" : "text-green-500" // positive = spent more = red
                       )}>
-                        {cat.change < 0 ? "" : "+"}{fromCents(cat.change).toFixed(0)}
+                        {cat.change > 0 ? "+" : "-"}{formatMoney(Math.abs(cat.change))}
                       </span>
                     ) : (
                       <Minus className="h-3 w-3 text-muted-foreground/30 inline" />
@@ -189,7 +194,7 @@ export function ReportsTab({ month, year, budgetScope }: ReportsTabProps) {
               ))}
             </div>
           )}
-          {current.byCategory.length === 0 && (
+          {current.byCategory.length === 0 && !(deltas?.categoryChanges && deltas.categoryChanges.length > 0) && (
             <p className="text-xs text-muted-foreground/50 text-center py-3">No expenses this month</p>
           )}
         </div>

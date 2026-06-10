@@ -6,6 +6,31 @@ import { getMonthRange } from "@/lib/date";
 import { SPENDING_ACCOUNT_TYPES } from "@/lib/account-types";
 
 export const dashboardRouter = router({
+  /** Completion signals for the getting-started checklist */
+  onboardingStatus: householdProcedure.query(async ({ ctx }) => {
+    const accountsWhere = visibleAccountsWhere(ctx.userId, ctx.householdId);
+    const [accountCount, importCount, categorizedCount] = await Promise.all([
+      ctx.prisma.financialAccount.count({ where: accountsWhere }),
+      ctx.prisma.importBatch.count({
+        where: { status: "COMPLETED", account: accountsWhere },
+      }),
+      ctx.prisma.transaction.count({
+        where: {
+          AND: [
+            visibleTransactionsWhere(ctx.userId, ctx.householdId),
+            { categoryId: { not: null } },
+          ],
+        },
+        take: 1,
+      }),
+    ]);
+    return {
+      hasAccounts: accountCount > 0,
+      hasImports: importCount > 0,
+      hasCategorized: categorizedCount > 0,
+    };
+  }),
+
   monthlySummary: householdProcedure
     .input(
       z.object({
@@ -205,7 +230,9 @@ export const dashboardRouter = router({
       // Deltas
       const deltas = compare ? (() => {
         const incomeChange = current.totalIncome - compare.totalIncome;
-        const expensesChange = current.totalExpenses - compare.totalExpenses;
+        // totalExpenses is a negative sum — compare magnitudes so that
+        // positive = spending increased (UI inverts color accordingly).
+        const expensesChange = Math.abs(current.totalExpenses) - Math.abs(compare.totalExpenses);
         const catChanges = new Map<string, { categoryId: string | null; categoryName: string | null; categoryIcon: string | null; currentAmount: number; compareAmount: number }>();
 
         for (const c of current.byCategory) {
@@ -226,8 +253,12 @@ export const dashboardRouter = router({
           netFlowChange: current.netFlow - compare.netFlow,
           savingsRateChange: current.savingsRate - compare.savingsRate,
           categoryChanges: Array.from(catChanges.values())
-            .map((c) => ({ ...c, change: c.currentAmount - c.compareAmount, changePercent: c.compareAmount !== 0 ? ((c.currentAmount - c.compareAmount) / Math.abs(c.compareAmount)) * 100 : 0 }))
-            .sort((a, b) => a.change - b.change),
+            // Amounts are negative sums — compare magnitudes (positive change = spent more)
+            .map((c) => {
+              const change = Math.abs(c.currentAmount) - Math.abs(c.compareAmount);
+              return { ...c, change, changePercent: c.compareAmount !== 0 ? (change / Math.abs(c.compareAmount)) * 100 : 0 };
+            })
+            .sort((a, b) => b.change - a.change),
         };
       })() : null;
 
