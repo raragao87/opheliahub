@@ -12,10 +12,11 @@ import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
 
 // Map nav item href → translation key
-const NAV_ITEM_KEYS: Record<string, "nav.dashboard" | "nav.tracker" | "nav.planner"> = {
+const NAV_ITEM_KEYS: Record<string, "nav.dashboard" | "nav.tracker" | "nav.planner" | "nav.portfolio"> = {
   "/dashboard": "nav.dashboard",
   "/tracker": "nav.tracker",
   "/planner": "nav.planner",
+  "/portfolio": "nav.portfolio",
 };
 
 export function AppSidebar() {

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { CategorySelect } from "@/components/shared/category-select";
+import { CurrencySelect } from "@/components/shared/currency-select";
 import { toCents } from "@/lib/money";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 
@@ -31,9 +32,11 @@ export default function NewTransactionPage() {
     categoryId: "",
     notes: "",
     tagIds: [] as string[],
+    currency: "",
     investmentAssetId: "",
     quantity: "",
     unitPrice: "",
+    fxRate: "",
   });
 
   const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
@@ -81,8 +84,10 @@ export default function NewTransactionPage() {
         quantity: parseFloat(form.quantity),
       }),
       ...(isInvestmentAccount && form.unitPrice && {
-        unitPrice: Math.round(parseFloat(form.unitPrice) * 100),
+        unitPrice: parseFloat(form.unitPrice),
       }),
+      fxRate: form.fxRate ? parseFloat(form.fxRate) : null,
+      currency: form.currency || undefined,
     });
   };
 
@@ -159,7 +164,10 @@ export default function NewTransactionPage() {
               <Select
                 id="account"
                 value={form.accountId}
-                onChange={(e) => setForm({ ...form, accountId: e.target.value })}
+                onChange={(e) => {
+                  const acct = (accountsQuery.data ?? []).find((a) => a.id === e.target.value);
+                  setForm({ ...form, accountId: e.target.value, currency: acct?.currency || "EUR" });
+                }}
                 required
               >
                 <option value="">Select account...</option>
@@ -190,6 +198,38 @@ export default function NewTransactionPage() {
                       </option>
                     ))}
                 </Select>
+              </div>
+            )}
+
+            {/* Currency — defaults to account's currency */}
+            {selectedAccount && (
+              <div className="space-y-2">
+                <Label htmlFor="currency">Currency</Label>
+                <CurrencySelect
+                  id="currency"
+                  value={form.currency || selectedAccount.currency || "EUR"}
+                  onChange={(code) => setForm({ ...form, currency: code })}
+                />
+              </div>
+            )}
+
+            {/* FX rate — shown for foreign-currency accounts */}
+            {selectedAccount && selectedAccount.currency !== "EUR" && (
+              <div className="space-y-2">
+                <Label htmlFor="fxRate">
+                  Exchange rate (1 EUR = ? {selectedAccount.currency})
+                </Label>
+                <Input
+                  id="fxRate"
+                  type="number"
+                  step="0.0001"
+                  placeholder="e.g., 1.0842"
+                  value={form.fxRate}
+                  onChange={(e) => setForm({ ...form, fxRate: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The rate you actually received. Leave blank to use the market rate.
+                </p>
               </div>
             )}
 

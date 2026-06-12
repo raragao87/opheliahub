@@ -255,6 +255,7 @@ enum AssetType {
   CRYPTO
   COMMODITY
   FUND
+  CFD
   OTHER
 }
 
@@ -308,11 +309,18 @@ model Transaction {
   linkedTransaction   Transaction?  @relation("TransferLink", fields: [linkedTransactionId], references: [id])
   linkedBy            Transaction?  @relation("TransferLink")
 
+  // Actual FX rate used for this transaction (e.g., deposit EUR→USD)
+  fxRate              Decimal?  @db.Decimal(18, 8)
+
+  // Link fee/dividend/interest transactions to the asset they relate to
+  relatedAssetId      String?
+
   account          FinancialAccount  @relation(fields: [accountId], references: [id])
   category         Category?         @relation("UserCategory", fields: [categoryId], references: [id])
   opheliaCategory  Category?         @relation("OpheliaCategory", fields: [opheliaCategoryId], references: [id])
   user             User              @relation(fields: [userId], references: [id])
   importBatch      ImportBatch?      @relation(fields: [importBatchId], references: [id])
+  relatedAsset     InvestmentAsset?  @relation("RelatedAssetTransactions", fields: [relatedAssetId], references: [id])
   tags             TransactionTag[]
   investmentDetail InvestmentDetail?
 
@@ -326,6 +334,7 @@ model Transaction {
   @@index([categoryId, date])
   @@index([effectiveCategoryId])
   @@index([deletedAt])
+  @@index([relatedAssetId])
   @@map("transactions")
 }
 
@@ -523,8 +532,10 @@ model InvestmentAsset {
   isin        String?   // International Securities ID (optional)
   householdId String
 
-  household         Household          @relation(fields: [householdId], references: [id])
-  investmentDetails InvestmentDetail[]
+  household           Household          @relation(fields: [householdId], references: [id])
+  investmentDetails   InvestmentDetail[]
+  prices              AssetPrice[]
+  relatedTransactions Transaction[]      @relation("RelatedAssetTransactions")
 
   @@unique([householdId, ticker])
   @@unique([householdId, isin])
@@ -532,12 +543,28 @@ model InvestmentAsset {
   @@map("investment_assets")
 }
 
-model InvestmentDetail {
-  id                String  @id @default(cuid())
-  transactionId     String  @unique
+model AssetPrice {
+  id                String   @id @default(cuid())
   investmentAssetId String
-  quantity          Decimal @db.Decimal(18, 8)
-  unitPrice         Int
+  date              DateTime @db.Date
+  price             Decimal  @db.Decimal(18, 6)
+  source            String?
+
+  investmentAsset InvestmentAsset @relation(fields: [investmentAssetId], references: [id], onDelete: Cascade)
+
+  @@unique([investmentAssetId, date])
+  @@index([investmentAssetId, date])
+  @@map("asset_prices")
+}
+
+model InvestmentDetail {
+  id                String   @id @default(cuid())
+  transactionId     String   @unique
+  investmentAssetId String
+  quantity          Decimal  @db.Decimal(18, 8)
+  unitPrice         Decimal  @db.Decimal(18, 6)
+  purchaseFxRate    Decimal? @db.Decimal(18, 8)
+  feeAmount         Decimal? @db.Decimal(18, 6)
 
   transaction     Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   investmentAsset InvestmentAsset @relation(fields: [investmentAssetId], references: [id])

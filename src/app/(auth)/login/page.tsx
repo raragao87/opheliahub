@@ -2,6 +2,8 @@ import { signIn } from "@/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+const isDev = process.env.NODE_ENV === "development";
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -57,6 +59,28 @@ export default async function LoginPage({
             Sign in with Google
           </Button>
         </form>
+        {isDev && (
+          <form
+            action={async (formData: FormData) => {
+              "use server";
+              const email = formData.get("email") as string;
+              await signIn("dev-login", { email, redirectTo: "/dashboard" });
+            }}
+          >
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Dev only</span>
+              </div>
+            </div>
+            <input type="hidden" name="email" value="roberto.b.a.aragao@gmail.com" />
+            <Button type="submit" variant="outline" className="w-full" size="lg">
+              Dev Login (Roberto)
+            </Button>
+          </form>
+        )}
       </CardContent>
     </Card>
   );

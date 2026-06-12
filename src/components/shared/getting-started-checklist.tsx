@@ -27,14 +27,12 @@ export function GettingStartedChecklist() {
   }, []);
 
   const householdQuery = useQuery(trpc.household.get.queryOptions());
-  const accountsQuery = useQuery(
-    trpc.dashboard.accountBalances.queryOptions({})
-  );
+  const statusQuery = useQuery(trpc.dashboard.onboardingStatus.queryOptions());
 
   const household = householdQuery.data;
-  const accounts = accountsQuery.data ?? [];
+  const status = statusQuery.data;
   const memberCount = household?.members.length ?? 0;
-  const hasAccounts = accounts.length > 0;
+  const hasAccounts = status?.hasAccounts ?? false;
   const hasSoloHousehold = memberCount === 1;
 
   if (dismissed) return null;
@@ -70,6 +68,9 @@ export function GettingStartedChecklist() {
   // All conditions met → nothing left to do, auto-dismiss
   const completedIds = new Set<string>();
   if (hasAccounts) completedIds.add("account");
+  if (status?.hasImports) completedIds.add("import");
+  if (status?.hasCategorized) completedIds.add("categories");
+  if (!hasSoloHousehold) completedIds.add("invite");
 
   const allDone = visibleItems.every((item) => completedIds.has(item.id));
   if (allDone) return null;

@@ -189,6 +189,7 @@ export const importRouter = router({
             displayName: z.string().optional(),
             amount: z.number().int(),
             type: z.enum(["INCOME", "EXPENSE", "FUND", "TRANSFER", "INVESTMENT"]),
+            currency: z.string().length(3).optional(),
             categoryId: z.string().optional(),
             tagIds: z.array(z.string()).default([]),
             externalId: z.string().optional(),
@@ -230,7 +231,7 @@ export const importRouter = router({
         const isInvestmentAccount = ACCOUNT_TYPE_META[account.type]?.sidebarGroup === "INVESTMENT";
 
         for (const txData of input.transactions) {
-          const { tagIds, displayName: clientDisplayName, ...transactionData } = txData;
+          const { tagIds, displayName: clientDisplayName, currency: txCurrency, ...transactionData } = txData;
 
           // Auto-type INVESTMENT for investment accounts (except transfers)
           if (isInvestmentAccount && transactionData.type !== "TRANSFER") {
@@ -240,6 +241,7 @@ export const importRouter = router({
           const created = await tx.transaction.create({
             data: {
               ...transactionData,
+              currency: txCurrency || account.currency || "EUR",
               displayName: clientDisplayName || extractDisplayName(transactionData.description),
               originalDescription: transactionData.description,
               accountId: input.accountId,

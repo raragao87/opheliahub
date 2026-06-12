@@ -25,6 +25,7 @@ interface TransactionAccount {
   id: string;
   name: string;
   type?: string;
+  currency?: string;
 }
 
 interface TransactionCategory {
@@ -45,6 +46,7 @@ interface TransactionLinked {
 export interface TransactionItem {
   id: string;
   amount: number;
+  currency?: string;
   type: string;
   description: string;
   displayName?: string | null;
@@ -64,12 +66,14 @@ export interface TransactionItem {
   opheliaCategory?: { id: string; name: string } | null;
   opheliaConfidence?: number | null;
   opheliaDisplayName?: string | null;
+  // FX rate used for this transaction (e.g., deposit EUR→USD)
+  fxRate?: unknown;
   // Investment detail (1:1 relation)
   investmentDetail?: {
     investmentAssetId: string;
     investmentAsset: { id: string; ticker: string | null; name: string; type: string };
     quantity: unknown; // Prisma Decimal — rendered via toString()
-    unitPrice: number;
+    unitPrice: unknown;
   } | null;
 }
 
@@ -789,7 +793,9 @@ export function TransactionTable({
     // overflow-y-auto + max-h makes this a self-contained scroll area,
     // which allows the sticky thead to work correctly.
     <div className="overflow-x-clip">
-      <table className="w-full text-sm min-w-[760px]">
+      {/* No min-width: with overflow-x-clip a forced width would hide the
+          Amount column on narrow viewports; columns truncate instead. */}
+      <table className="w-full text-sm">
         <thead className="sticky z-10" style={{ top: stickyOffset }}>
           <tr className="border-y border-border bg-card">
             {selectable && (
@@ -1271,6 +1277,7 @@ function TransactionRow({
         )}
         <InlineMoneyEdit
           value={txn.amount}
+          currency={txn.currency}
           onSave={(cents) => onUpdate(txn.id, { amount: cents })}
           className={cn(
             txn.amount > 0 && "text-green-600 dark:text-green-400",

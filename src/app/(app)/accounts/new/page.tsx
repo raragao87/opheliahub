@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { CurrencySelect } from "@/components/shared/currency-select";
 import { toCents } from "@/lib/money";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
-import { CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
+import { DEFAULT_CURRENCY } from "@/lib/currencies";
 
 const LIABILITY_TYPES = new Set(
   Object.entries(ACCOUNT_TYPE_META)
@@ -159,17 +160,11 @@ export default function NewAccountPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Select
+                <CurrencySelect
                   id="currency"
                   value={form.currency}
-                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.symbol} {c.code} — {c.name}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(code) => setForm({ ...form, currency: code })}
+                />
               </div>
             </div>
 

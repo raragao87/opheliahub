@@ -45,7 +45,14 @@ export function CostAnalysisTab({ budgetScope }: CostAnalysisTabProps) {
     return [];
   }, [selectedGroup, selectedCatIds]);
 
-  const period = PERIOD_PRESETS[periodIdx].getRange();
+  // Memoized + normalized to start of day: a fresh Date on every render would
+  // change the query key each time and cause an infinite refetch loop.
+  const period = useMemo(() => {
+    const range: { from?: Date; to?: Date } = PERIOD_PRESETS[periodIdx].getRange();
+    range.from?.setHours(0, 0, 0, 0);
+    range.to?.setHours(23, 59, 59, 999);
+    return range;
+  }, [periodIdx]);
 
   const analysisQuery = useQuery({
     ...trpc.category.costAnalysis.queryOptions({
