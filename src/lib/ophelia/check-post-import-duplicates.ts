@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { resolveDuplicates } from "./resolveDuplicates";
+import { descriptionsMatch } from "@/lib/duplicate-matching";
 
 /**
  * Background check for duplicates after an import is committed.
@@ -66,10 +67,11 @@ export async function checkPostImportDuplicates(
       const dayDiff = Math.abs(imp.date.getTime() - ex.date.getTime());
       if (dayDiff > 86400000) continue; // more than 1 day apart
 
-      // Compare all available names (description, displayName, opheliaDisplayName).
-      const namesA = [imp.description, imp.displayName, imp.opheliaDisplayName].filter(Boolean).map(n => n!.toLowerCase().slice(0, 20));
-      const namesB = [ex.description, ex.displayName, ex.opheliaDisplayName].filter(Boolean).map(n => n!.toLowerCase().slice(0, 20));
-      const obviousDuplicate = namesA.some(a => namesB.some(b => a.includes(b) || b.includes(a)));
+      // Compare all available names (description, displayName, opheliaDisplayName)
+      // via shared matching (prefix similarity or same counterparty IBAN).
+      const namesA = [imp.description, imp.displayName, imp.opheliaDisplayName].filter(Boolean) as string[];
+      const namesB = [ex.description, ex.displayName, ex.opheliaDisplayName].filter(Boolean) as string[];
+      const obviousDuplicate = namesA.some(a => namesB.some(b => descriptionsMatch(a, b)));
       if (obviousDuplicate) {
         if (!obviousImportedIds.has(imp.id)) {
           obviousImportedIds.add(imp.id);

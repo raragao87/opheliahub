@@ -5,6 +5,7 @@ import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
 import { computeEffectiveCategoryId } from "@/lib/effective-category";
+import { descriptionsMatch } from "@/lib/duplicate-matching";
 import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
 import { isOpheliaEnabled } from "@/lib/ophelia";
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
@@ -90,12 +91,9 @@ export const importRouter = router({
             Math.abs(ex.date.getTime() - imported.date.getTime()) < 86400000; // 1 day
           if (!sameAmount || !sameDate) continue;
 
-          // Check description similarity
-          const similarDesc =
-            ex.description.toLowerCase().includes(imported.description.toLowerCase().slice(0, 20)) ||
-            imported.description.toLowerCase().includes(ex.description.toLowerCase().slice(0, 20));
-
-          if (similarDesc) {
+          // Similar description OR same counterparty IBAN (banks reformat
+          // descriptions between exports — e.g. ABN pending vs settled)
+          if (descriptionsMatch(imported.description, ex.description)) {
             isDefinite = true;
             break;
           }

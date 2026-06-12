@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { ScopeBadge } from "@/components/shared/visibility-badge";
 import { formatDate } from "@/lib/date";
+import { descriptionsMatch } from "@/lib/duplicate-matching";
 import { parseCsvFile, transformCsvToTransactions, type AmountColumnHints, type ColumnMapping, type ParsedTransaction } from "@/lib/parsers/csv-parser";
 import { parseMT940 } from "@/lib/parsers/mt940-parser";
 import type { FileStructureAnalysis } from "@/lib/ophelia/types";
@@ -758,23 +759,26 @@ export default function ImportPage() {
         // Check exact match: same date + same amount
         const amountMatch = sameDateExisting.find((ex) => ex.amount === tx.amount);
         if (amountMatch) {
-          // Check description similarity
-          const descA = tx.description.toLowerCase().slice(0, 20);
-          const descB = amountMatch.description.toLowerCase().slice(0, 20);
-          if (descA.includes(descB) || descB.includes(descA)) {
-            return "duplicate"; // Same date + amount + similar description
+          // Similar description OR same counterparty IBAN (banks reformat
+          // descriptions between exports — e.g. ABN pending vs settled)
+          if (descriptionsMatch(tx.description, amountMatch.description)) {
+            return "duplicate"; // Same date + amount + same transaction
           }
           return "sameAmount"; // Same date + amount but different description
         }
 
-        // Check adjacent date (±1 day)
+        // Check adjacent date (±1 day) — banks shift dates between exports
         const prevDate = new Date(tx.date.getTime() - 86400000).toISOString().slice(0, 10);
         const nextDate = new Date(tx.date.getTime() + 86400000).toISOString().slice(0, 10);
         const adjacentExisting = [
           ...(existingByDate.get(prevDate) ?? []),
           ...(existingByDate.get(nextDate) ?? []),
         ];
-        if (adjacentExisting.some((ex) => ex.amount === tx.amount)) {
+        const adjacentAmountMatch = adjacentExisting.find((ex) => ex.amount === tx.amount);
+        if (adjacentAmountMatch) {
+          if (descriptionsMatch(tx.description, adjacentAmountMatch.description)) {
+            return "duplicate"; // ±1 day, same amount, same transaction
+          }
           return "similar";
         }
 
