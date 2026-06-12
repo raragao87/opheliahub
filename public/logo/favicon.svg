@@ -1,0 +1,31 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Simplified icon for small sizes -->
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#4338ca"/>
+
+  <!-- Simplified figures as two arcs -->
+  <path fill="#a5b4fc" d="
+    M 42 14
+    C 52 18, 56 28, 56 36
+    C 56 46, 50 53, 38 56
+    C 44 50, 50 44, 50 36
+    C 50 28, 48 20, 42 14
+    Z
+  "/>
+
+  <!-- House (white) -->
+  <path fill="white" d="
+    M 32 18
+    L 20 28
+    L 23 28
+    L 23 42
+    L 41 42
+    L 41 28
+    L 44 28
+    Z
+  "/>
+
+  <!-- Chart bars -->
+  <rect x="26" y="37" width="5" height="4" rx="0.8" fill="#4338ca"/>
+  <rect x="33" y="34" width="5" height="7" rx="0.8" fill="#4338ca"/>
+</svg>

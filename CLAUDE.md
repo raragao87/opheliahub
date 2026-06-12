@@ -6,7 +6,7 @@ OpheliaHub is a personal & family finance management app for couples. It unifies
 
 ## Tech Stack
 
-- **Framework**: Next.js 14+ (App Router)
+- **Framework**: Next.js 16+ (App Router)
 - **Language**: TypeScript (strict mode)
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Database**: PostgreSQL + Prisma ORM
@@ -18,7 +18,8 @@ OpheliaHub is a personal & family finance management app for couples. It unifies
 ## Core Architecture Rules
 
 - All monetary values are **integers (cents/minor units)**. Never use floats for money.
-- Multi-currency: every transaction and account stores its currency code (EUR default).
+- Multi-currency: every transaction and account stores its currency code (EUR default). 40+ currencies supported.
+- Investment transactions track `purchaseFxRate` for return decomposition (local vs FX gains).
 - Privacy is enforced at the **database query level**, not just UI. Every Prisma query involving transactions, accounts, or balances must be scoped by user permissions.
 - Transaction visibility is derived from **account ownership** — all transactions on a SHARED account are shared, all on a PERSONAL account are personal. There is no per-transaction visibility field.
 - **Transaction types**: INCOME, EXPENSE, FUND, TRANSFER, INVESTMENT — the type is derived from the category's type (for FUND), the account's type (for INVESTMENT), or explicit user action (for TRANSFER). Every transaction has a `categoryId` — no exceptions.
@@ -150,3 +151,14 @@ To audit a database for privacy invariant violations:
 - Branch naming: `feature/description`, `fix/description`, `chore/description`
 - Commit messages: conventional commits (`feat:`, `fix:`, `test:`, `chore:`, `refactor:`)
 - Always run `pnpm typecheck && pnpm test` before committing
+
+## Deployment
+
+- Hosted on **Vercel** (production)
+- Vercel Analytics enabled
+
+## Naming Notes
+
+- `BudgetScope` enum (values: SHARED, PERSONAL) replaces the former `Visibility` enum. The DB column is still named `visibility` via `@@map`; code uses `budgetScope` everywhere.
+
+## Last reviewed: 2026-06-12

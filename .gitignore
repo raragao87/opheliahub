@@ -31,9 +31,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# env files — never commit credentials; .env.example is the only committable one
 .env
 .env*.local
+.env.production
+.env.vercel-prod
 
 # vercel
 .vercel

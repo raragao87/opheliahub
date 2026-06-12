@@ -1,0 +1,59 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Left figure (dark indigo) -->
+  <circle cx="148" cy="78" r="46" fill="#4338ca"/>
+  <path fill="#4338ca" d="
+    M 120 115
+    C 70 140, 25 210, 25 290
+    C 25 370, 80 430, 180 455
+    C 220 462, 250 464, 270 464
+    C 260 455, 235 440, 200 420
+    C 140 390, 100 340, 95 290
+    C 90 240, 100 185, 135 140
+    Z
+  "/>
+  <path fill="#4338ca" d="
+    M 175 105
+    C 200 92, 230 86, 258 88
+    C 245 100, 218 105, 190 110
+    Z
+  "/>
+
+  <!-- Right figure (lavender) -->
+  <circle cx="364" cy="78" r="46" fill="#a5b4fc"/>
+  <path fill="#a5b4fc" d="
+    M 392 115
+    C 442 140, 487 210, 487 290
+    C 487 370, 432 430, 332 455
+    C 292 462, 262 464, 242 464
+    C 252 455, 277 440, 312 420
+    C 372 390, 412 340, 417 290
+    C 422 240, 412 185, 377 140
+    Z
+  "/>
+  <path fill="#a5b4fc" d="
+    M 337 105
+    C 312 92, 282 86, 254 88
+    C 267 100, 294 105, 322 110
+    Z
+  "/>
+
+  <!-- House roof -->
+  <path fill="#4338ca" d="
+    M 256 168
+    L 178 242
+    L 196 242
+    L 196 338
+    L 316 338
+    L 316 242
+    L 334 242
+    Z
+  "/>
+
+  <!-- House interior -->
+  <rect x="203" y="248" width="106" height="84" rx="4" fill="white"/>
+
+  <!-- Chart bars ascending -->
+  <rect x="215" y="305" width="22" height="23" rx="3" fill="#4338ca"/>
+  <rect x="245" y="283" width="22" height="45" rx="3" fill="#4338ca"/>
+  <rect x="275" y="260" width="22" height="68" rx="3" fill="#4338ca"/>
+</svg>
