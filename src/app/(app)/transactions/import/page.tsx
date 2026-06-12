@@ -121,6 +121,11 @@ export default function ImportPage() {
   const [fuzzyDuplicates, setFuzzyDuplicates] = useState<FuzzyDuplicate[]>([]);
   // Indices the user has explicitly said "import anyway" despite duplicate flag
   const [importAnywayIndices, setImportAnywayIndices] = useState<Set<number>>(new Set());
+  // Duplicate detection in flight — the commit button must stay disabled until
+  // this resolves, otherwise an early click imports everything unfiltered.
+  const [dedupPending, setDedupPending] = useState(false);
+  // Duplicate detection failed — flags may be incomplete, warn the user.
+  const [dedupFailed, setDedupFailed] = useState(false);
 
   // Display name overrides (index → custom name)
   const [displayNameOverrides, setDisplayNameOverrides] = useState<Record<number, string>>({});
@@ -173,6 +178,12 @@ export default function ImportPage() {
       onSuccess: (data) => {
         setDuplicateIndices(data.duplicates);
         setFuzzyDuplicates(data.fuzzy ?? []);
+        setDedupPending(false);
+      },
+      onError: () => {
+        // Both detection paths failed — flags are incomplete
+        setDedupPending(false);
+        setDedupFailed(true);
       },
     })
   );
@@ -661,9 +672,11 @@ export default function ImportPage() {
     setImportAnywayIndices(new Set());
     setDuplicateFlags([]);
     setImportContextData(null);
+    setDedupFailed(false);
     setStep("preview");
 
     if (!accountId || txs.length === 0) return;
+    setDedupPending(true);
 
     // Get date range from imported transactions
     const dates = txs.map((t) => t.date.getTime());
@@ -775,9 +788,11 @@ export default function ImportPage() {
         .map((f, i) => (f === "duplicate" ? i : -1))
         .filter((i) => i >= 0);
       setDuplicateIndices(definiteDups);
+      setDedupPending(false);
 
     } catch {
       // Fallback: use the old checkDuplicates mutation
+      // (dedupPending stays true; the mutation clears it on success/error)
       checkDuplicatesMutation.mutate({
         accountId,
         transactions: txs.map((tx) => ({
@@ -1925,22 +1940,42 @@ export default function ImportPage() {
               <Button variant="outline" onClick={() => setStep(format === "CSV" ? "filter" : "upload")} className="flex-1">
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
-              <Button onClick={handleCommit} disabled={transactions.length === 0 || commitMutation.isPending} className="flex-1">
-                <Check className="h-4 w-4 mr-1" />
-                {commitMutation.isPending ? (
-                  "Importing..."
-                ) : (() => {
-                  const skipCount =
-                    duplicateIndices.length +
-                    fuzzyDuplicates.filter(
-                      (f) =>
-                        (f.isDuplicate === true || f.isDuplicate === null) &&
-                        !importAnywayIndices.has(f.index)
-                    ).length;
-                  return `Import ${transactions.length - skipCount} Transaction${transactions.length - skipCount !== 1 ? "s" : ""}`;
-                })()}
+              <Button
+                onClick={handleCommit}
+                disabled={transactions.length === 0 || commitMutation.isPending || dedupPending}
+                className="flex-1"
+              >
+                {dedupPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    Checking for duplicates…
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-1" />
+                    {commitMutation.isPending ? (
+                      "Importing..."
+                    ) : (() => {
+                      const skipCount =
+                        duplicateIndices.length +
+                        fuzzyDuplicates.filter(
+                          (f) =>
+                            (f.isDuplicate === true || f.isDuplicate === null) &&
+                            !importAnywayIndices.has(f.index)
+                        ).length;
+                      return `Import ${transactions.length - skipCount} Transaction${transactions.length - skipCount !== 1 ? "s" : ""}`;
+                    })()}
+                  </>
+                )}
               </Button>
             </div>
+
+            {dedupFailed && (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                ⚠ Duplicate check failed — rows already in your account may not be flagged.
+                Review carefully before importing.
+              </p>
+            )}
 
             {commitMutation.error && (
               <p className="text-sm text-red-600">{commitMutation.error.message}</p>

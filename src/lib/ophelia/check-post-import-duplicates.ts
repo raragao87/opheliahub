@@ -49,11 +49,16 @@ export async function checkPostImportDuplicates(
 
   if (existing.length === 0) return;
 
-  // Find same-amount-same-date pairs across the two sets
+  // Find same-amount-same-date pairs across the two sets.
+  // Obvious matches (same name too) get an alert directly — the import-time
+  // fast check normally prevents them, but it can be bypassed (e.g. commit
+  // clicked before the check finished), so this must work as a safety net.
   const candidates: {
     importedTx: (typeof imported)[number];
     existingTx: (typeof existing)[number];
   }[] = [];
+  const obvious: typeof candidates = [];
+  const obviousImportedIds = new Set<string>();
 
   for (const imp of imported) {
     for (const ex of existing) {
@@ -61,15 +66,36 @@ export async function checkPostImportDuplicates(
       const dayDiff = Math.abs(imp.date.getTime() - ex.date.getTime());
       if (dayDiff > 86400000) continue; // more than 1 day apart
 
-      // Skip if any name variant is obviously the same (these were caught by fast check).
       // Compare all available names (description, displayName, opheliaDisplayName).
       const namesA = [imp.description, imp.displayName, imp.opheliaDisplayName].filter(Boolean).map(n => n!.toLowerCase().slice(0, 20));
       const namesB = [ex.description, ex.displayName, ex.opheliaDisplayName].filter(Boolean).map(n => n!.toLowerCase().slice(0, 20));
       const obviousDuplicate = namesA.some(a => namesB.some(b => a.includes(b) || b.includes(a)));
-      if (obviousDuplicate) continue;
+      if (obviousDuplicate) {
+        if (!obviousImportedIds.has(imp.id)) {
+          obviousImportedIds.add(imp.id);
+          obvious.push({ importedTx: imp, existingTx: ex });
+        }
+        continue;
+      }
 
       candidates.push({ importedTx: imp, existingTx: ex });
     }
+  }
+
+  // Alert obvious duplicates immediately — no AI needed
+  if (obvious.length > 0) {
+    await prisma.duplicateAlert.createMany({
+      data: obvious.map(({ importedTx, existingTx }) => ({
+        userId,
+        accountId,
+        importBatchId: batchId,
+        transactionIdA: importedTx.id,
+        transactionIdB: existingTx.id,
+        confidence: 1,
+        reasoning: "Same amount, same date, and matching description as an existing transaction.",
+        status: "PENDING" as const,
+      })),
+    });
   }
 
   if (candidates.length === 0) return;
