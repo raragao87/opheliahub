@@ -174,19 +174,10 @@ export default function ImportPage() {
     trpc.import.commit.mutationOptions()
   );
 
+  // Results are handled inline at the call sites (the ambiguous-rows call
+  // operates on a subset and must remap indices back to the full list).
   const checkDuplicatesMutation = useMutation(
-    trpc.import.checkDuplicates.mutationOptions({
-      onSuccess: (data) => {
-        setDuplicateIndices(data.duplicates);
-        setFuzzyDuplicates(data.fuzzy ?? []);
-        setDedupPending(false);
-      },
-      onError: () => {
-        // Both detection paths failed — flags are incomplete
-        setDedupPending(false);
-        setDedupFailed(true);
-      },
-    })
+    trpc.import.checkDuplicates.mutationOptions()
   );
 
   const saveProfileMutation = useMutation(
@@ -792,21 +783,59 @@ export default function ImportPage() {
         .map((f, i) => (f === "duplicate" ? i : -1))
         .filter((i) => i >= 0);
       setDuplicateIndices(definiteDups);
+
+      // Same amount + same/adjacent date but a different description is
+      // ambiguous (banks rename merchants between exports) — let the server
+      // resolve those with AI instead of leaving them as a passive warning.
+      const ambiguous = flags
+        .map((f, i) => (f === "sameAmount" || f === "similar" ? i : -1))
+        .filter((i) => i >= 0);
+      if (ambiguous.length > 0) {
+        try {
+          const res = await checkDuplicatesMutation.mutateAsync({
+            accountId,
+            transactions: ambiguous.map((i) => ({
+              date: txs[i].date,
+              description: txs[i].description,
+              amount: txs[i].amount,
+              type: txs[i].type,
+              externalId: txs[i].externalId,
+            })),
+          });
+          // Remap subset indices back to positions in the full list
+          setDuplicateIndices((prev) => [
+            ...new Set([...prev, ...res.duplicates.map((i) => ambiguous[i])]),
+          ]);
+          setFuzzyDuplicates(
+            (res.fuzzy ?? []).map((f) => ({ ...f, index: ambiguous[f.index] }))
+          );
+        } catch {
+          // Non-fatal: rows keep their yellow warning badge for manual review
+          setDedupFailed(true);
+        }
+      }
       setDedupPending(false);
 
     } catch {
-      // Fallback: use the old checkDuplicates mutation
-      // (dedupPending stays true; the mutation clears it on success/error)
-      checkDuplicatesMutation.mutate({
-        accountId,
-        transactions: txs.map((tx) => ({
-          date: tx.date,
-          description: tx.description,
-          amount: tx.amount,
-          type: tx.type,
-          externalId: tx.externalId,
-        })),
-      });
+      // Fallback: full server-side duplicate check
+      try {
+        const res = await checkDuplicatesMutation.mutateAsync({
+          accountId,
+          transactions: txs.map((tx) => ({
+            date: tx.date,
+            description: tx.description,
+            amount: tx.amount,
+            type: tx.type,
+            externalId: tx.externalId,
+          })),
+        });
+        setDuplicateIndices(res.duplicates);
+        setFuzzyDuplicates(res.fuzzy ?? []);
+      } catch {
+        // Both detection paths failed — flags are incomplete
+        setDedupFailed(true);
+      }
+      setDedupPending(false);
     }
   }, [accountId, queryClient, trpc.import.getAccountImportContext, checkDuplicatesMutation]);
 

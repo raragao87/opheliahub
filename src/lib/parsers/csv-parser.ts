@@ -98,6 +98,18 @@ function normalizeCurrencyCode(raw: string): string {
   return trimmed.toUpperCase();
 }
 
+// Status values that mean a row never settled — these must not be imported
+// (e.g. Revolut exports reverted/pending rows alongside completed ones, and
+// their amounts are NOT included in the bank's running balance).
+const NON_SETTLED_STATUS = new Set([
+  "reverted", "ongedaan gemaakt",          // en / nl
+  "pending", "in behandeling",
+  "declined", "geweigerd",
+  "failed", "mislukt",
+  "cancelled", "geannuleerd",
+]);
+const STATUS_HEADER = /^(status|state|staat)$/i;
+
 /** Transform parsed CSV rows into transactions using a column mapping */
 export function transformCsvToTransactions(
   rows: Record<string, string>[],
@@ -109,11 +121,23 @@ export function transformCsvToTransactions(
   const transactions: ParsedTransaction[] = [];
   const errors: { row: number; message: string }[] = [];
 
+  const statusKey = rows.length > 0
+    ? Object.keys(rows[0]).find((k) => STATUS_HEADER.test(k.trim()))
+    : undefined;
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rowNum = i + 1; // 1-indexed for user display
 
     try {
+      // Skip rows that never settled (reverted, pending, declined, …)
+      if (statusKey) {
+        const status = row[statusKey]?.trim().toLowerCase();
+        if (status && NON_SETTLED_STATUS.has(status)) {
+          errors.push({ row: rowNum, message: `Skipped non-settled row (status: ${row[statusKey]?.trim()})` });
+          continue;
+        }
+      }
       // Parse date
       const rawDateStr = row[mapping.date]?.trim();
       if (!rawDateStr) {
