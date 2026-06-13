@@ -27,7 +27,8 @@ export interface EnableBankingTx {
   /** Stable bank-side id — preferred for dedup. */
   entry_reference?: string;
   transaction_id?: string;
-  booking_date?: string; // YYYY-MM-DD
+  transaction_date?: string; // YYYY-MM-DD — when the transaction actually occurred
+  booking_date?: string; // when it posted/settled (can be a future value date, e.g. weekend → Monday)
   value_date?: string;
   transaction_amount: { amount: string; currency: string };
   credit_debit_indicator: "CRDT" | "DBIT";

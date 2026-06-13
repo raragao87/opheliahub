@@ -57,6 +57,14 @@ describe("transformBankTransaction", () => {
     expect(transformBankTransaction(tx({ booking_date: undefined, value_date: "2026-06-01" }))!.date.getFullYear()).toBe(2026);
     expect(transformBankTransaction(tx({ booking_date: undefined, value_date: undefined }))).toBeNull();
   });
+
+  it("prefers transaction_date over a later booking/value date (weekend settlement)", () => {
+    // Transfer made Sat Jun 13 but booked/valued Mon Jun 15 — should date Jun 13.
+    const result = transformBankTransaction(
+      tx({ transaction_date: "2026-06-13", booking_date: "2026-06-15", value_date: "2026-06-15" }),
+    )!;
+    expect(result.date.toISOString().slice(0, 10)).toBe("2026-06-13");
+  });
 });
 
 describe("transformBankTransactions", () => {

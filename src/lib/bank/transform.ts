@@ -25,7 +25,10 @@ export function transformBankTransaction(tx: EnableBankingTx): ParsedTransaction
     "(no description)";
 
   const externalId = tx.entry_reference ?? tx.transaction_id;
-  const dateStr = tx.booking_date ?? tx.value_date;
+  // Prefer the date the transaction actually occurred over the booking/value
+  // date: banks can book a weekend transfer on the next business day, which
+  // would otherwise show as a future-dated transaction (e.g. Sat → Mon).
+  const dateStr = tx.transaction_date ?? tx.booking_date ?? tx.value_date;
   if (!dateStr) return null;
 
   return {
