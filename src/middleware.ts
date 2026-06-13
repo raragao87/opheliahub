@@ -10,6 +10,8 @@ export default auth((req) => {
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
     pathname.startsWith("/api/auth") ||
     pathname === "/api/ophelia/categorize" || // cron — protected by Bearer token
     pathname.startsWith("/api/cron") || // cron endpoints — protected by Bearer token
