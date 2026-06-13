@@ -27,6 +27,25 @@ import { toast } from "sonner";
 type Step = "upload" | "mapping" | "filter" | "preview" | "confirm";
 
 /**
+ * Whether a CSV column mapping actually resolves against the file's headers.
+ * A saved import profile can map columns that don't exist in a newer/different
+ * export (e.g. Revolut changed its date column names) — using it blindly yields
+ * empty values and "Missing date" on every row. Require the essential columns
+ * to be both set AND present in the parsed headers.
+ */
+function csvMappingResolves(
+  mapping: ColumnMapping,
+  headers: string[],
+  amountMode: "SINGLE" | "SPLIT",
+): boolean {
+  if (headers.length === 0) return false;
+  const has = (c?: string) => !!c && headers.includes(c);
+  const amountOk =
+    amountMode === "SINGLE" ? has(mapping.amount) : has(mapping.debit) && has(mapping.credit);
+  return has(mapping.date) && has(mapping.description) && amountOk;
+}
+
+/**
  * Scans rows from an Excel sheet (as string[][]) to find the first row that
  * looks like a column header row, skipping bank-statement metadata rows.
  * Returns the 0-based row index to start from.
@@ -508,14 +527,22 @@ export default function ImportPage() {
     // For CSV: need headers to be parsed first
     if (csvHeaders.length === 0) return;
 
-    // CSV with saved profile: auto-advance to filter
+    // CSV with saved profile: auto-advance to filter — but only if the profile's
+    // columns actually exist in this file. A stale profile (different export
+    // format) would otherwise import nothing with "Missing date" on every row.
     if (savedProfileLoaded) {
-      handleGoToFilter();
-      setPendingAutoAdvance(false);
-      return;
+      if (csvMappingResolves(mapping, csvHeaders, amountMode)) {
+        handleGoToFilter();
+        setPendingAutoAdvance(false);
+        return;
+      }
+      // Profile doesn't match this file → fall through to re-detect via Ophelia
+      // and leave the user on the mapping step to confirm/fix the columns.
+      setSavedProfileLoaded(false);
+      setStep("mapping");
     }
 
-    // CSV without saved profile: trigger Ophelia and stay on mapping
+    // CSV without (a usable) saved profile: trigger Ophelia and stay on mapping
     const sampleLines = fileContent
       .split("\n")
       .filter((l) => l.trim().length > 0)
@@ -1347,10 +1374,7 @@ export default function ImportPage() {
                 }}
                 disabled={
                   !accountId ||
-                  (format === "CSV" &&
-                    (!mapping.date ||
-                      !mapping.description ||
-                      (amountMode === "SINGLE" ? !mapping.amount : !mapping.debit || !mapping.credit)))
+                  (format === "CSV" && !csvMappingResolves(mapping, csvHeaders, amountMode))
                 }
                 className="flex-1"
               >
