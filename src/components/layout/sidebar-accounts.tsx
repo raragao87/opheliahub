@@ -11,11 +11,12 @@ import { MoneyDisplay } from "@/components/shared/money-display";
 import { groupAccountsForSidebar, ACCOUNT_TYPE_META } from "@/lib/account-types";
 import type { SidebarGroupKey } from "@/lib/account-types";
 import { fromCents, parseToCents } from "@/lib/money";
-import { ChevronDown, ChevronRight, Plus, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Upload, RefreshCw } from "lucide-react";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
 import { useImportDrop } from "@/lib/import-drop-context";
 import { invalidateFinancialData } from "@/lib/invalidate";
+import { toast } from "sonner";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -145,6 +146,26 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Bank sync — only show the "sync all" control when a connection exists.
+  const hasConnectionsQuery = useQuery({
+    ...trpc.bankConnection.hasActiveConnections.queryOptions(),
+    staleTime: 5 * 60_000,
+  });
+  const syncAllMutation = useMutation(
+    trpc.bankConnection.syncAll.mutationOptions({
+      onSuccess: (r) => {
+        invalidateFinancialData(queryClient, trpc);
+        toast.success(
+          r.imported > 0 || r.skipped > 0
+            ? `${r.imported} imported, ${r.skipped} skipped`
+            : t(lang, "banks.syncedUpToDate")
+        );
+        if (r.errors.length > 0) toast.error(r.errors[0]);
+      },
+      onError: (e) => toast.error(e.message),
+    })
+  );
 
   const reconcileMutation = useMutation(
     trpc.account.reconcile.mutationOptions({
@@ -293,7 +314,18 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          {hasConnectionsQuery.data && (
+            <button
+              type="button"
+              onClick={() => syncAllMutation.mutate()}
+              disabled={syncAllMutation.isPending}
+              className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              title={t(lang, "banks.syncAll")}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", syncAllMutation.isPending && "animate-spin")} />
+            </button>
+          )}
           <Link
             href="/transactions/import"
             onClick={onNavigate}

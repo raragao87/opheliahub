@@ -182,6 +182,31 @@ export const bankConnectionRouter = router({
       return syncConnection(ctx.prisma, connection, ctx.householdId);
     }),
 
+  /** Whether the user has any active connection — gates the sidebar sync button. */
+  hasActiveConnections: householdProcedure.query(async ({ ctx }) => {
+    const count = await ctx.prisma.bankConnection.count({
+      where: { userId: ctx.userId, status: "ACTIVE" },
+    });
+    return count > 0;
+  }),
+
+  /** Sync every active connection at once (sidebar "sync all"). */
+  syncAll: householdProcedure.mutation(async ({ ctx }) => {
+    const connections = await ctx.prisma.bankConnection.findMany({
+      where: { userId: ctx.userId, status: "ACTIVE" },
+    });
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    for (const connection of connections) {
+      const r = await syncConnection(ctx.prisma, connection, ctx.householdId);
+      imported += r.imported;
+      skipped += r.skipped;
+      if (r.errors.length > 0) errors.push(`${connection.aspspName}: ${r.errors.join("; ")}`);
+    }
+    return { connections: connections.length, imported, skipped, errors };
+  }),
+
   /** Disconnect — keeps synced transactions + accounts; frees the links. */
   disconnect: householdProcedure
     .input(z.object({ connectionId: z.string() }))
