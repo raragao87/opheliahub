@@ -8,12 +8,18 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { SelectableCard, SelectableCardGrid } from "@/components/ui/selectable-card";
+import { InlineSelectEdit } from "@/components/shared/inline-select-edit";
+import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
 import { Landmark, RefreshCw, Loader2, Plus, AlertTriangle } from "lucide-react";
+
+const NEW_ACCOUNT = "__new__";
+// A bank feed only makes sense linked to a spending/investment account, not
+// an asset/debt (mortgage, vehicle, property). These are the linkable groups.
+const LINKABLE_GROUPS = new Set(["SPENDING", "INVESTMENT"]);
 
 /** Settings → Connected banks. Manage PSD2 connections, map accounts, sync. */
 export function BanksTab() {
@@ -199,7 +205,7 @@ function ConnectCard({ lang }: { lang: ReturnType<typeof useUserPreferences>["pr
   );
 }
 
-interface AccountOption { id: string; name: string; }
+interface AccountOption { id: string; name: string; ownership: string; type: string; icon?: string | null; }
 
 function MappingCard({
   connectionId, accounts, lang, onDone,
@@ -223,12 +229,31 @@ function MappingCard({
 
   const discovered = (discoveredQuery.data ?? []).filter((d) => !d.alreadyLinked);
 
+  // Only spending/investment accounts are sensible link targets, grouped by
+  // ownership so Shared and Personal accounts don't blur together.
+  const linkable = accounts.filter((a) => LINKABLE_GROUPS.has(ACCOUNT_TYPE_META[a.type]?.sidebarGroup ?? ""));
+  const optionGroups = (["SHARED", "PERSONAL"] as const)
+    .map((ownership) => ({
+      label: t(lang, ownership === "SHARED" ? "banks.groupShared" : "banks.groupPersonal"),
+      options: linkable
+        .filter((a) => a.ownership === ownership)
+        .map((a) => ({ value: a.id, label: `${a.icon ?? ""} ${a.name}`.trim() })),
+    }))
+    .filter((g) => g.options.length > 0);
+  const nameById = new Map(accounts.map((a) => [a.id, a.name]));
+  const displayFor = (uid: string) => {
+    const c = choices[uid];
+    if (!c) return "";
+    if (c === NEW_ACCOUNT) return t(lang, "banks.createNew");
+    return nameById.get(c) ?? "";
+  };
+
   function submit() {
     const mappings = discovered
       .filter((d) => choices[d.uid])
       .map((d) => {
         const choice = choices[d.uid];
-        if (choice === "__new__") {
+        if (choice === NEW_ACCOUNT) {
           return { externalAccountId: d.uid, iban: d.iban, displayName: d.name, currency: d.currency,
             createNew: { name: newNames[d.uid] || d.name || "Account", type: "CHECKING" as const } };
         }
@@ -252,15 +277,22 @@ function MappingCard({
         ) : (
           discovered.map((d) => (
             <div key={d.uid} className="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <div className="text-sm font-medium">{d.name ?? d.uid}{d.iban ? ` · ${d.iban}` : ""}</div>
-              <Select value={choices[d.uid] ?? ""} onChange={(e) => setChoices((p) => ({ ...p, [d.uid]: e.target.value }))}>
-                <option value="">{t(lang, "banks.chooseMapping")}</option>
-                <option value="__new__">{t(lang, "banks.createNew")}</option>
-                <optgroup label={t(lang, "banks.linkExisting")}>
-                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </optgroup>
-              </Select>
-              {choices[d.uid] === "__new__" && (
+              <div className="text-sm font-medium">
+                {d.name ?? d.uid}
+                {d.iban ? <span className="text-muted-foreground font-normal"> · {d.iban}</span> : null}
+              </div>
+              <InlineSelectEdit
+                value={choices[d.uid] ?? ""}
+                displayValue={displayFor(d.uid)}
+                placeholder={t(lang, "banks.chooseMapping")}
+                allowEmpty={false}
+                options={[]}
+                optionGroups={optionGroups}
+                topOptions={[{ value: NEW_ACCOUNT, label: `+ ${t(lang, "banks.createNew")}` }]}
+                onSave={(value) => setChoices((p) => ({ ...p, [d.uid]: value }))}
+                className="border border-border rounded-md px-3 py-2 hover:border-muted-foreground/40"
+              />
+              {choices[d.uid] === NEW_ACCOUNT && (
                 <Input
                   placeholder={t(lang, "banks.newAccountName")}
                   value={newNames[d.uid] ?? d.name ?? ""}
