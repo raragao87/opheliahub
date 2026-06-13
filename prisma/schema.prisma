@@ -91,6 +91,7 @@ model User {
   duplicateAlerts       DuplicateAlert[]
   opheliaFeedback       OpheliaFeedback[] @relation("UserOpheliaFeedback")
   notes                 Note[]
+  bankConnections       BankConnection[]
 
   @@map("users")
 }
@@ -209,6 +210,7 @@ model FinancialAccount {
   importBatches   ImportBatch[]
   recurringRules  RecurringRule[]
   linkedFundCategories Category[] @relation("LinkedFundCategories")
+  bankAccountLink BankAccountLink?
 
   @@index([ownerId])
   @@index([householdId])
@@ -216,6 +218,55 @@ model FinancialAccount {
   @@index([householdId, ownership])
   @@index([ownerId, ownership])
   @@map("financial_accounts")
+}
+
+// ─── BANK CONNECTIONS (PSD2 automatic import via Enable Banking) ─────
+// The consent belongs to the user who created it (privacy boundary). Synced
+// transactions land in the mapped FinancialAccount and inherit ITS ownership.
+// No bank tokens are stored — only the non-secret session id + account refs;
+// the app signs a short-lived RS256 JWT from the env private key per request.
+model BankConnection {
+  id                String               @id @default(cuid())
+  userId            String
+  aspspName         String
+  aspspCountry      String
+  sessionId         String? // Enable Banking session id (null only transiently)
+  // Discovered accounts captured at consent time: [{ uid, name?, iban?, currency? }].
+  // Drives the mapping UI; not secret (uids are opaque, usable only with our key).
+  discoveredAccounts Json?
+  status            BankConnectionStatus @default(ACTIVE)
+  consentValidUntil DateTime
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  user         User              @relation(fields: [userId], references: [id])
+  accountLinks BankAccountLink[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("bank_connections")
+}
+
+// Maps one discovered bank account (Enable Banking uid) to one OpheliaHub
+// account. financialAccountId is unique → strict 1:1, preventing two bank
+// accounts from double-counting into the same balance.
+model BankAccountLink {
+  id                 String    @id @default(cuid())
+  bankConnectionId   String
+  externalAccountId  String // Enable Banking account uid
+  financialAccountId String    @unique
+  iban               String?
+  displayName        String?
+  lastSyncedAt       DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  bankConnection   BankConnection   @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [id])
+
+  @@unique([bankConnectionId, externalAccountId])
+  @@index([bankConnectionId])
+  @@map("bank_account_links")
 }
 
 // ─── ENUMS ─────────────────────────────────────────────────────────
@@ -592,6 +643,13 @@ model CurrencyRate {
 enum ImportFormat {
   CSV
   MT940
+  OPENBANKING
+}
+
+enum BankConnectionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
 }
 
 enum ImportStatus {

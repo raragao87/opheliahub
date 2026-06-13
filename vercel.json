@@ -3,6 +3,10 @@
     {
       "path": "/api/ophelia/categorize",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/bank-sync",
+      "schedule": "0 7 * * *"
     }
   ]
 }

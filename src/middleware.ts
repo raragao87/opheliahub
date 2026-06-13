@@ -12,7 +12,8 @@ export default auth((req) => {
     pathname === "/" ||
     pathname.startsWith("/api/auth") ||
     pathname === "/api/ophelia/categorize" || // cron — protected by Bearer token
-    pathname.startsWith("/api/cron"); // cron endpoints — protected by Bearer token
+    pathname.startsWith("/api/cron") || // cron endpoints — protected by Bearer token
+    pathname.startsWith("/api/bank/callback"); // bank consent return — validated by signed state
 
   if (!isLoggedIn && !isPublicRoute) {
     return Response.redirect(new URL("/login", req.nextUrl));

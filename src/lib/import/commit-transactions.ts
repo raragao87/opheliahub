@@ -1,0 +1,142 @@
+/**
+ * Shared transaction-commit core.
+ *
+ * Extracted from the import router's `commit` mutation so BOTH the manual
+ * CSV/MT940 import AND the automatic bank sync write transactions the same
+ * way — same balance update, same ImportBatch, same Ophelia categorization
+ * and post-import duplicate hooks.
+ *
+ * The CSV path passes `skipExistingExternalIds: false` and is byte-for-byte
+ * identical to the previous behavior. The bank-sync path passes `true`, which
+ * adds an exact externalId dedup (bank transaction ids are stable).
+ */
+import type { PrismaClient, ImportFormat, AccountType } from "@prisma/client";
+import { ACCOUNT_TYPE_META } from "@/lib/account-types";
+import { extractDisplayName } from "@/lib/recurring";
+import { computeEffectiveCategoryId } from "@/lib/effective-category";
+import { isOpheliaEnabled } from "@/lib/ophelia";
+import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
+import { checkPostImportDuplicates } from "@/lib/ophelia/check-post-import-duplicates";
+
+export interface CommitRow {
+  date: Date;
+  description: string;
+  displayName?: string;
+  amount: number; // cents
+  type: "INCOME" | "EXPENSE" | "FUND" | "TRANSFER" | "INVESTMENT";
+  currency?: string;
+  categoryId?: string;
+  tagIds?: string[];
+  externalId?: string;
+}
+
+export interface CommitArgs {
+  userId: string;
+  householdId: string;
+  accountId: string;
+  account: { type: AccountType; currency: string };
+  fileName: string;
+  format: ImportFormat;
+  profileId?: string;
+  rows: CommitRow[];
+  /** Bank sync: skip rows whose externalId already exists on the account. */
+  skipExistingExternalIds?: boolean;
+}
+
+export async function commitTransactions(
+  prisma: PrismaClient,
+  args: CommitArgs
+): Promise<{ batchId: string; importedRows: number; skippedRows: number }> {
+  const { userId, householdId, accountId, account } = args;
+
+  // Exact dedup for bank sync — query existing externalIds once, build a Set.
+  let existingExternalIds = new Set<string>();
+  if (args.skipExistingExternalIds) {
+    const ids = args.rows.map((r) => r.externalId).filter((id): id is string => !!id);
+    if (ids.length > 0) {
+      const existing = await prisma.transaction.findMany({
+        where: { accountId, externalId: { in: ids }, deletedAt: null },
+        select: { externalId: true },
+      });
+      existingExternalIds = new Set(existing.map((e) => e.externalId!).filter(Boolean));
+    }
+  }
+
+  const rowsToImport = args.skipExistingExternalIds
+    ? args.rows.filter((r) => !r.externalId || !existingExternalIds.has(r.externalId))
+    : args.rows;
+  const skippedRows = args.rows.length - rowsToImport.length;
+
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const batch = await tx.importBatch.create({
+        data: {
+          fileName: args.fileName,
+          format: args.format,
+          status: "PROCESSING",
+          totalRows: args.rows.length,
+          userId,
+          accountId,
+          profileId: args.profileId,
+        },
+      });
+
+      let importedRows = 0;
+      let balanceChange = 0;
+
+      const isInvestmentAccount = ACCOUNT_TYPE_META[account.type]?.sidebarGroup === "INVESTMENT";
+
+      for (const txData of rowsToImport) {
+        const { tagIds = [], displayName: clientDisplayName, currency: txCurrency, ...transactionData } = txData;
+
+        // Auto-type INVESTMENT for investment accounts (except transfers)
+        if (isInvestmentAccount && transactionData.type !== "TRANSFER") {
+          transactionData.type = "INVESTMENT";
+        }
+
+        const created = await tx.transaction.create({
+          data: {
+            ...transactionData,
+            currency: txCurrency || account.currency || "EUR",
+            displayName: clientDisplayName || extractDisplayName(transactionData.description),
+            originalDescription: transactionData.description,
+            accountId,
+            userId,
+            importBatchId: batch.id,
+            effectiveCategoryId: computeEffectiveCategoryId(transactionData.categoryId ?? null, null),
+            tags: tagIds.length > 0 ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
+          },
+        });
+
+        balanceChange += created.amount;
+        importedRows++;
+      }
+
+      await tx.financialAccount.update({
+        where: { id: accountId },
+        data: { balance: { increment: balanceChange } },
+      });
+
+      await tx.importBatch.update({
+        where: { id: batch.id },
+        data: { status: "COMPLETED", importedRows },
+      });
+
+      return { batchId: batch.id, importedRows };
+    },
+    { timeout: 60_000 }
+  );
+
+  // Fire-and-forget: Ophelia categorization + post-import duplicate safety net.
+  // Gated only on isOpheliaEnabled() — identical to the original CSV path.
+  if (isOpheliaEnabled()) {
+    categorizeTransactionBatch(prisma, householdId, 50).catch((err) =>
+      console.error("[Ophelia] Post-import categorization error:", err)
+    );
+    checkPostImportDuplicates(prisma, userId, householdId, accountId, result.batchId).catch((err) =>
+      console.error("[Ophelia] Post-import duplicate check error:", err)
+    );
+  }
+
+  return { ...result, skippedRows };
+}

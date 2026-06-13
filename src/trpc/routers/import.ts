@@ -2,14 +2,11 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, householdProcedure } from "../init";
 import { visibleAccountsWhere, visibleTransactionsWhere } from "@/lib/privacy";
-import { ACCOUNT_TYPE_META } from "@/lib/account-types";
-import { extractDisplayName } from "@/lib/recurring";
-import { computeEffectiveCategoryId } from "@/lib/effective-category";
 import { descriptionsMatch } from "@/lib/duplicate-matching";
 import { resolveDuplicates } from "@/lib/ophelia/resolveDuplicates";
 import { isOpheliaEnabled } from "@/lib/ophelia";
-import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
 import { checkPostImportDuplicates } from "@/lib/ophelia/check-post-import-duplicates";
+import { commitTransactions } from "@/lib/import/commit-transactions";
 
 const parsedTransactionSchema = z.object({
   date: z.coerce.date(),
@@ -209,84 +206,22 @@ export const importRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Account not found." });
       }
 
-      // Create import batch and transactions in a single db transaction
-      const result = await ctx.prisma.$transaction(async (tx) => {
-        const batch = await tx.importBatch.create({
-          data: {
-            fileName: input.fileName,
-            format: input.format,
-            status: "PROCESSING",
-            totalRows: input.transactions.length,
-            userId: ctx.userId,
-            accountId: input.accountId,
-            profileId: input.profileId,
-          },
-        });
+      // Delegate to the shared commit core. CSV/MT940 keep their existing
+      // dedup (checkDuplicates / checkPostImportDuplicates), so this path
+      // passes skipExistingExternalIds: false — behavior is unchanged.
+      const { batchId, importedRows } = await commitTransactions(ctx.prisma, {
+        userId: ctx.userId,
+        householdId: ctx.householdId,
+        accountId: input.accountId,
+        account: { type: account.type, currency: account.currency },
+        fileName: input.fileName,
+        format: input.format,
+        profileId: input.profileId,
+        rows: input.transactions,
+        skipExistingExternalIds: false,
+      });
 
-        let importedRows = 0;
-        let balanceChange = 0;
-
-        const isInvestmentAccount = ACCOUNT_TYPE_META[account.type]?.sidebarGroup === "INVESTMENT";
-
-        for (const txData of input.transactions) {
-          const { tagIds, displayName: clientDisplayName, currency: txCurrency, ...transactionData } = txData;
-
-          // Auto-type INVESTMENT for investment accounts (except transfers)
-          if (isInvestmentAccount && transactionData.type !== "TRANSFER") {
-            transactionData.type = "INVESTMENT";
-          }
-
-          const created = await tx.transaction.create({
-            data: {
-              ...transactionData,
-              currency: txCurrency || account.currency || "EUR",
-              displayName: clientDisplayName || extractDisplayName(transactionData.description),
-              originalDescription: transactionData.description,
-              accountId: input.accountId,
-              userId: ctx.userId,
-              importBatchId: batch.id,
-              effectiveCategoryId: computeEffectiveCategoryId(transactionData.categoryId, null),
-              tags: tagIds.length > 0
-                ? { create: tagIds.map((tagId) => ({ tagId })) }
-                : undefined,
-            },
-          });
-
-          balanceChange += created.amount;
-          importedRows++;
-        }
-
-        // Update account balance
-        await tx.financialAccount.update({
-          where: { id: input.accountId },
-          data: { balance: { increment: balanceChange } },
-        });
-
-        // Finalize batch
-        await tx.importBatch.update({
-          where: { id: batch.id },
-          data: {
-            status: "COMPLETED",
-            importedRows,
-          },
-        });
-
-        return { batchId: batch.id, importedRows };
-      }, { timeout: 60_000 });
-
-      // Fire-and-forget: kick off Ophelia for newly imported transactions.
-      // Not awaited — doesn't slow down the commit response.
-      if (isOpheliaEnabled()) {
-        categorizeTransactionBatch(ctx.prisma, ctx.householdId, 50).catch((err) =>
-          console.error("[Ophelia] Post-import categorization error:", err)
-        );
-
-        // Background duplicate check for transactions that slipped through
-        checkPostImportDuplicates(ctx.prisma, ctx.userId, ctx.householdId, input.accountId, result.batchId)
-          .catch((err) => console.error("[Ophelia] Post-import duplicate check error:", err));
-      }
-
-      return result;
+      return { batchId, importedRows };
     }),
 
   /** Save or update an import profile (upsert per account+format) */

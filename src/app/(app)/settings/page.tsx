@@ -5,16 +5,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AppearanceSettings } from "@/components/shared/appearance-settings";
 import { ProfileTab } from "./profile-tab";
 import { PreferencesTab } from "./preferences-tab";
+import { BanksTab } from "./banks-tab";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t, type TranslationKey } from "@/lib/translations";
 import { cn } from "@/lib/utils";
 
-type SettingsTab = "profile" | "preferences" | "appearance";
+type SettingsTab = "profile" | "preferences" | "appearance" | "banks";
 
 const TABS: { id: SettingsTab; labelKey: TranslationKey }[] = [
   { id: "profile", labelKey: "settings.profile" },
   { id: "preferences", labelKey: "settings.preferences" },
   { id: "appearance", labelKey: "settings.appearance" },
+  { id: "banks", labelKey: "settings.banks" },
 ];
 
 export default function SettingsPage() {
@@ -70,6 +72,7 @@ function SettingsPageInner() {
       {activeTab === "profile" && <ProfileTab />}
       {activeTab === "preferences" && <PreferencesTab />}
       {activeTab === "appearance" && <AppearanceSettings />}
+      {activeTab === "banks" && <BanksTab />}
     </div>
   );
 }

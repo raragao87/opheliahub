@@ -18,6 +18,7 @@ import { duplicatesRouter } from "./routers/duplicates";
 import { notesRouter } from "./routers/notes";
 import { investmentAssetRouter } from "./routers/investment-asset";
 import { portfolioRouter } from "./routers/portfolio";
+import { bankConnectionRouter } from "./routers/bank-connection";
 
 export const appRouter = router({
   auth: authRouter,
@@ -39,6 +40,7 @@ export const appRouter = router({
   notes: notesRouter,
   investmentAsset: investmentAssetRouter,
   portfolio: portfolioRouter,
+  bankConnection: bankConnectionRouter,
 });
 
 export type AppRouter = typeof appRouter;

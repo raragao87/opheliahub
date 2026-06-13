@@ -18,6 +18,12 @@ const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   OPHELIA_CRON_SECRET: z.string().optional(),
+
+  // Enable Banking (PSD2 automatic import)
+  ENABLE_BANKING_APP_ID: z.string().optional(),
+  ENABLE_BANKING_PRIVATE_KEY: z.string().optional(), // PEM (PKCS8); newlines may be \n-escaped
+  ENABLE_BANKING_REDIRECT_URL: z.string().url().optional(), // e.g. https://<app>/api/bank/callback
+  BANK_STATE_SECRET: z.string().optional(), // HMAC key for the consent-callback state nonce
 });
 
 export const env = envSchema.parse(process.env);
