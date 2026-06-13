@@ -50,9 +50,23 @@ export async function syncConnection(
 
   for (const link of links) {
     try {
-      const dateFrom = link.lastSyncedAt
-        ? toDateOnly(link.lastSyncedAt)
-        : toDateOnly(new Date(Date.now() - FIRST_SYNC_LOOKBACK_DAYS * 86_400_000));
+      // First sync of an account that already has transactions (e.g. months of
+      // manual CSV imports): start from its most recent existing transaction
+      // instead of 90 days back, so we don't re-pull — and re-dedup — the whole
+      // overlap. Empty accounts fall back to the 90-day backfill. The fuzzy
+      // dedup in commitTransactions still guards the boundary day.
+      let dateFrom: string;
+      if (link.lastSyncedAt) {
+        dateFrom = toDateOnly(link.lastSyncedAt);
+      } else {
+        const latest = await prisma.transaction.findFirst({
+          where: { accountId: link.financialAccountId, deletedAt: null },
+          orderBy: { date: "desc" },
+          select: { date: true },
+        });
+        const lookback = new Date(Date.now() - FIRST_SYNC_LOOKBACK_DAYS * 86_400_000);
+        dateFrom = toDateOnly(latest && latest.date > lookback ? latest.date : lookback);
+      }
 
       const raw = await getTransactions(link.externalAccountId, dateFrom, opts.psu);
       const rows = transformBankTransactions(raw);
