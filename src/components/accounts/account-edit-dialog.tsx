@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { CurrencySelect } from "@/components/shared/currency-select";
 import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { fromCents, toCents } from "@/lib/money";
+import { invalidateFinancialData } from "@/lib/invalidate";
 import {
   Save,
   AlertTriangle,
@@ -84,7 +85,7 @@ export function AccountEditDialog({ accountId, open, onClose }: AccountEditDialo
   const updateMutation = useMutation(
     trpc.account.update.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
         onClose();
       },
     })
@@ -92,20 +93,20 @@ export function AccountEditDialog({ accountId, open, onClose }: AccountEditDialo
 
   const updateTransactionMutation = useMutation(
     trpc.transaction.update.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateFinancialData(queryClient, trpc),
     })
   );
 
   const createTransactionMutation = useMutation(
     trpc.transaction.create.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateFinancialData(queryClient, trpc),
     })
   );
 
   const deleteMutation = useMutation(
     trpc.account.delete.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
         onClose();
       },
     })
@@ -114,7 +115,7 @@ export function AccountEditDialog({ accountId, open, onClose }: AccountEditDialo
   const flipMutation = useMutation(
     trpc.account.flipTransactionSigns.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
         setFlipConfirm(false);
       },
     })

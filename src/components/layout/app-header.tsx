@@ -50,8 +50,13 @@ export function AppHeader({ userName, userImage, userEmail }: AppHeaderProps) {
   const { preferences } = useUserPreferences();
   const lang = preferences.language;
 
-  // Use live DB data so display name changes in Settings reflect immediately
-  const prefsQuery = useQuery(trpc.auth.getPreferences.queryOptions());
+  // Use live DB data so display name changes in Settings reflect immediately.
+  // Shares the cache key with UserPreferencesProvider (5min staleTime) — keep
+  // the same staleTime so neither observer forces a refetch on every nav.
+  const prefsQuery = useQuery({
+    ...trpc.auth.getPreferences.queryOptions(),
+    staleTime: 5 * 60_000,
+  });
   const displayName = prefsQuery.data?.name ?? userName;
   const displayImage = prefsQuery.data?.image ?? userImage;
   const displayEmail = prefsQuery.data?.email ?? userEmail;

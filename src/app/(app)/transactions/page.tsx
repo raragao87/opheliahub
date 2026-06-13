@@ -12,6 +12,7 @@ import type { FilterOptionGroup } from "@/components/shared/multi-select-filter"
 import { useOwnership } from "@/lib/ownership-context";
 import { ACCOUNT_TYPE_META, SIDEBAR_GROUPS } from "@/lib/account-types";
 import { toCents } from "@/lib/money";
+import { invalidateFinancialData } from "@/lib/invalidate";
 import { toast } from "sonner";
 import { showUndoToast } from "@/lib/undo-toast";
 import {
@@ -218,10 +219,13 @@ function TransactionsContent() {
   }, []);
 
   // ── Data queries ───────────────────────────────────────────────────
-  const sessionQuery = useQuery(trpc.auth.getSession.queryOptions());
+  // Reference data changes rarely and is invalidated by its own mutations —
+  // a long staleTime stops page navigations from refetching all of it.
+  const REF_STALE = 5 * 60_000;
+  const sessionQuery = useQuery({ ...trpc.auth.getSession.queryOptions(), staleTime: REF_STALE });
   const currentUserId = sessionQuery.data?.user?.id;
 
-  const householdQuery = useQuery(trpc.household.get.queryOptions());
+  const householdQuery = useQuery({ ...trpc.household.get.queryOptions(), staleTime: REF_STALE });
   const members = useMemo(
     () =>
       (householdQuery.data?.members ?? []).map((m) => ({
@@ -250,13 +254,15 @@ function TransactionsContent() {
     }
   }, [budgetScopeParam, accountsQuery.data]);
 
-  const categoriesQuery = useQuery(
-    trpc.category.tree.queryOptions({ budgetScope: budgetScopeParam })
-  );
-  const tagsQuery = useQuery(
-    trpc.tag.list.queryOptions({ budgetScope: budgetScopeParam })
-  );
-  const assetsQuery = useQuery(trpc.investmentAsset.list.queryOptions());
+  const categoriesQuery = useQuery({
+    ...trpc.category.tree.queryOptions({ budgetScope: budgetScopeParam }),
+    staleTime: REF_STALE,
+  });
+  const tagsQuery = useQuery({
+    ...trpc.tag.list.queryOptions({ budgetScope: budgetScopeParam }),
+    staleTime: REF_STALE,
+  });
+  const assetsQuery = useQuery({ ...trpc.investmentAsset.list.queryOptions(), staleTime: REF_STALE });
 
   // ── Build query input ──────────────────────────────────────────────
   const PAGE_SIZE = 50;
@@ -414,7 +420,7 @@ function TransactionsContent() {
         toast.error(`Failed to update: ${err.message}`);
       },
       onSettled: () => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
     })
   );
@@ -483,7 +489,7 @@ function TransactionsContent() {
         });
       },
       onSettled: () => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
     })
   );
@@ -492,7 +498,7 @@ function TransactionsContent() {
     trpc.transaction.restore.mutationOptions({
       onSuccess: () => {
         toast.success("Transaction restored");
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
       onError: (err) => toast.error(`Failed to restore: ${err.message}`),
     })
@@ -520,7 +526,7 @@ function TransactionsContent() {
       onSuccess: (data) => {
         toast.success(`Updated category on ${data.updated} transaction${data.updated !== 1 ? "s" : ""}`);
         setSelectedIds(new Set());
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
       onError: (err) => toast.error(err.message),
     })
@@ -531,7 +537,7 @@ function TransactionsContent() {
       onSuccess: (data) => {
         toast.success(`Added tags to ${data.updated} transaction${data.updated !== 1 ? "s" : ""}`);
         setSelectedIds(new Set());
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
       onError: (err) => toast.error(err.message),
     })
@@ -542,7 +548,7 @@ function TransactionsContent() {
       onSuccess: (data) => {
         toast.success(`Removed tags from ${data.updated} transaction${data.updated !== 1 ? "s" : ""}`);
         setSelectedIds(new Set());
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
       onError: (err) => toast.error(err.message),
     })
@@ -558,7 +564,7 @@ function TransactionsContent() {
           },
         });
         setSelectedIds(new Set());
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
       onError: (err) => toast.error(err.message),
     })
@@ -568,7 +574,7 @@ function TransactionsContent() {
     trpc.transaction.bulkRestore.mutationOptions({
       onSuccess: (data) => {
         toast.success(`Restored ${data.restored} transaction${data.restored !== 1 ? "s" : ""}`);
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
       onError: (err) => toast.error(`Failed to restore: ${err.message}`),
     })
@@ -578,7 +584,7 @@ function TransactionsContent() {
     trpc.transaction.confirmOpheliaSuggestions.mutationOptions({
       onSuccess: (data) => {
         toast.success(`Confirmed ${data.confirmed} Ophelia suggestion${data.confirmed !== 1 ? "s" : ""}`);
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
       onError: (err) => toast.error(err.message),
     })
@@ -736,7 +742,7 @@ function TransactionsContent() {
 
   const accountUpdateMutation = useMutation(
     trpc.account.update.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateFinancialData(queryClient, trpc),
       onError: (err) => toast.error(`Failed to update account: ${err.message}`),
     })
   );

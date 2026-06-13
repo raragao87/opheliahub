@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { MoneyDisplay } from "@/components/shared/money-display";
 import { Loader2, ArrowLeftRight } from "lucide-react";
 import { toast } from "sonner";
+import { invalidateFinancialData } from "@/lib/invalidate";
 
 interface MarkTransferDialogProps {
   transaction: {
@@ -58,7 +59,7 @@ export function MarkTransferDialog({ transaction, open, onClose, onSuccess }: Ma
     trpc.transaction.markAsTransfer.mutationOptions({
       onSuccess: () => {
         toast.success("Marked as transfer");
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
         onSuccess();
         onClose();
       },
@@ -207,7 +208,7 @@ export function UnmarkTransferDialog({ transaction, open, onClose, onSuccess }: 
     trpc.transaction.unmarkTransfer.mutationOptions({
       onSuccess: () => {
         toast.success("Transfer unmarked");
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
         onSuccess();
         onClose();
       },

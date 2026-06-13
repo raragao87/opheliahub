@@ -10,6 +10,7 @@ import { MoneyDisplay } from "@/components/shared/money-display";
 import { InlineMoneyEdit } from "@/components/shared/inline-money-edit";
 import { getCurrentYearMonth, getPreviousMonth, getNextMonth } from "@/lib/date";
 import { useOwnership } from "@/lib/ownership-context";
+import { invalidateFinancialData } from "@/lib/invalidate";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { t } from "@/lib/translations";
@@ -208,6 +209,12 @@ function buildFundTransactionsUrl(
 export default function TrackerPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  // Tracker mutations touch budgets AND categories (funds are categories),
+  // but never tags/household/session — keep invalidation targeted.
+  const invalidateTrackerData = () => {
+    invalidateFinancialData(queryClient, trpc);
+    void queryClient.invalidateQueries(trpc.category.pathFilter());
+  };
   const searchParams = useSearchParams();
   const { budgetScopeParam } = useOwnership();
   const { preferences } = useUserPreferences();
@@ -313,7 +320,12 @@ export default function TrackerPage() {
     placeholderData: keepPreviousData,
   });
 
-  const treeQuery = useQuery(trpc.category.tree.queryOptions({ budgetScope }));
+  // Category tree is reference data — invalidated by its own mutations, so a
+  // long staleTime stops month/scope switches from refetching it.
+  const treeQuery = useQuery({
+    ...trpc.category.tree.queryOptions({ budgetScope }),
+    staleTime: 5 * 60_000,
+  });
 
   // Funds query
   const fundsQuery = useQuery({
@@ -343,20 +355,20 @@ export default function TrackerPage() {
   // Fund mutations
   const setFundAllocationMutation = useMutation(
     trpc.tracker.setFundAllocation.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateTrackerData(),
     })
   );
 
   const setInvestmentAllocationMutation = useMutation(
     trpc.tracker.setInvestmentAllocation.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateTrackerData(),
     })
   );
 
   const createFundMutation = useMutation(
     trpc.fund.create.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateTrackerData();
         setShowAddFund(false);
         setNewFundName("");
         setNewFundIcon("");
@@ -367,7 +379,7 @@ export default function TrackerPage() {
   const updateFundMutation = useMutation(
     trpc.fund.update.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateTrackerData();
         setEditingFundId(null);
         setEditingFundName("");
         setEditingFundIcon("");
@@ -378,26 +390,26 @@ export default function TrackerPage() {
 
   const deleteFundMutation = useMutation(
     trpc.fund.delete.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateTrackerData(),
     })
   );
 
   const reorderFundsMutation = useMutation(
     trpc.fund.reorder.mutationOptions({
-      onSettled: () => queryClient.invalidateQueries(),
+      onSettled: () => invalidateTrackerData(),
     })
   );
 
   const updateLinkedAccountMutation = useMutation(
     trpc.fund.updateLinkedAccount.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateTrackerData(),
     })
   );
 
   const addFundEntryMutation = useMutation(
     trpc.fund.addEntry.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateTrackerData();
         setAdjustingFundId(null);
         setAdjustAmount("");
         setAdjustNote("");
@@ -407,7 +419,7 @@ export default function TrackerPage() {
 
   const deleteFundEntryMutation = useMutation(
     trpc.fund.deleteEntry.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateTrackerData(),
     })
   );
 
@@ -442,14 +454,14 @@ export default function TrackerPage() {
   // Tracker mutations
   const setAllocationMutation = useMutation(
     trpc.tracker.setAllocation.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateTrackerData(),
     })
   );
 
   const copyPreviousMonthMutation = useMutation(
     trpc.tracker.copyPreviousMonth.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateTrackerData();
         toast.success(t(lang, "tracker.copyFromDesc"));
       },
     })
@@ -458,7 +470,7 @@ export default function TrackerPage() {
   const resetAllocationsMutation = useMutation(
     trpc.tracker.resetAllocations.mutationOptions({
       onSuccess: (data) => {
-        queryClient.invalidateQueries();
+        invalidateTrackerData();
         toast.success(`Reset ${data.reset} allocations`);
       },
     })
@@ -468,7 +480,7 @@ export default function TrackerPage() {
   const createCategoryMutation = useMutation(
     trpc.category.create.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateTrackerData();
         setAddingCategoryToGroup(null);
         setNewCategoryName("");
         setNewCategoryIcon("");
@@ -482,7 +494,7 @@ export default function TrackerPage() {
   const updateCategoryMutation = useMutation(
     trpc.category.update.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateTrackerData();
         setEditingCategoryId(null);
         setEditingName("");
         setEditingIcon("");
@@ -492,13 +504,13 @@ export default function TrackerPage() {
 
   const deleteCategoryMutation = useMutation(
     trpc.category.delete.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(),
+      onSuccess: () => invalidateTrackerData(),
     })
   );
 
   const reorderMutation = useMutation(
     trpc.category.reorder.mutationOptions({
-      onSettled: () => queryClient.invalidateQueries(),
+      onSettled: () => invalidateTrackerData(),
     })
   );
 
@@ -2921,7 +2933,7 @@ export default function TrackerPage() {
           onClose={() => setCalculatorCategoryTarget(null)}
           lang={lang}
           onApplyBudget={() => {
-            queryClient.invalidateQueries();
+            invalidateTrackerData();
             setCalculatorCategoryTarget(null);
           }}
         />

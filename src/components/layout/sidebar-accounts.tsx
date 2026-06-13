@@ -15,6 +15,7 @@ import { ChevronDown, ChevronRight, Plus, Upload } from "lucide-react";
 import { useUserPreferences } from "@/lib/user-preferences-context";
 import { t } from "@/lib/translations";
 import { useImportDrop } from "@/lib/import-drop-context";
+import { invalidateFinancialData } from "@/lib/invalidate";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -76,17 +77,18 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const accountsQuery = useQuery(trpc.account.list.queryOptions());
   const allAccounts = accountsQuery.data ?? [];
 
-  // Fetch per-account pending Ophelia counts (poll every 30s)
+  // Fetch per-account pending Ophelia counts (poll every 2 min — targeted
+  // invalidation refreshes them immediately after relevant mutations)
   const pendingByAccountQuery = useQuery({
     ...trpc.ophelia.pendingByAccount.queryOptions({ budgetScope }),
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
   });
   const pendingByAccount = pendingByAccountQuery.data?.byAccount ?? {};
 
-  // Fetch per-account pending duplicate alert counts (poll every 30s)
+  // Fetch per-account pending duplicate alert counts (poll every 2 min)
   const duplicatesByAccountQuery = useQuery({
     ...trpc.duplicates.pendingByAccount.queryOptions({ budgetScope }),
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
   });
   const duplicatesByAccount = duplicatesByAccountQuery.data?.byAccount ?? {};
 
@@ -147,7 +149,7 @@ export function SidebarAccounts({ onNavigate }: SidebarAccountsProps) {
   const reconcileMutation = useMutation(
     trpc.account.reconcile.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
         setEditingItemId(null);
         setEditValue("");
       },

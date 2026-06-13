@@ -274,9 +274,10 @@ export const trackerRouter = router({
       ]);
 
       const allAccountMap = new Map(allInvestmentAccounts.map(a => [a.id, a]));
+      const allocationByAccount = new Map(investmentAllocations.map(a => [a.accountId, a]));
 
       const investmentSummary = [...allInvestmentAccountIds].map(accountId => {
-        const allocation = investmentAllocations.find(a => a.accountId === accountId);
+        const allocation = allocationByAccount.get(accountId);
         const account = allocation?.account ?? allAccountMap.get(accountId);
         return {
           accountId,

@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, householdProcedure } from "../init";
+import { router, protectedProcedure, householdProcedure, invalidateMembership } from "../init";
 import { seedDefaultCategories } from "../../lib/seed-categories";
 
 export const householdRouter = router({
@@ -35,6 +35,7 @@ export const householdRouter = router({
       // Seed default categories
       await seedDefaultCategories(ctx.prisma, household.id);
 
+      invalidateMembership(ctx.userId);
       return household;
     }),
 
@@ -145,13 +146,15 @@ export const householdRouter = router({
       });
     }
 
-    return ctx.prisma.householdMember.update({
+    const accepted = await ctx.prisma.householdMember.update({
       where: { id: pending.id },
       data: {
         inviteStatus: "ACCEPTED",
         joinedAt: new Date(),
       },
     });
+    invalidateMembership(ctx.userId);
+    return accepted;
   }),
 
   rejectInvite: protectedProcedure.mutation(async ({ ctx }) => {
@@ -181,10 +184,12 @@ export const householdRouter = router({
       if (ctx.householdRole !== "OWNER") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only the owner can rename the household." });
       }
-      return ctx.prisma.household.update({
+      const updated = await ctx.prisma.household.update({
         where: { id: ctx.householdId },
         data: { name: input.name },
       });
+      invalidateMembership(ctx.userId); // refresh this owner's cached household
+      return updated;
     }),
 
   removeMember: householdProcedure
@@ -203,6 +208,7 @@ export const householdRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Member not found." });
       }
       await ctx.prisma.householdMember.delete({ where: { id: member.id } });
+      invalidateMembership(input.userId); // removed member must re-evaluate access
       return { success: true };
     }),
 
@@ -228,6 +234,9 @@ export const householdRouter = router({
           data: { role: "OWNER" },
         }),
       ]);
+      // Both users' cached roles changed — drop them so OWNER checks are fresh
+      invalidateMembership(ctx.userId);
+      invalidateMembership(input.newOwnerId);
       return { success: true };
     }),
 
@@ -242,6 +251,7 @@ export const householdRouter = router({
       throw new TRPCError({ code: "BAD_REQUEST", message: "Owners cannot leave. Transfer ownership first." });
     }
     await ctx.prisma.householdMember.delete({ where: { id: membership.id } });
+    invalidateMembership(ctx.userId);
     return { success: true };
   }),
 });

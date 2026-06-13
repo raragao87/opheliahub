@@ -129,17 +129,21 @@ async function loadHoldings(
     }
   }
 
-  // Latest EUR rate per non-EUR currency
+  // Latest EUR rate per non-EUR currency — one query for all currencies
+  // (distinct on currency, newest first) instead of a findFirst per currency.
   const currencies = [
     ...new Set([...byAsset.values()].map((e) => e.asset.currency).filter((c) => c !== "EUR")),
   ];
   const rateByCurrency = new Map<string, number>();
-  for (const currency of currencies) {
-    const rate = await ctx.prisma.currencyRate.findFirst({
-      where: { currency, baseCurrency: "EUR" },
-      orderBy: { date: "desc" },
+  if (currencies.length > 0) {
+    const rates = await ctx.prisma.currencyRate.findMany({
+      where: { currency: { in: currencies }, baseCurrency: "EUR" },
+      orderBy: [{ currency: "asc" }, { date: "desc" }],
+      distinct: ["currency"],
     });
-    if (rate) rateByCurrency.set(currency, microRateToFloat(rate.rate));
+    for (const rate of rates) {
+      rateByCurrency.set(rate.currency, microRateToFloat(rate.rate));
+    }
   }
 
   const staleCutoff = new Date();

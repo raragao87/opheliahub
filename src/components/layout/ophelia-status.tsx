@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOwnership } from "@/lib/ownership-context";
+import { invalidateFinancialData } from "@/lib/invalidate";
 
 /**
  * Compact Ophelia status pill for the sidebar.
@@ -22,14 +23,14 @@ export function OpheliaStatus() {
 
   const pendingQuery = useQuery({
     ...trpc.ophelia.pendingCount.queryOptions({ budgetScope }),
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
   });
 
   const runMutation = useMutation(
     trpc.ophelia.runCategorization.mutationOptions({
       onSuccess: () => {
         // Refresh pending count + transaction list
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
       },
     })
   );

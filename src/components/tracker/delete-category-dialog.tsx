@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { toast } from "sonner";
 import { t, type Language } from "@/lib/translations";
+import { invalidateFinancialData } from "@/lib/invalidate";
 
 interface DeleteCategoryDialogProps {
   category: {
@@ -32,7 +33,8 @@ export function DeleteCategoryDialog({ category, open, onClose, categories, fund
   const deleteMutation = useMutation(
     trpc.category.delete.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
+        void queryClient.invalidateQueries(trpc.category.pathFilter());
         const count = category?.transactionCount ?? 0;
         toast.success(
           `${t(lang, "tracker.categoryDeleted")}${count > 0 ? ` ${count} ${t(lang, "tracker.reassigned")}` : ""}`

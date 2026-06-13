@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { invalidateFinancialData } from "@/lib/invalidate";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MoneyDisplay } from "@/components/shared/money-display";
@@ -95,7 +96,10 @@ export function TagsTab({ month, year, budgetScope }: TagsTabProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; txnCount: number } | null>(null);
 
   // Mutations
-  const invalidateAll = () => queryClient.invalidateQueries();
+  const invalidateAll = () => {
+    invalidateFinancialData(queryClient, trpc);
+    void queryClient.invalidateQueries(trpc.tag.pathFilter());
+  };
 
   const createTagMutation = useMutation(
     trpc.tag.create.mutationOptions({

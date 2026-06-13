@@ -23,7 +23,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => { initErrorCapture(); }, []);
 
   const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } })
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60_000,
+            // Mutations invalidate exactly what they change (see
+            // lib/invalidate.ts) — refetching everything on tab focus
+            // just made the app feel slow.
+            refetchOnWindowFocus: false,
+          },
+        },
+      })
   );
 
   const [trpcClient] = useState(() =>

@@ -11,6 +11,7 @@ import { fromCents, toCents } from "@/lib/money";
 import { t, type Language } from "@/lib/translations";
 import { toast } from "sonner";
 import { Plus, Trash2, Calculator } from "lucide-react";
+import { invalidateFinancialData } from "@/lib/invalidate";
 
 interface LineItemData {
   id: string;
@@ -78,7 +79,8 @@ export function BudgetCalculator({
   const fundMutation = useMutation(
     trpc.fund.setLineItems.mutationOptions({
       onSuccess: (data) => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
+        void queryClient.invalidateQueries(trpc.category.pathFilter());
         toast.success(
           `${t(lang, "tracker.funds.calculator")}: ${fromCents(data.computedMonthly).toFixed(2)}/${t(lang, "tracker.funds.monthly")}`
         );
@@ -91,7 +93,8 @@ export function BudgetCalculator({
   const categoryMutation = useMutation(
     trpc.category.setLineItems.mutationOptions({
       onSuccess: (data) => {
-        queryClient.invalidateQueries();
+        invalidateFinancialData(queryClient, trpc);
+        void queryClient.invalidateQueries(trpc.category.pathFilter());
         toast.success(
           `${t(lang, "tracker.funds.calculator")}: ${fromCents(data.computedMonthly).toFixed(2)}/${t(lang, "tracker.funds.monthly")}`
         );

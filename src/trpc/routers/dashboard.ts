@@ -262,174 +262,146 @@ export const dashboardRouter = router({
         };
       })() : null;
 
-      // 12-month trend
-      const trendMonths: Array<{
-        year: number; month: number; label: string;
-        income: number; expenses: number; net: number;
-        savingsRate: number; monthlyFundBudget: number;
-      }> = [];
-
+      // ── 12-month windows (trend, expense breakdown, fund history) ──────
+      // These were three sequential per-month loops (~60 round-trips). They
+      // are now a handful of batched queries with the bucketing done in JS —
+      // the result shapes are unchanged.
+      const months: Array<{ year: number; month: number; label: string; key: string }> = [];
       for (let i = 11; i >= 0; i--) {
         const d = new Date(input.year, input.month - 1 - i, 1);
         const y = d.getFullYear();
         const m = d.getMonth() + 1;
-        const { start, end } = getMonthRange(y, m);
-
-        const agg = await ctx.prisma.transaction.groupBy({
-          by: ["type"],
-          where: dashboardTransactionsWhere({
-            userId: ctx.userId,
-            householdId: ctx.householdId,
-            budgetScope: input.budgetScope,
-            dateRange: { gte: start, lte: end },
-            type: { in: ["INCOME", "EXPENSE"] },
-          }),
-          _sum: { amount: true },
-        });
-
-        const income = agg.find((a) => a.type === "INCOME")?._sum.amount ?? 0;
-        const expenses = agg.find((a) => a.type === "EXPENSE")?._sum.amount ?? 0;
-        const net = income + expenses;
-        const savingsRate = income > 0 ? (net / income) * 100 : 0;
-
-        // Per-month fund budget
-        const monthFundBudget = await ctx.prisma.fundTrackerAllocation.aggregate({
-          where: {
-            category: {
-              householdId: ctx.householdId,
-              type: "FUND",
-              budgetScope: input.budgetScope,
-              isArchived: false,
-            },
-            tracker: { year: y, month: m },
-          },
-          _sum: { amount: true },
-        });
-
-        trendMonths.push({
+        months.push({
           year: y, month: m,
           label: d.toLocaleDateString("en-GB", { month: "short" }),
-          income,
-          expenses: Math.abs(expenses),
-          net,
-          savingsRate,
-          monthlyFundBudget: monthFundBudget._sum?.amount ?? 0,
+          key: `${y}-${m}`,
         });
       }
+      const monthKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}`;
+      const monthIndex = (year: number, month: number) => year * 12 + (month - 1);
+      const windowStart = getMonthRange(months[0].year, months[0].month).start;
+      const windowEnd = getMonthRange(months[11].year, months[11].month).end;
 
-      // Expense breakdown by category group (parent category) over 12 months
-      const expensesByGroup: Array<{
-        year: number; month: number; label: string;
-        groups: Array<{ groupId: string; groupName: string; amount: number }>;
-      }> = [];
+      // One fetch covers both the trend (INCOME+EXPENSE sums) and the expense
+      // breakdown (EXPENSE rows grouped by parent category).
+      const windowTxns = await ctx.prisma.transaction.findMany({
+        where: dashboardTransactionsWhere({
+          userId: ctx.userId,
+          householdId: ctx.householdId,
+          budgetScope: input.budgetScope,
+          dateRange: { gte: windowStart, lte: windowEnd },
+          type: { in: ["INCOME", "EXPENSE"] },
+        }),
+        select: {
+          date: true,
+          amount: true,
+          type: true,
+          category: { select: { parent: { select: { id: true, name: true } } } },
+        },
+      });
 
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(input.year, input.month - 1 - i, 1);
-        const y = d.getFullYear();
-        const m = d.getMonth() + 1;
-        const { start, end } = getMonthRange(y, m);
-
-        const txns = await ctx.prisma.transaction.findMany({
-          where: dashboardTransactionsWhere({
-            userId: ctx.userId,
-            householdId: ctx.householdId,
-            budgetScope: input.budgetScope,
-            dateRange: { gte: start, lte: end },
-            type: "EXPENSE",
-          }),
-          select: {
-            amount: true,
-            category: {
-              select: {
-                parent: { select: { id: true, name: true } },
-              },
-            },
-          },
-        });
-
-        const groupMap = new Map<string, { groupId: string; groupName: string; amount: number }>();
-        for (const tx of txns) {
-          const groupId = tx.category?.parent?.id ?? "__uncategorized__";
-          const groupName = tx.category?.parent?.name ?? "Uncategorized";
-          const entry = groupMap.get(groupId) ?? { groupId, groupName, amount: 0 };
-          entry.amount += Math.abs(tx.amount);
-          groupMap.set(groupId, entry);
-        }
-
-        expensesByGroup.push({
-          year: y, month: m,
-          label: d.toLocaleDateString("en-GB", { month: "short" }),
-          groups: Array.from(groupMap.values()).sort((a, b) => b.amount - a.amount),
-        });
-      }
-
-      // 12-month fund balance history
-      const fundHistory: Array<{ year: number; month: number; label: string; totalAvailable: number }> = [];
-
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(input.year, input.month - 1 - i, 1);
-        const y = d.getFullYear();
-        const m = d.getMonth() + 1;
-
-        // Sum all fund allocations up to and including this month
-        const allocations = await ctx.prisma.fundTrackerAllocation.aggregate({
-          where: {
-            category: {
-              householdId: ctx.householdId,
-              type: "FUND",
-              budgetScope: input.budgetScope,
-              isArchived: false,
-            },
-            tracker: {
-              OR: [
-                { year: { lt: y } },
-                { year: y, month: { lte: m } },
-              ],
-            },
-          },
-          _sum: { amount: true },
-        });
-
-        // Sum all fund spending up to end of this month
-        const { end: monthEnd } = getMonthRange(y, m);
-        const spending = await ctx.prisma.transaction.aggregate({
-          where: {
-            AND: [
-              dashboardTransactionsWhere({
-                userId: ctx.userId,
-                householdId: ctx.householdId,
-                type: "FUND",
-              }),
-              {
-                category: {
-                  householdId: ctx.householdId,
-                  type: "FUND",
-                  budgetScope: input.budgetScope,
-                  isArchived: false,
-                },
-              },
-              { account: { type: { in: SPENDING_ACCOUNT_TYPES } } },
-              {
-                OR: [
-                  { accrualDate: { lte: monthEnd } },
-                  { accrualDate: null, date: { lte: monthEnd } },
-                ],
-              },
+      // All fund allocations + spending up to the window end — used for the
+      // per-month trend budget and the cumulative fund-balance history.
+      const fundCategoryFilter = {
+        householdId: ctx.householdId,
+        type: "FUND" as const,
+        budgetScope: input.budgetScope,
+        isArchived: false,
+      };
+      const allAllocations = await ctx.prisma.fundTrackerAllocation.findMany({
+        where: {
+          category: fundCategoryFilter,
+          tracker: {
+            OR: [
+              { year: { lt: months[11].year } },
+              { year: months[11].year, month: { lte: months[11].month } },
             ],
           },
-          _sum: { amount: true },
-        });
+        },
+        select: { amount: true, tracker: { select: { year: true, month: true } } },
+      });
+      const allFundSpending = await ctx.prisma.transaction.findMany({
+        where: {
+          AND: [
+            dashboardTransactionsWhere({ userId: ctx.userId, householdId: ctx.householdId, type: "FUND" }),
+            { category: fundCategoryFilter },
+            { account: { type: { in: SPENDING_ACCOUNT_TYPES } } },
+            {
+              OR: [
+                { accrualDate: { lte: windowEnd } },
+                { accrualDate: null, date: { lte: windowEnd } },
+              ],
+            },
+          ],
+        },
+        select: { amount: true, accrualDate: true, date: true },
+      });
 
-        const totalBudgeted = allocations._sum?.amount ?? 0;
-        const totalSpent = -(spending._sum?.amount ?? 0); // expenses are negative
-        const totalAvailable = totalBudgeted - totalSpent;
-
-        fundHistory.push({
-          year: y, month: m,
-          label: d.toLocaleDateString("en-GB", { month: "short" }),
-          totalAvailable,
-        });
+      // Trend + expense breakdown buckets
+      const trendByKey = new Map<string, { income: number; expenses: number }>();
+      const groupMapsByKey = new Map<string, Map<string, { groupId: string; groupName: string; amount: number }>>();
+      const fundBudgetByKey = new Map<string, number>();
+      for (const mo of months) {
+        trendByKey.set(mo.key, { income: 0, expenses: 0 });
+        groupMapsByKey.set(mo.key, new Map());
+        fundBudgetByKey.set(mo.key, 0);
       }
+      for (const tx of windowTxns) {
+        const key = monthKey(tx.date);
+        const bucket = trendByKey.get(key);
+        if (!bucket) continue; // defensive: outside window
+        if (tx.type === "INCOME") {
+          bucket.income += tx.amount;
+        } else if (tx.type === "EXPENSE") {
+          bucket.expenses += tx.amount;
+          const gm = groupMapsByKey.get(key)!;
+          const groupId = tx.category?.parent?.id ?? "__uncategorized__";
+          const groupName = tx.category?.parent?.name ?? "Uncategorized";
+          const entry = gm.get(groupId) ?? { groupId, groupName, amount: 0 };
+          entry.amount += Math.abs(tx.amount);
+          gm.set(groupId, entry);
+        }
+      }
+      for (const a of allAllocations) {
+        const key = `${a.tracker.year}-${a.tracker.month}`;
+        if (fundBudgetByKey.has(key)) fundBudgetByKey.set(key, (fundBudgetByKey.get(key) ?? 0) + a.amount);
+      }
+
+      const trendMonths = months.map((mo) => {
+        const t = trendByKey.get(mo.key)!;
+        const net = t.income + t.expenses;
+        return {
+          year: mo.year, month: mo.month, label: mo.label,
+          income: t.income,
+          expenses: Math.abs(t.expenses),
+          net,
+          savingsRate: t.income > 0 ? (net / t.income) * 100 : 0,
+          monthlyFundBudget: fundBudgetByKey.get(mo.key) ?? 0,
+        };
+      });
+
+      const expensesByGroup = months.map((mo) => ({
+        year: mo.year, month: mo.month, label: mo.label,
+        groups: Array.from(groupMapsByKey.get(mo.key)!.values()).sort((a, b) => b.amount - a.amount),
+      }));
+
+      // Cumulative fund-balance history: allocations up to and including each
+      // month, spending with effective date (accrualDate ?? date) <= month end.
+      const allocByIndex = allAllocations.map((a) => ({ amount: a.amount, idx: monthIndex(a.tracker.year, a.tracker.month) }));
+      const spendByEff = allFundSpending
+        .map((s) => ({ amount: s.amount, eff: s.accrualDate ?? s.date }))
+        .sort((a, b) => a.eff.getTime() - b.eff.getTime());
+      const fundHistory = months.map((mo) => {
+        const idx = monthIndex(mo.year, mo.month);
+        const monthEnd = getMonthRange(mo.year, mo.month).end;
+        const totalBudgeted = allocByIndex.reduce((s, a) => (a.idx <= idx ? s + a.amount : s), 0);
+        const spentSum = spendByEff.reduce((s, sp) => (sp.eff.getTime() <= monthEnd.getTime() ? s + sp.amount : s), 0);
+        const totalSpent = -spentSum; // expenses are negative
+        return {
+          year: mo.year, month: mo.month, label: mo.label,
+          totalAvailable: totalBudgeted - totalSpent,
+        };
+      });
 
       return { current, compare, deltas, trends: { months: trendMonths }, expensesByGroup, fundHistory };
     }),
