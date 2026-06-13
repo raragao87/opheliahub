@@ -158,6 +158,29 @@ export const categoryRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
+      // Transaction.type is derived from its category's type. When a category's
+      // type changes (e.g. EXPENSE → FUND), cascade it to existing transactions
+      // so they keep counting in the right place (e.g. fund totals). Without this
+      // they retain their old type and silently drop out of the tracker.
+      // Mirrors the per-transaction derive in the transaction.update mutation;
+      // skips TRANSFER (movements are categorized via the markAsTransfer flow,
+      // not by editing a category's type).
+      const typeChanged =
+        data.type !== undefined &&
+        data.type !== category.type &&
+        data.type !== "TRANSFER";
+
+      if (typeChanged) {
+        return ctx.prisma.$transaction(async (tx) => {
+          const updated = await tx.category.update({ where: { id }, data });
+          await tx.transaction.updateMany({
+            where: { categoryId: id, type: { not: "TRANSFER" } },
+            data: { type: data.type },
+          });
+          return updated;
+        });
+      }
+
       return ctx.prisma.category.update({ where: { id }, data });
     }),
 
