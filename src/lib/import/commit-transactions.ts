@@ -15,6 +15,7 @@ import { ACCOUNT_TYPE_META } from "@/lib/account-types";
 import { extractDisplayName } from "@/lib/recurring";
 import { computeEffectiveCategoryId } from "@/lib/effective-category";
 import { isOpheliaEnabled } from "@/lib/ophelia";
+import { descriptionsMatch } from "@/lib/duplicate-matching";
 import { categorizeTransactionBatch } from "@/lib/ophelia/categorize-batch";
 import { checkPostImportDuplicates } from "@/lib/ophelia/check-post-import-duplicates";
 
@@ -49,22 +50,52 @@ export async function commitTransactions(
 ): Promise<{ batchId: string; importedRows: number; skippedRows: number }> {
   const { userId, householdId, accountId, account } = args;
 
-  // Exact dedup for bank sync — query existing externalIds once, build a Set.
-  let existingExternalIds = new Set<string>();
+  // Dedup for bank sync. Two layers, because the bank's transaction id won't
+  // match rows imported earlier from CSV (which have a different/absent id):
+  //   1. exact externalId match (cheap, handles repeat syncs of bank rows)
+  //   2. fuzzy match against existing rows by amount + date(±1d) + description
+  //      — catches the first sync overlapping manual imports, so it doesn't
+  //      re-import what's already there. One-to-one: each existing row absorbs
+  //      at most one incoming row.
+  let rowsToImport = args.rows;
   if (args.skipExistingExternalIds) {
+    const dates = args.rows.map((r) => r.date.getTime());
+    const lo = new Date(Math.min(...dates) - 3 * 86_400_000);
+    const hi = new Date(Math.max(...dates) + 3 * 86_400_000);
     const ids = args.rows.map((r) => r.externalId).filter((id): id is string => !!id);
-    if (ids.length > 0) {
-      const existing = await prisma.transaction.findMany({
-        where: { accountId, externalId: { in: ids }, deletedAt: null },
-        select: { externalId: true },
-      });
-      existingExternalIds = new Set(existing.map((e) => e.externalId!).filter(Boolean));
-    }
-  }
 
-  const rowsToImport = args.skipExistingExternalIds
-    ? args.rows.filter((r) => !r.externalId || !existingExternalIds.has(r.externalId))
-    : args.rows;
+    const existing = await prisma.transaction.findMany({
+      where: {
+        accountId,
+        deletedAt: null,
+        OR: [
+          ...(ids.length ? [{ externalId: { in: ids } }] : []),
+          { date: { gte: lo, lte: hi } },
+        ],
+      },
+      select: { externalId: true, date: true, amount: true, description: true, displayName: true },
+    });
+
+    const existingExternalIds = new Set(existing.map((e) => e.externalId).filter((x): x is string => !!x));
+    const fuzzyPool = existing.map((e) => ({ ...e, used: false }));
+
+    rowsToImport = args.rows.filter((r) => {
+      if (r.externalId && existingExternalIds.has(r.externalId)) return false; // layer 1
+      const match = fuzzyPool.find(
+        (e) =>
+          !e.used &&
+          e.amount === r.amount &&
+          Math.abs(e.date.getTime() - r.date.getTime()) <= 86_400_000 &&
+          (descriptionsMatch(r.description, e.description) ||
+            (e.displayName ? descriptionsMatch(r.description, e.displayName) : false))
+      );
+      if (match) {
+        match.used = true; // layer 2 — consume so two new rows can't both match it
+        return false;
+      }
+      return true;
+    });
+  }
   const skippedRows = args.rows.length - rowsToImport.length;
 
   const result = await prisma.$transaction(
