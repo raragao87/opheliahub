@@ -45,6 +45,26 @@ export interface DiscoveredAccount {
   product?: string;
 }
 
+/** Account object as returned in the /sessions response and /accounts/{id}/details. */
+export interface EnableBankingAccount {
+  uid: string;
+  name?: string;
+  currency?: string;
+  product?: string;
+  account_id?: { iban?: string; other?: string | null };
+}
+
+/** Normalize a raw Enable Banking account object to our discovered shape. */
+export function toDiscoveredAccount(a: EnableBankingAccount): DiscoveredAccount {
+  return {
+    uid: a.uid,
+    name: a.name,
+    iban: a.account_id?.iban,
+    currency: a.currency,
+    product: a.product,
+  };
+}
+
 /** Optional PSU (end-user) headers — lift the background rate limit when the user is online. */
 export interface PsuHeaders {
   psuIpAddress?: string;
@@ -133,10 +153,11 @@ export async function startAuth(args: {
   });
 }
 
-/** Exchange the post-consent code for a session + the list of authorized account uids. */
+/** Exchange the post-consent code for a session + the authorized accounts.
+ *  Enable Banking returns `accounts` as full account objects (not uid strings). */
 export async function createSession(code: string): Promise<{
   session_id: string;
-  accounts: string[];
+  accounts: EnableBankingAccount[];
   aspsp: { name: string; country: string };
 }> {
   return ebFetch(`/sessions`, {

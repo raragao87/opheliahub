@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { verifyState } from "@/lib/bank/state";
-import { createSession, getAccountDetails } from "@/lib/bank/enable-banking";
+import { createSession, toDiscoveredAccount } from "@/lib/bank/enable-banking";
 
 export const runtime = "nodejs";
 
@@ -38,17 +39,9 @@ export async function GET(request: Request) {
   try {
     const ebSession = await createSession(code);
 
-    // Capture the discovered accounts now (drives the mapping UI).
-    const discovered = await Promise.all(
-      ebSession.accounts.map(async (uid) => {
-        try {
-          const d = await getAccountDetails(uid);
-          return { uid, name: d.name, iban: d.iban, currency: d.currency };
-        } catch {
-          return { uid };
-        }
-      })
-    );
+    // The session response already contains full account objects — normalize
+    // them for the mapping UI (no extra per-account detail call needed).
+    const discovered = ebSession.accounts.map(toDiscoveredAccount);
 
     const connection = await prisma.bankConnection.create({
       data: {
@@ -56,7 +49,7 @@ export async function GET(request: Request) {
         aspspName: state.aspspName,
         aspspCountry: state.aspspCountry,
         sessionId: ebSession.session_id,
-        discoveredAccounts: discovered,
+        discoveredAccounts: discovered as unknown as Prisma.InputJsonValue,
         status: "ACTIVE",
         consentValidUntil: new Date(state.validUntil),
       },
