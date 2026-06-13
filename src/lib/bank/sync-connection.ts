@@ -94,8 +94,14 @@ export async function syncConnection(
     } catch (err) {
       const e = err as Error & { status?: number };
       result.errors.push(`${link.externalAccountId}: ${e.message}`);
-      // Auth/consent failure → connection no longer usable.
-      if (e.status === 401 || e.status === 403) {
+      // Connection no longer usable → flip to EXPIRED so the UI prompts a
+      // reconnect instead of failing silently every sync. PSD2 sessions can't be
+      // refreshed without the user re-authenticating (SCA), so there's nothing
+      // to retry automatically.
+      //   401/403 — auth/consent rejected
+      //   404      — account UID gone (the session was invalidated, e.g. the
+      //              same bank was re-authorized under a newer session)
+      if (e.status === 401 || e.status === 403 || e.status === 404) {
         await prisma.bankConnection.update({
           where: { id: connection.id },
           data: { status: "EXPIRED" },
