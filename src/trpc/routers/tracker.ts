@@ -590,12 +590,17 @@ export const trackerRouter = router({
         ctx.userId, ctx.householdId, input.budgetScope
       );
 
-      // Fetch expense transactions with tags for this month (spending accounts only)
+      // Fetch expense transactions with tags for this month (spending accounts only).
+      // Bucket by effective budget date (accrualDate when set, else date) so tag
+      // totals match the category summary for accrued transactions.
       const transactionsWithTags = await ctx.prisma.transaction.findMany({
         where: {
           ...visibilityFilter,
           account: { type: { in: SPENDING_ACCOUNT_TYPES } },
-          date: { gte: start, lte: end },
+          OR: [
+            { accrualDate: { gte: start, lte: end } },
+            { accrualDate: null, date: { gte: start, lte: end } },
+          ],
           type: "EXPENSE",
           tags: { some: {} },
         },
