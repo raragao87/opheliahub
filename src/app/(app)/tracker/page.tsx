@@ -813,7 +813,7 @@ export default function TrackerPage() {
   // Spending percentage (expenses + funds actual vs budgeted)
   const totalBudgetedSpending = expenseAssigned + totalFundContributions;
   const spendingPct = totalBudgetedSpending > 0
-    ? Math.round(((totalSpentExpenses + totalFundActual) / totalBudgetedSpending) * 100)
+    ? Math.round(((totalSpentExpenses + totalFundContributions) / totalBudgetedSpending) * 100)
     : 0;
 
   // Days left in month
@@ -835,7 +835,7 @@ export default function TrackerPage() {
     totalIncome,
     expenseAssigned + totalFundContributions,
     totalActualWithCarryIn,
-    totalSpentExpenses + totalFundActual,
+    totalSpentExpenses + totalFundContributions,
     1
   );
   const incomeBudgetPct = (totalIncome / maxBarValue) * 100;
@@ -845,7 +845,11 @@ export default function TrackerPage() {
   const investmentActualPct = (Math.abs(summaryQuery.data?.actualInvestment ?? 0) / maxBarValue) * 100;
   const incomeReceivedPct = (totalActualWithCarryIn / maxBarValue) * 100;
   const expenseSpentPct = (totalSpentExpenses / maxBarValue) * 100;
-  const fundSpentPct = (totalFundActual / maxBarValue) * 100;
+  // The actual/income side counts fund *contributions* (money allocated into the
+  // envelope), not fund spending: spending from a fund draws down its accumulated
+  // balance, not this month's income. Mirrors the server's toNextMonth formula,
+  // which subtracts fund allocations (not fund spending).
+  const fundActualPct = fundsBudgetPct;
 
   // Circular gauge
   const gaugePct = totalIncome > 0
@@ -940,7 +944,7 @@ export default function TrackerPage() {
               const toNextMonth = summaryQuery.data?.toNextMonth ?? 0;
               const showCarryOutPositive = budgetMonthsLinked && toNextMonth > 0 && totalActualWithCarryIn > 0;
               const showCarryOutNegative = budgetMonthsLinked && toNextMonth < 0;
-              const availableSpacePct = Math.max(incomeReceivedPct - expenseSpentPct - fundSpentPct, 0);
+              const availableSpacePct = Math.max(incomeReceivedPct - expenseSpentPct - fundActualPct, 0);
               const carryOutPct = showCarryOutPositive
                 ? Math.min(Math.max((toNextMonth / totalActualWithCarryIn) * incomeReceivedPct, 1.5), availableSpacePct)
                 : 0;
@@ -995,15 +999,15 @@ export default function TrackerPage() {
                         }}
                       />
                     )}
-                    {/* Actual fill segments */}
-                    {(totalSpentExpenses > 0 || totalFundActual > 0) && (
+                    {/* Actual fill segments — funds reflect contributions (allocations), not spending */}
+                    {(totalSpentExpenses > 0 || totalFundContributions > 0) && (
                       <div
                         className="absolute inset-y-0 left-0 rounded-[4px] overflow-hidden flex"
-                        style={{ width: `${expenseSpentPct + fundSpentPct}%` }}
+                        style={{ width: `${expenseSpentPct + fundActualPct}%` }}
                       >
                         <div style={{ flex: totalSpentExpenses || 1 }} className="bg-red-500/45" />
-                        {totalFundActual > 0 && (
-                          <div style={{ flex: totalFundActual }} className="bg-amber-500/40" />
+                        {totalFundContributions > 0 && (
+                          <div style={{ flex: totalFundContributions }} className="bg-amber-500/40" />
                         )}
                       </div>
                     )}
@@ -1012,11 +1016,11 @@ export default function TrackerPage() {
                       <div
                         className="absolute rounded-[3px] border-2 border-dashed border-green-600 dark:border-green-500 bg-green-500/[0.08]"
                         style={{
-                          left: `calc(${expenseSpentPct + fundSpentPct}% + 3px)`,
+                          left: `calc(${expenseSpentPct + fundActualPct}% + 3px)`,
                           top: '3px',
                           bottom: '3px',
                           width: `${Math.min(carryOutPct, availableSpacePct)}%`,
-                          maxWidth: `calc(${incomeReceivedPct}% - ${expenseSpentPct + fundSpentPct}% - 6px)`,
+                          maxWidth: `calc(${incomeReceivedPct}% - ${expenseSpentPct + fundActualPct}% - 6px)`,
                           zIndex: 2,
                         }}
                       />
