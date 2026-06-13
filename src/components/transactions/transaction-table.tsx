@@ -790,11 +790,148 @@ export function TransactionTable({
   }, [transactions]);
 
   return (
-    // overflow-y-auto + max-h makes this a self-contained scroll area,
-    // which allows the sticky thead to work correctly.
-    <div className="overflow-x-clip">
-      {/* No min-width: with overflow-x-clip a forced width would hide the
-          Amount column on narrow viewports; columns truncate instead. */}
+    <div>
+      {/* ── Mobile (below `sm`): filter bar + stacked card list ───────────
+          The desktop table clips its right-hand columns off a phone screen,
+          so on mobile we render each transaction as a card instead. */}
+      <div className="sm:hidden">
+        {cf && setCf && (
+          <div className="flex items-center gap-3 px-3 py-2 border-y border-border overflow-x-auto">
+            <span className="shrink-0 inline-flex">
+              <ColumnHeaderFilter label="Search" active={!!cf.search}>
+                {(close) => (
+                  <ColumnSearchInput search={cf.search} onChange={(s) => setCf("search", s)} close={close} />
+                )}
+              </ColumnHeaderFilter>
+            </span>
+            {onTypeChange && (
+              <span className="shrink-0 inline-flex">
+                <ColumnHeaderFilter
+                  label="Category"
+                  active={cf.categoryIds.length > 0 || cf.uncategorized || cf.opheliaUnconfirmed || cf.type === "TRANSFER"}
+                >
+                  {(close) => (
+                    <ColumnMultiSelect
+                      groups={categoryFilterGroups}
+                      selected={(cf.uncategorized || cf.opheliaUnconfirmed) ? [] : cf.categoryIds}
+                      onChange={(ids) => {
+                        setCf("categoryIds", ids);
+                        if (cf.uncategorized) setCf("uncategorized", false);
+                        if (cf.opheliaUnconfirmed) setCf("opheliaUnconfirmed", false);
+                      }}
+                      toggleLabel="Uncategorized"
+                      toggleActive={cf.uncategorized}
+                      onToggle={() => { setCf("uncategorized", !cf.uncategorized); setCf("opheliaUnconfirmed", false); setCf("categoryIds", []); }}
+                      extraToggles={[
+                        {
+                          label: "Needs confirmation",
+                          active: cf.opheliaUnconfirmed,
+                          onToggle: () => { setCf("opheliaUnconfirmed", !cf.opheliaUnconfirmed); setCf("uncategorized", false); setCf("categoryIds", []); },
+                          icon: <Sparkles className={cn("h-3.5 w-3.5 shrink-0", cf.opheliaUnconfirmed ? "text-amber-500" : "text-muted-foreground")} />,
+                        },
+                        {
+                          label: "Fund",
+                          active: cf.type === "FUND",
+                          onToggle: () => onTypeChange(cf.type === "FUND" ? "" : "FUND", ""),
+                          icon: <Wallet className={cn("h-3.5 w-3.5 shrink-0", cf.type === "FUND" ? "text-amber-500" : "text-muted-foreground")} />,
+                        },
+                        {
+                          label: "Transfer",
+                          active: cf.type === "TRANSFER",
+                          onToggle: () => onTypeChange(cf.type === "TRANSFER" ? "" : "TRANSFER", cf.type === "TRANSFER" ? "" : cf.transferType),
+                          icon: <ArrowLeftRight className={cn("h-3.5 w-3.5 shrink-0", cf.type === "TRANSFER" ? "text-primary" : "text-muted-foreground")} />,
+                        },
+                      ]}
+                      close={close}
+                    />
+                  )}
+                </ColumnHeaderFilter>
+              </span>
+            )}
+            <span className="shrink-0 inline-flex">
+              <ColumnHeaderFilter label="Date" active={!!(cf.dateFrom || cf.dateTo)}>
+                {(close) => (
+                  <ColumnMonthPicker
+                    dateFrom={cf.dateFrom}
+                    dateTo={cf.dateTo}
+                    onChange={(from, to) => { setCf("dateFrom", from); setCf("dateTo", to); }}
+                    close={close}
+                  />
+                )}
+              </ColumnHeaderFilter>
+            </span>
+            <span className="shrink-0 inline-flex">
+              <ColumnHeaderFilter label="Amount" active={!!(cf.amountMin || cf.amountMax)}>
+                {(close) => (
+                  <ColumnAmountRange
+                    amountMin={cf.amountMin}
+                    amountMax={cf.amountMax}
+                    dataMin={amountBounds.min}
+                    dataMax={amountBounds.max}
+                    onChange={(min, max) => { setCf("amountMin", min); setCf("amountMax", max); }}
+                    close={close}
+                  />
+                )}
+              </ColumnHeaderFilter>
+            </span>
+            <span className="shrink-0 inline-flex">
+              <ColumnHeaderFilter label="Tags" active={cf.tagIds.length > 0 || cf.noTags}>
+                {(close) => (
+                  <ColumnMultiSelect
+                    groups={tagFilterGroups}
+                    selected={cf.noTags ? [] : cf.tagIds}
+                    onChange={(ids) => { setCf("tagIds", ids); if (cf.noTags) setCf("noTags", false); }}
+                    toggleLabel="No tags"
+                    toggleActive={cf.noTags}
+                    onToggle={() => { setCf("noTags", !cf.noTags); setCf("tagIds", []); }}
+                    close={close}
+                  />
+                )}
+              </ColumnHeaderFilter>
+            </span>
+          </div>
+        )}
+        {selectable && transactions.length > 0 && (
+          <label className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground border-b border-border">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+              onChange={toggleAll}
+              className="rounded border-border"
+            />
+            Select all
+          </label>
+        )}
+        <div className="divide-y divide-border/40">
+          {transactions.map((txn) => (
+            <TransactionCard
+              key={txn.id}
+              txn={txn}
+              categoryOptions={categoryOptions}
+              categoryOptionGroups={categoryOptionGroups}
+              allTags={allTags}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              onMarkAsTransfer={onMarkAsTransfer}
+              onUnmarkTransfer={onUnmarkTransfer}
+              isUpdating={updatingId === txn.id}
+              selectable={selectable}
+              isSelected={selectedIds?.has(txn.id) ?? false}
+              onToggleSelect={() => toggleOne(txn.id)}
+              members={members}
+              currentUserId={currentUserId}
+              assets={assets}
+              flatCategories={flatCategories}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Desktop (`sm` and up): the full table ─────────────────────────
+          overflow-x-clip + no min-width: columns truncate rather than force a
+          horizontal scrollbar. */}
+      <div className="hidden sm:block overflow-x-clip">
       <table className="w-full text-sm">
         <thead className="sticky z-10" style={{ top: stickyOffset }}>
           <tr className="border-y border-border bg-card">
@@ -1021,50 +1158,18 @@ export function TransactionTable({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
 
-// ── Row Component ────────────────────────────────────────────────────
+// ── Shared row model + cell renderers (desktop row AND mobile card) ──────
 
-function TransactionRow({
-  txn,
-  categoryOptions,
-  categoryOptionGroups,
-  allTags,
-  onUpdate,
-  onDelete,
-  onMarkAsTransfer,
-  onUnmarkTransfer,
-  isUpdating,
-  selectable,
-  isSelected,
-  onToggleSelect,
-  members,
-  currentUserId,
-  assets,
-  flatCategories,
-}: {
-  txn: TransactionItem;
-  categoryOptions: { value: string; label: string }[];
-  categoryOptionGroups: { label: string; options: { value: string; label: string }[] }[];
-  flatCategories: CategoryOption[];
-  allTags: TagOption[];
-  onUpdate: (id: string, data: Record<string, unknown>) => void;
-  onDelete?: (id: string) => void;
-  onMarkAsTransfer?: (txn: TransactionItem) => void;
-  onUnmarkTransfer?: (txn: TransactionItem) => void;
-  isUpdating: boolean;
-  selectable: boolean;
-  isSelected: boolean;
-  onToggleSelect: () => void;
-  members?: Array<{ id: string; name: string; image: string | null }>;
-  currentUserId?: string;
-  assets?: Array<{ id: string; ticker: string | null; name: string; type: string }>;
-}) {
+/** Derived per-row values shared by the desktop <tr> row and the mobile card. */
+function useTransactionRowModel(txn: TransactionItem, flatCategories: CategoryOption[]) {
   const isTransfer = txn.type === "TRANSFER";
   const partnerAccount = txn.linkedTransaction?.account ?? txn.linkedBy?.account ?? null;
-  const isOutflow  = txn.amount < 0;
+  const isOutflow = txn.amount < 0;
   const accountGroup = txn.account.type
     ? ACCOUNT_TYPE_META[txn.account.type]?.sidebarGroup
     : null;
@@ -1074,7 +1179,6 @@ function TransactionRow({
   const canEditCategory = !isTransfer && !isAssetsDebts;
 
   // Filter category options for investment accounts — show only INVESTMENT categories
-  // Build a set of investment category IDs from flatCategories (which has categoryType)
   const investmentCatIds = useMemo(() => {
     const ids = new Set<string>();
     for (const c of flatCategories) {
@@ -1083,19 +1187,7 @@ function TransactionRow({
     return ids;
   }, [flatCategories]);
 
-  const effectiveCategoryOptions = isInvestmentAccount
-    ? categoryOptions.filter((o) => investmentCatIds.has(o.value))
-    : categoryOptions.filter((o) => !investmentCatIds.has(o.value));
-  const effectiveCategoryOptionGroups = isInvestmentAccount
-    ? categoryOptionGroups
-        .map((g) => ({ ...g, options: g.options.filter((o) => investmentCatIds.has(o.value)) }))
-        .filter((g) => g.options.length > 0)
-    : categoryOptionGroups
-        .map((g) => ({ ...g, options: g.options.filter((o) => !investmentCatIds.has(o.value)) }))
-        .filter((g) => g.options.length > 0);
-
   const displayDesc = txn.displayName || txn.description;
-
   const accountName = txn.account.name;
   const accountPartner = isTransfer && partnerAccount
     ? isOutflow ? partnerAccount.name : txn.account.name
@@ -1119,15 +1211,209 @@ function TransactionRow({
     <AccountIcon className="h-4 w-4 inline-block text-muted-foreground" />
   ) : null;
 
-  const opheliaCatLabel = !txn.category && txn.opheliaCategory
-    ? txn.opheliaCategory.name
-    : null;
+  const opheliaCatLabel = !txn.category && txn.opheliaCategory ? txn.opheliaCategory.name : null;
   const opheliaConf = txn.opheliaConfidence ?? null;
   const opheliaConfColor =
     opheliaConf == null ? "text-violet-400"
     : opheliaConf >= 0.8 ? "text-green-500"
     : opheliaConf >= 0.5 ? "text-yellow-500"
     : "text-red-400";
+
+  return {
+    isTransfer, partnerAccount, isOutflow, isAssetsDebts, isInvestmentAccount,
+    AccountIcon, canEditCategory, investmentCatIds, displayDesc, accountName,
+    accountPartner, accountDisplay, categoryDisplay, categoryIcon,
+    opheliaCatLabel, opheliaConf, opheliaConfColor,
+  };
+}
+
+type RowModel = ReturnType<typeof useTransactionRowModel>;
+
+/** Build the investment-aware category option lists from raw options + the row model. */
+function effectiveCategoryOptions(
+  model: RowModel,
+  categoryOptions: { value: string; label: string }[],
+  categoryOptionGroups: { label: string; options: { value: string; label: string }[] }[],
+) {
+  const { isInvestmentAccount, investmentCatIds } = model;
+  const options = isInvestmentAccount
+    ? categoryOptions.filter((o) => investmentCatIds.has(o.value))
+    : categoryOptions.filter((o) => !investmentCatIds.has(o.value));
+  const optionGroups = isInvestmentAccount
+    ? categoryOptionGroups
+        .map((g) => ({ ...g, options: g.options.filter((o) => investmentCatIds.has(o.value)) }))
+        .filter((g) => g.options.length > 0)
+    : categoryOptionGroups
+        .map((g) => ({ ...g, options: g.options.filter((o) => !investmentCatIds.has(o.value)) }))
+        .filter((g) => g.options.length > 0);
+  return { options, optionGroups };
+}
+
+/** The category control (transfer chip / Ophelia suggestion / inline select). */
+function CategoryCellContent({
+  txn, model, categoryOptions, categoryOptionGroups, onUpdate, onMarkAsTransfer, onUnmarkTransfer,
+}: {
+  txn: TransactionItem;
+  model: RowModel;
+  categoryOptions: { value: string; label: string }[];
+  categoryOptionGroups: { label: string; options: { value: string; label: string }[] }[];
+  onUpdate: (id: string, data: Record<string, unknown>) => void;
+  onMarkAsTransfer?: (txn: TransactionItem) => void;
+  onUnmarkTransfer?: (txn: TransactionItem) => void;
+}) {
+  const {
+    isTransfer, partnerAccount, canEditCategory, opheliaCatLabel, opheliaConf,
+    opheliaConfColor, categoryDisplay, categoryIcon,
+  } = model;
+  const eff = effectiveCategoryOptions(model, categoryOptions, categoryOptionGroups);
+
+  if (isTransfer) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 text-xs px-1 py-0.5 rounded cursor-pointer transition-colors hover:bg-muted/50",
+          partnerAccount ? "text-blue-500" : "text-amber-500"
+        )}
+        onClick={() => onUnmarkTransfer?.(txn)}
+        title="Click to undo transfer"
+      >
+        <ArrowLeftRight className="h-3 w-3 shrink-0" />
+        <span className="leading-tight">
+          <span className="block truncate">Transfer</span>
+          {partnerAccount && <span className="block truncate text-[10px] opacity-70">→ {partnerAccount.name}</span>}
+        </span>
+      </span>
+    );
+  }
+  if (!canEditCategory) {
+    return <span className="text-sm px-1 py-0.5">{categoryIcon}</span>;
+  }
+  if (opheliaCatLabel && !txn.category) {
+    return (
+      <div className="flex items-center gap-1 group/ophelia">
+        <span title={opheliaConf != null ? `Ophelia: ${Math.round(opheliaConf * 100)}% confidence` : "Suggested by Ophelia"}>
+          <Sparkles className={cn("h-3 w-3 shrink-0", opheliaConfColor)} />
+        </span>
+        <InlineSelectEdit
+          value=""
+          displayValue={opheliaCatLabel}
+          options={eff.options}
+          optionGroups={eff.optionGroups}
+          topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
+          onSave={(value) => {
+            if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
+            onUpdate(txn.id, { categoryId: value || null });
+          }}
+          emptyLabel="Uncategorized"
+          placeholder="—"
+        />
+        <button
+          type="button"
+          title={`Accept Ophelia's suggestion: ${opheliaCatLabel}`}
+          onClick={() => onUpdate(txn.id, { categoryId: txn.opheliaCategoryId })}
+          className="shrink-0 opacity-0 group-hover/ophelia:opacity-100 text-[10px] text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200 transition-opacity font-medium leading-none"
+        >
+          Accept
+        </button>
+      </div>
+    );
+  }
+  return (
+    <InlineSelectEdit
+      value={txn.category?.id ?? ""}
+      displayValue={categoryDisplay}
+      options={categoryOptions}
+      optionGroups={categoryOptionGroups}
+      topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
+      onSave={(value) => {
+        if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
+        onUpdate(txn.id, { categoryId: value || null });
+      }}
+      emptyLabel="Uncategorized"
+      placeholder="—"
+    />
+  );
+}
+
+/** The amount control (investment asset selector + inline money edit). */
+function AmountCellContent({
+  txn, model, assets, onUpdate,
+}: {
+  txn: TransactionItem;
+  model: RowModel;
+  assets?: Array<{ id: string; ticker: string | null; name: string; type: string }>;
+  onUpdate: (id: string, data: Record<string, unknown>) => void;
+}) {
+  const { isInvestmentAccount, isTransfer } = model;
+  return (
+    <>
+      {isInvestmentAccount && !isTransfer && (
+        <span className="mr-1">
+          <InlineAssetSelect
+            value={txn.investmentDetail?.investmentAssetId ?? null}
+            displayText={txn.investmentDetail?.investmentAsset?.ticker ?? txn.investmentDetail?.investmentAsset?.name ?? null}
+            assets={assets ?? []}
+            onChange={(assetId) => onUpdate(txn.id, { investmentAssetId: assetId })}
+          />
+          {txn.investmentDetail?.quantity != null && (
+            <span className="text-[10px] text-muted-foreground ml-0.5">×{String(txn.investmentDetail.quantity)}</span>
+          )}
+        </span>
+      )}
+      <InlineMoneyEdit
+        value={txn.amount}
+        currency={txn.currency}
+        onSave={(cents) => onUpdate(txn.id, { amount: cents })}
+        className={cn(
+          txn.amount > 0 && "text-green-600 dark:text-green-400",
+          txn.amount < 0 && "text-red-600 dark:text-red-400"
+        )}
+      />
+    </>
+  );
+}
+
+// ── Row Component ────────────────────────────────────────────────────
+
+interface TransactionRowProps {
+  txn: TransactionItem;
+  categoryOptions: { value: string; label: string }[];
+  categoryOptionGroups: { label: string; options: { value: string; label: string }[] }[];
+  flatCategories: CategoryOption[];
+  allTags: TagOption[];
+  onUpdate: (id: string, data: Record<string, unknown>) => void;
+  onDelete?: (id: string) => void;
+  onMarkAsTransfer?: (txn: TransactionItem) => void;
+  onUnmarkTransfer?: (txn: TransactionItem) => void;
+  isUpdating: boolean;
+  selectable: boolean;
+  isSelected: boolean;
+  onToggleSelect: () => void;
+  members?: Array<{ id: string; name: string; image: string | null }>;
+  currentUserId?: string;
+  assets?: Array<{ id: string; ticker: string | null; name: string; type: string }>;
+}
+
+function TransactionRow({
+  txn,
+  categoryOptions,
+  categoryOptionGroups,
+  allTags,
+  onUpdate,
+  onDelete,
+  onMarkAsTransfer,
+  onUnmarkTransfer,
+  isUpdating,
+  selectable,
+  isSelected,
+  onToggleSelect,
+  members,
+  currentUserId,
+  assets,
+  flatCategories,
+}: TransactionRowProps) {
+  const model = useTransactionRowModel(txn, flatCategories);
+  const { displayDesc, isTransfer, accountPartner, accountDisplay, accountName, isOutflow } = model;
 
   return (
     <tr
@@ -1186,69 +1472,15 @@ function TransactionRow({
 
       {/* Category */}
       <td className="py-1.5 px-2">
-        {isTransfer ? (
-          // Transfer indicator — clickable to unmark
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 text-xs px-1 py-0.5 rounded cursor-pointer transition-colors hover:bg-muted/50",
-              partnerAccount ? "text-blue-500" : "text-amber-500"
-            )}
-            onClick={() => onUnmarkTransfer?.(txn)}
-            title="Click to undo transfer"
-          >
-            <ArrowLeftRight className="h-3 w-3 shrink-0" />
-            <span className="leading-tight">
-              <span className="block truncate">Transfer</span>
-              {partnerAccount && <span className="block truncate text-[10px] opacity-70">→ {partnerAccount.name}</span>}
-            </span>
-          </span>
-        ) : canEditCategory ? (
-          opheliaCatLabel && !txn.category ? (
-            // Ophelia suggestion: no user category set, AI has a candidate
-            <div className="flex items-center gap-1 group/ophelia">
-              <span title={opheliaConf != null ? `Ophelia: ${Math.round(opheliaConf * 100)}% confidence` : "Suggested by Ophelia"}>
-                <Sparkles className={cn("h-3 w-3 shrink-0", opheliaConfColor)} />
-              </span>
-              <InlineSelectEdit
-                value=""
-                displayValue={opheliaCatLabel}
-                options={effectiveCategoryOptions}
-                optionGroups={effectiveCategoryOptionGroups}
-                topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
-                onSave={(value) => {
-                  if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
-                  onUpdate(txn.id, { categoryId: value || null });
-                }}
-                emptyLabel="Uncategorized"
-                placeholder="—"
-              />
-              <button
-                type="button"
-                title={`Accept Ophelia's suggestion: ${opheliaCatLabel}`}
-                onClick={() => onUpdate(txn.id, { categoryId: txn.opheliaCategoryId })}
-                className="shrink-0 opacity-0 group-hover/ophelia:opacity-100 text-[10px] text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200 transition-opacity font-medium leading-none"
-              >
-                Accept
-              </button>
-            </div>
-          ) : (
-            <InlineSelectEdit
-              value={txn.category?.id ?? ""}
-              displayValue={categoryDisplay}
-              options={categoryOptions}
-              optionGroups={categoryOptionGroups}
-              topOptions={onMarkAsTransfer ? [{ value: "__TRANSFER__", label: "↔ Mark as transfer" }] : undefined}
-              onSave={(value) => {
-                if (value === "__TRANSFER__") { onMarkAsTransfer?.(txn); return; }
-                onUpdate(txn.id, { categoryId: value || null });
-              }}
-              emptyLabel="Uncategorized"
-              placeholder="—"
-            />
-          )
-        ) : (
-          <span className="text-sm px-1 py-0.5">{categoryIcon}</span>
-        )}
+        <CategoryCellContent
+          txn={txn}
+          model={model}
+          categoryOptions={categoryOptions}
+          categoryOptionGroups={categoryOptionGroups}
+          onUpdate={onUpdate}
+          onMarkAsTransfer={onMarkAsTransfer}
+          onUnmarkTransfer={onUnmarkTransfer}
+        />
       </td>
 
       {/* Tags */}
@@ -1262,28 +1494,7 @@ function TransactionRow({
 
       {/* Amount + investment asset selector */}
       <td className="py-1.5 px-2 text-right whitespace-nowrap">
-        {isInvestmentAccount && !isTransfer && (
-          <span className="mr-1">
-            <InlineAssetSelect
-              value={txn.investmentDetail?.investmentAssetId ?? null}
-              displayText={txn.investmentDetail?.investmentAsset?.ticker ?? txn.investmentDetail?.investmentAsset?.name ?? null}
-              assets={assets ?? []}
-              onChange={(assetId) => onUpdate(txn.id, { investmentAssetId: assetId })}
-            />
-            {txn.investmentDetail?.quantity != null && (
-              <span className="text-[10px] text-muted-foreground ml-0.5">×{String(txn.investmentDetail.quantity)}</span>
-            )}
-          </span>
-        )}
-        <InlineMoneyEdit
-          value={txn.amount}
-          currency={txn.currency}
-          onSave={(cents) => onUpdate(txn.id, { amount: cents })}
-          className={cn(
-            txn.amount > 0 && "text-green-600 dark:text-green-400",
-            txn.amount < 0 && "text-red-600 dark:text-red-400"
-          )}
-        />
+        <AmountCellContent txn={txn} model={model} assets={assets} onUpdate={onUpdate} />
       </td>
 
       {/* Notes */}
@@ -1303,6 +1514,113 @@ function TransactionRow({
         {onDelete && !txn.isInitialBalance && <DeleteCell txnId={txn.id} onDelete={onDelete} />}
       </td>
     </tr>
+  );
+}
+
+// ── Mobile card (below `sm`) ──────────────────────────────────────────
+// Same data + handlers as the desktop <tr>, re-laid-out as a stacked card so
+// the Amount is never clipped off-screen on a phone.
+
+function TransactionCard({
+  txn,
+  categoryOptions,
+  categoryOptionGroups,
+  allTags,
+  onUpdate,
+  onDelete,
+  onMarkAsTransfer,
+  onUnmarkTransfer,
+  isUpdating,
+  selectable,
+  isSelected,
+  onToggleSelect,
+  members,
+  currentUserId,
+  assets,
+  flatCategories,
+}: TransactionRowProps) {
+  const model = useTransactionRowModel(txn, flatCategories);
+  const { displayDesc } = model;
+
+  return (
+    <div
+      className={cn(
+        "px-3 py-2.5 flex flex-col gap-1.5 transition-colors",
+        isUpdating && "opacity-60",
+        isSelected && "bg-primary/5"
+      )}
+    >
+      {/* Top line: (checkbox) Name … Amount */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={onToggleSelect}
+              className="mt-1 rounded border-border shrink-0"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <InlineTextEdit
+              value={displayDesc}
+              onSave={(value) => onUpdate(txn.id, { displayName: value })}
+              className="font-medium"
+              maxLength={100}
+            />
+            {txn.displayName && txn.displayName !== txn.description && (
+              <span className="text-xs text-muted-foreground/50 truncate block" title={txn.description}>
+                {txn.description.length > 50 ? txn.description.slice(0, 50) + "..." : txn.description}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="text-right whitespace-nowrap shrink-0 font-medium">
+          <AmountCellContent txn={txn} model={model} assets={assets} onUpdate={onUpdate} />
+        </div>
+      </div>
+
+      {/* Second line: Date · Category … Notes / Delete */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 text-xs text-muted-foreground">
+          {txn.isInitialBalance ? (
+            <span className="text-muted-foreground/50">—</span>
+          ) : (
+            <span className="shrink-0 flex items-center gap-1">
+              <InlineDateEdit value={txn.date} onSave={(date) => onUpdate(txn.id, { date })} />
+              <AccrualDateCell txnId={txn.id} accrualDate={txn.accrualDate ?? null} txnDate={txn.date} onUpdate={onUpdate} />
+            </span>
+          )}
+          <span className="text-muted-foreground/40 shrink-0">·</span>
+          <span className="min-w-0 truncate">
+            <CategoryCellContent
+              txn={txn}
+              model={model}
+              categoryOptions={categoryOptions}
+              categoryOptionGroups={categoryOptionGroups}
+              onUpdate={onUpdate}
+              onMarkAsTransfer={onMarkAsTransfer}
+              onUnmarkTransfer={onUnmarkTransfer}
+            />
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <InlineTagEdit
+            selectedTagIds={txn.tags.map((t) => t.tag.id)}
+            allTags={allTags}
+            onSave={(tagIds) => onUpdate(txn.id, { tagIds })}
+          />
+          <NoteCell
+            txnId={txn.id}
+            notes={txn.notes}
+            onUpdate={onUpdate}
+            members={members}
+            currentUserId={currentUserId}
+          />
+          {onDelete && !txn.isInitialBalance && <DeleteCell txnId={txn.id} onDelete={onDelete} />}
+        </div>
+      </div>
+    </div>
   );
 }
 

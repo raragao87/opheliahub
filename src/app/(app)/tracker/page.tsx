@@ -1418,12 +1418,12 @@ export default function TrackerPage() {
           : expenseAssigned - totalSpentExpenses;
 
         return (
-          <div key={tableType} className="rounded-lg border bg-card overflow-x-clip">
+          <div key={tableType} className="rounded-lg border bg-card overflow-x-auto sm:overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col /><col style={{ width: '130px' }} /><col style={{ width: '130px' }} /><col style={{ width: '150px' }} />
               </colgroup>
-              <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
+              <thead className="sm:sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
                   <th className="text-left py-2.5 px-3 bg-card">
@@ -2330,12 +2330,12 @@ export default function TrackerPage() {
             }
           }}
         >
-        <div className="rounded-lg border bg-card overflow-x-clip">
+        <div className="rounded-lg border bg-card overflow-x-auto sm:overflow-x-clip">
             <table className="w-full text-sm min-w-[600px]" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col /><col style={{ width: '130px' }} /><col style={{ width: '130px' }} /><col style={{ width: '150px' }} />
               </colgroup>
-              <thead className="sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
+              <thead className="sm:sticky z-10" style={{ top: `${64 + headerHeight}px` }}>
                 {/* Row 1: Title + column headers */}
                 <tr className="border-b bg-card">
                   <th className="text-left py-2.5 px-3 bg-card">

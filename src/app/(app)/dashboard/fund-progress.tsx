@@ -76,15 +76,15 @@ function FundCard({ fund, lang }: { fund: FundData; lang: Language }) {
               className="h-2"
               indicatorClassName={isCompleted ? "bg-green-500" : "bg-primary"}
             />
-            <div className="flex items-center justify-between gap-1">
+            <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
               <MoneyDisplay amount={fund.available} className="text-sm font-semibold" colorize={false} />
               {isCompleted ? (
-                <span className="flex items-center gap-0.5 text-xs text-green-600 dark:text-green-400">
+                <span className="flex items-center gap-0.5 text-xs text-green-600 dark:text-green-400 whitespace-nowrap">
                   <Check className="h-3 w-3" />
                   {t(lang, "dashboard.completed")}
                 </span>
               ) : (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
                   {t(lang, "dashboard.ofTarget").replace(
                     "{target}",
                     ""
