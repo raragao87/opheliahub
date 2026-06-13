@@ -7,11 +7,15 @@
  * Prefix comparison alone misses these, so we also compare counterparty IBANs.
  */
 
-const IBAN_REGEX = /[A-Z]{2}\d{2}[A-Z]{4}\d{6,18}/g;
+// 2-letter country + 2 check digits + 11–30 alphanumeric BBAN. Word-bounded so
+// the IBAN doesn't glue to an adjacent "BIC"/slash. Handles both Dutch IBANs
+// (4-letter bank code: NL32REVO…) and all-numeric ones (Belgian BE32905…).
+const IBAN_REGEX = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g;
 
 /** Extract all IBANs from a transaction description (normalized, deduped). */
 export function extractIbans(description: string): string[] {
-  const matches = description.toUpperCase().replace(/\s/g, "").match(IBAN_REGEX);
+  // Keep delimiters (don't strip whitespace) so \b boundaries work.
+  const matches = description.toUpperCase().match(IBAN_REGEX);
   return matches ? [...new Set(matches)] : [];
 }
 

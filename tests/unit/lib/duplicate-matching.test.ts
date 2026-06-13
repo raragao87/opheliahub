@@ -23,6 +23,35 @@ describe("extractIbans", () => {
       extractIbans("IBAN: NL32REVO0921990154 ref NL32REVO0921990154")
     ).toEqual(["NL32REVO0921990154"]);
   });
+
+  it("extracts an all-numeric (Belgian) IBAN without gluing to BIC", () => {
+    expect(extractIbans("SEPA Overboeking IBAN: BE32905284529602 BIC: TRWIBEB1")).toEqual([
+      "BE32905284529602",
+    ]);
+    expect(
+      extractIbans("/TRTP/SEPA OVERBOEKING/IBAN/BE32905284529602/BIC/TRWIBEB1/NAME/Lainara")
+    ).toEqual(["BE32905284529602"]);
+  });
+});
+
+describe("descriptionsMatch — real bank format variants", () => {
+  it("matches ABN settled vs TRTP format for a Belgian IBAN", () => {
+    expect(
+      descriptionsMatch(
+        "SEPA Overboeking IBAN: BE32905284529602 BIC:",
+        "/TRTP/SEPA OVERBOEKING/IBAN/BE32905284529602/BIC/TRWIBEB1/NAME/Lainara"
+      )
+    ).toBe(true);
+  });
+
+  it("matches ABN settled vs TRTP format for a Dutch IBAN", () => {
+    expect(
+      descriptionsMatch(
+        "SEPA Overboeking IBAN: NL32REVO0921990154 BIC",
+        "/TRTP/SEPA OVERBOEKING/IBAN/NL32REVO0921990154/BIC/REVONL22/NAME/ROBERTO"
+      )
+    ).toBe(true);
+  });
 });
 
 describe("descriptionsMatch", () => {

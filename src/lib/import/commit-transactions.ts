@@ -81,11 +81,13 @@ export async function commitTransactions(
 
     rowsToImport = args.rows.filter((r) => {
       if (r.externalId && existingExternalIds.has(r.externalId)) return false; // layer 1
+      // ±4 days: banks book a transfer on a different date than an earlier
+      // CSV export showed it (settlement vs initiation).
       const match = fuzzyPool.find(
         (e) =>
           !e.used &&
           e.amount === r.amount &&
-          Math.abs(e.date.getTime() - r.date.getTime()) <= 86_400_000 &&
+          Math.abs(e.date.getTime() - r.date.getTime()) <= 4 * 86_400_000 &&
           (descriptionsMatch(r.description, e.description) ||
             (e.displayName ? descriptionsMatch(r.description, e.displayName) : false))
       );
