@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/bank-sync",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/demo-reset",
+      "schedule": "0 4 * * *"
     }
   ]
 }

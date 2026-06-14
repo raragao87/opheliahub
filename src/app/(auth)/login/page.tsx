@@ -59,6 +59,27 @@ export default async function LoginPage({
             Sign in with Google
           </Button>
         </form>
+        <form
+          action={async () => {
+            "use server";
+            await signIn("demo", { redirectTo: "/dashboard" });
+          }}
+        >
+          <div className="relative my-2">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or</span>
+            </div>
+          </div>
+          <Button type="submit" variant="outline" className="w-full" size="lg">
+            ✨ Try the live demo
+          </Button>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Explore a sample household — no sign-up. Resets daily.
+          </p>
+        </form>
         {isDev && (
           <form
             action={async (formData: FormData) => {
