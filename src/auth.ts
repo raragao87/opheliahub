@@ -1,7 +1,24 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
+import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
+import { DEMO_USER_ID } from "@/lib/demo/constants";
 import authConfig from "./auth.config";
+
+// Public "Try the demo" login. Defined here (Node, not the edge auth.config) so
+// the Prisma lookup never bloats the edge middleware bundle. Passwordless, but it
+// can ONLY ever authenticate the fixed demo user, which lives solely in the demo
+// household — so it grants no access to real user data.
+const demoProvider = Credentials({
+  id: "demo",
+  name: "Demo",
+  credentials: {},
+  async authorize() {
+    const user = await prisma.user.findUnique({ where: { id: DEMO_USER_ID } });
+    if (!user) return null;
+    return { id: user.id, email: user.email, name: user.name };
+  },
+});
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -48,4 +65,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   ...authConfig,
+  providers: [...authConfig.providers, demoProvider],
 });
