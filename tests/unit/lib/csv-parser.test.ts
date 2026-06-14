@@ -1,7 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { parseCsvFile, transformCsvToTransactions } from "@/lib/parsers/csv-parser";
+import { parseCsvFile, transformCsvToTransactions, detectCurrencyColumn } from "@/lib/parsers/csv-parser";
 
 const MAPPING = { date: "Datum", description: "Beschrijving", amount: "Bedrag" };
+
+describe("detectCurrencyColumn", () => {
+  it("detects the currency column across locales/abbreviations", () => {
+    expect(detectCurrencyColumn(["Date", "Description", "Amount", "Currency"])).toBe("Currency");
+    expect(detectCurrencyColumn(["Datum", "Bedrag", "Valuta"])).toBe("Valuta");
+    expect(detectCurrencyColumn(["Datum", "Muntsoort"])).toBe("Muntsoort");
+    expect(detectCurrencyColumn(["Data", "Moeda"])).toBe("Moeda");
+    expect(detectCurrencyColumn(["Date", "Devise"])).toBe("Devise");
+    expect(detectCurrencyColumn(["Datum", "Währung"])).toBe("Währung");
+    expect(detectCurrencyColumn(["Date", "CCY"])).toBe("CCY");
+  });
+
+  it("returns undefined when no currency column is present", () => {
+    expect(detectCurrencyColumn(["Date", "Description", "Amount", "Balance"])).toBeUndefined();
+  });
+
+  it("does not match unrelated columns containing the substring", () => {
+    // "Concurrency"/"Current" must not be treated as a currency column
+    expect(detectCurrencyColumn(["Current Balance", "Account"])).toBeUndefined();
+  });
+});
 
 describe("transformCsvToTransactions — non-settled status filtering", () => {
   it("skips reverted and pending rows (Revolut style)", () => {

@@ -98,6 +98,16 @@ function normalizeCurrencyCode(raw: string): string {
   return trimmed.toUpperCase();
 }
 
+// Header names that denote a per-transaction currency column, across the locales
+// OpheliaHub's users see (en/nl/pt/fr/de/es) plus common abbreviations.
+const CURRENCY_HEADER =
+  /^(currency|valuta|muntsoort|moeda|devise|w[äa]hrung|divisa|ccy|curr\.?|cur)$/i;
+
+/** Auto-detect a currency column from CSV headers, if one is present. */
+export function detectCurrencyColumn(headers: string[]): string | undefined {
+  return headers.find((h) => CURRENCY_HEADER.test(h.trim()));
+}
+
 // Status values that mean a row never settled — these must not be imported
 // (e.g. Revolut exports reverted/pending rows alongside completed ones, and
 // their amounts are NOT included in the bank's running balance).

@@ -14,7 +14,7 @@ import { MoneyDisplay } from "@/components/shared/money-display";
 import { ScopeBadge } from "@/components/shared/visibility-badge";
 import { formatDate } from "@/lib/date";
 import { descriptionsMatch } from "@/lib/duplicate-matching";
-import { parseCsvFile, transformCsvToTransactions, type AmountColumnHints, type ColumnMapping, type ParsedTransaction } from "@/lib/parsers/csv-parser";
+import { parseCsvFile, transformCsvToTransactions, detectCurrencyColumn, type AmountColumnHints, type ColumnMapping, type ParsedTransaction } from "@/lib/parsers/csv-parser";
 import { parseMT940 } from "@/lib/parsers/mt940-parser";
 import type { FileStructureAnalysis } from "@/lib/ophelia/types";
 import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertTriangle, ChevronRight, Filter, Pencil, Loader2, Sparkles, Tag as TagIcon } from "lucide-react";
@@ -560,6 +560,20 @@ export default function ImportPage() {
   }, [pendingAutoAdvance, fileContent, accountId, format, savedProfileLoaded, csvHeaders.length]);
 
   // Derive filterable columns (low cardinality only)
+  // Auto-map the currency column from the file's headers when it isn't already
+  // set (or points at a column not in this file). Runs on every import path —
+  // saved profile, Ophelia, or manual — so a per-transaction currency is
+  // captured even when the user never opens the mapping step.
+  useEffect(() => {
+    if (csvHeaders.length === 0) return;
+    setMapping((prev) => {
+      if (prev.currency && csvHeaders.includes(prev.currency)) return prev;
+      const detected = detectCurrencyColumn(csvHeaders);
+      if (!detected || detected === prev.currency) return prev;
+      return { ...prev, currency: detected };
+    });
+  }, [csvHeaders]);
+
   const filterableColumns = useMemo(() => {
     const MAX_CARDINALITY = 50;
     const result: { column: string; values: string[]; valueCounts: Record<string, number> }[] = [];
@@ -1405,6 +1419,24 @@ export default function ImportPage() {
                 Filter settings restored from last import. Adjust if needed.
               </div>
             )}
+            {/* Currency column — surfaced here too so it's reachable even when a
+                saved profile auto-advances past the column-mapping step. */}
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Label className="shrink-0">Currency column</Label>
+              <Select
+                value={mapping.currency ?? ""}
+                onChange={(e) => setMapping({ ...mapping, currency: e.target.value || undefined })}
+                className="w-auto min-w-[220px]"
+              >
+                <option value="">Use account default ({selectedAccount?.currency ?? "EUR"})</option>
+                {csvHeaders.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </Select>
+              <span className="text-xs text-muted-foreground">
+                Each transaction&apos;s currency is read from this column.
+              </span>
+            </div>
             <div className="flex gap-4 items-start">
               {/* Left: filter accordion panels */}
               <div className="w-56 flex-shrink-0">
