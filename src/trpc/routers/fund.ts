@@ -23,11 +23,6 @@ export const fundRouter = router({
           isArchived: false,
         },
         include: {
-          fundEntries: {
-            where: { type: { in: ["CONTRIBUTION", "WITHDRAWAL"] } },
-            orderBy: { createdAt: "desc" },
-            select: { id: true, type: true, amount: true, note: true, year: true, month: true, createdAt: true },
-          },
           fundTrackerAllocations: true,
           lineItems: { orderBy: { sortOrder: "asc" } },
           linkedAccount: {
@@ -156,15 +151,7 @@ export const fundRouter = router({
           });
           const thisMonthActual = -(thisMonthAgg._sum.amount ?? 0);
 
-          // Signed sum of manual fund movements (FundEntry.amount is always
-          // positive; WITHDRAWAL subtracts). Previously the balance only read
-          // ADJUSTMENT entries, which silently ignored CONTRIBUTION/WITHDRAWAL.
-          const contributions = cat.fundEntries.reduce(
-            (sum, e) => sum + (e.type === "WITHDRAWAL" ? -e.amount : e.amount),
-            0,
-          );
-
-          const available = totalBudgeted - totalSpending + contributions;
+          const available = totalBudgeted - totalSpending;
 
           return {
             id: cat.id,
@@ -176,7 +163,6 @@ export const fundRouter = router({
             available,
             totalBudgeted,
             totalSpending,
-            contributions,
             lineItems: cat.lineItems,
             linkedAccount: cat.linkedAccount,
             sortOrder: cat.sortOrder,

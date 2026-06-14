@@ -30,7 +30,6 @@ interface FundData {
   available: number;
   totalBudgeted: number;
   totalSpending: number;
-  contributions: number;
   lineItems: Array<{ id: string; description: string; period: number; amount: number; sortOrder: number }>;
   linkedAccount: { id: string; name: string; balance: number; currency: string } | null;
   sortOrder: number;
@@ -2579,12 +2578,6 @@ export default function TrackerPage() {
                                   <span className="text-right font-mono tabular-nums"><MoneyDisplay amount={fund.totalBudgeted} colorize={false} className="text-xs inline" /></span>
                                   <span className="text-muted-foreground">Total spending</span>
                                   <span className="text-right font-mono tabular-nums text-red-600 dark:text-red-400"><MoneyDisplay amount={-fund.totalSpending} colorize={false} className="text-xs inline" /></span>
-                                  {fund.contributions !== 0 && (
-                                    <>
-                                      <span className="text-muted-foreground">Contributions</span>
-                                      <span className="text-right font-mono tabular-nums text-green-600 dark:text-green-400"><MoneyDisplay amount={fund.contributions} colorize={false} className="text-xs inline" /></span>
-                                    </>
-                                  )}
                                   <span className="text-muted-foreground font-medium border-t pt-0.5 mt-0.5">Available</span>
                                   <span className="text-right font-mono tabular-nums font-medium border-t pt-0.5 mt-0.5"><MoneyDisplay amount={fund.available} colorize={false} className="text-xs inline" /></span>
                                 </div>
