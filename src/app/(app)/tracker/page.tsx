@@ -1416,12 +1416,12 @@ export default function TrackerPage() {
                       <button
                         onClick={() => {
                           if (isIncome) {
-                            // Income is flat — add category to first income group
+                            // Income categories live under a single (hidden) income
+                            // group. Add to it; create the group first if none exists.
                             const firstGroup = incomeGroups[0];
                             if (firstGroup) {
                               setAddingCategoryToGroup(firstGroup.id);
                             } else {
-                              // No income group yet — create one first
                               setShowAddGroup("INCOME");
                             }
                           } else {

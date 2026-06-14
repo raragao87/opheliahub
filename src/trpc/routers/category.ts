@@ -101,8 +101,15 @@ export const categoryRouter = router({
         if (!parent) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Parent group not found." });
         }
-        if (parent.type === "INCOME" || parent.type === "INVESTMENT"
-            || parent.type === "FUND" || parent.type === "TRANSFER") {
+        // Only top-level groups can hold categories (2-level hierarchy).
+        if (parent.parentId !== null) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Categories can only be nested one level deep.",
+          });
+        }
+        // INCOME and EXPENSE groups hold categories; the others are flat.
+        if (parent.type === "INVESTMENT" || parent.type === "FUND" || parent.type === "TRANSFER") {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: `${parent.type} categories cannot have subcategories.`,
@@ -339,15 +346,22 @@ export const categoryRouter = router({
         });
       }
 
-      // Enforce: can't reparent under INCOME or INVESTMENT
+      // Enforce the 2-level hierarchy: only top-level INCOME/EXPENSE groups can
+      // hold categories; INVESTMENT/FUND/TRANSFER are flat.
       const parentIds = [...new Set(input.items.map(i => i.parentId).filter((id): id is string => id !== null))];
       if (parentIds.length > 0) {
         const parents = await ctx.prisma.category.findMany({
           where: { id: { in: parentIds }, householdId: ctx.householdId },
-          select: { id: true, type: true },
+          select: { id: true, type: true, parentId: true },
         });
         for (const parent of parents) {
-          if (parent.type === "INCOME" || parent.type === "INVESTMENT") {
+          if (parent.parentId !== null) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Categories can only be nested one level deep.",
+            });
+          }
+          if (parent.type === "INVESTMENT" || parent.type === "FUND" || parent.type === "TRANSFER") {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: `${parent.type} categories cannot have subcategories.`,
