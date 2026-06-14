@@ -24,9 +24,9 @@ export const fundRouter = router({
         },
         include: {
           fundEntries: {
-            where: { type: "ADJUSTMENT" },
+            where: { type: { in: ["CONTRIBUTION", "WITHDRAWAL"] } },
             orderBy: { createdAt: "desc" },
-            select: { id: true, amount: true, note: true, year: true, month: true, createdAt: true },
+            select: { id: true, type: true, amount: true, note: true, year: true, month: true, createdAt: true },
           },
           fundTrackerAllocations: true,
           lineItems: { orderBy: { sortOrder: "asc" } },
@@ -156,12 +156,15 @@ export const fundRouter = router({
           });
           const thisMonthActual = -(thisMonthAgg._sum.amount ?? 0);
 
-          const adjustments = cat.fundEntries.reduce(
-            (sum, e) => sum + e.amount,
+          // Signed sum of manual fund movements (FundEntry.amount is always
+          // positive; WITHDRAWAL subtracts). Previously the balance only read
+          // ADJUSTMENT entries, which silently ignored CONTRIBUTION/WITHDRAWAL.
+          const contributions = cat.fundEntries.reduce(
+            (sum, e) => sum + (e.type === "WITHDRAWAL" ? -e.amount : e.amount),
             0,
           );
 
-          const available = totalBudgeted - totalSpending + adjustments;
+          const available = totalBudgeted - totalSpending + contributions;
 
           return {
             id: cat.id,
@@ -173,8 +176,7 @@ export const fundRouter = router({
             available,
             totalBudgeted,
             totalSpending,
-            adjustments,
-            entries: cat.fundEntries,
+            contributions,
             lineItems: cat.lineItems,
             linkedAccount: cat.linkedAccount,
             sortOrder: cat.sortOrder,
@@ -276,34 +278,6 @@ export const fundRouter = router({
         });
       }
       return ctx.prisma.category.delete({ where: { id: input.id } });
-    }),
-
-  addEntry: householdProcedure
-    .input(
-      z.object({
-        fundId: z.string(),
-        amount: z.number().int(),
-        note: z.string().max(200).optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const now = new Date();
-      return ctx.prisma.fundEntry.create({
-        data: {
-          categoryId: input.fundId,
-          year: now.getFullYear(),
-          month: now.getMonth() + 1,
-          type: "ADJUSTMENT",
-          amount: input.amount,
-          note: input.note,
-        },
-      });
-    }),
-
-  deleteEntry: householdProcedure
-    .input(z.object({ entryId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.fundEntry.delete({ where: { id: input.entryId } });
     }),
 
   setLineItems: householdProcedure

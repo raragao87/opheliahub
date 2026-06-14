@@ -424,8 +424,8 @@ export const dashboardRouter = router({
         include: {
           fundTrackerAllocations: true,
           fundEntries: {
-            where: { type: "ADJUSTMENT" },
-            select: { amount: true },
+            where: { type: { in: ["CONTRIBUTION", "WITHDRAWAL"] } },
+            select: { type: true, amount: true },
           },
           lineItems: {
             select: { period: true, amount: true },
@@ -515,9 +515,12 @@ export const dashboardRouter = router({
           });
           const thisMonthActual = -(thisMonthAgg._sum?.amount ?? 0);
 
-          const adjustments = cat.fundEntries.reduce((sum: number, e: { amount: number }) => sum + e.amount, 0);
+          const contributions = cat.fundEntries.reduce(
+            (sum: number, e: { type: string; amount: number }) => sum + (e.type === "WITHDRAWAL" ? -e.amount : e.amount),
+            0,
+          );
 
-          const available = fundTotalBudgeted - totalSpending + adjustments;
+          const available = fundTotalBudgeted - totalSpending + contributions;
 
           const target = cat.lineItems.length > 0
             ? cat.lineItems.reduce((s: number, li: { period: number; amount: number }) => s + li.period * li.amount, 0)

@@ -30,8 +30,7 @@ interface FundData {
   available: number;
   totalBudgeted: number;
   totalSpending: number;
-  adjustments: number;
-  entries: Array<{ id: string; amount: number; note: string | null; year: number; month: number; createdAt: Date }>;
+  contributions: number;
   lineItems: Array<{ id: string; description: string; period: number; amount: number; sortOrder: number }>;
   linkedAccount: { id: string; name: string; balance: number; currency: string } | null;
   sortOrder: number;
@@ -348,9 +347,6 @@ export default function TrackerPage() {
   const [newFundName, setNewFundName] = useState("");
   const [newFundIcon, setNewFundIcon] = useState("");
   const [expandedFundId, setExpandedFundId] = useState<string | null>(null);
-  const [adjustingFundId, setAdjustingFundId] = useState<string | null>(null);
-  const [adjustAmount, setAdjustAmount] = useState("");
-  const [adjustNote, setAdjustNote] = useState("");
 
   // Fund mutations
   const setFundAllocationMutation = useMutation(
@@ -402,23 +398,6 @@ export default function TrackerPage() {
 
   const updateLinkedAccountMutation = useMutation(
     trpc.fund.updateLinkedAccount.mutationOptions({
-      onSuccess: () => invalidateTrackerData(),
-    })
-  );
-
-  const addFundEntryMutation = useMutation(
-    trpc.fund.addEntry.mutationOptions({
-      onSuccess: () => {
-        invalidateTrackerData();
-        setAdjustingFundId(null);
-        setAdjustAmount("");
-        setAdjustNote("");
-      },
-    })
-  );
-
-  const deleteFundEntryMutation = useMutation(
-    trpc.fund.deleteEntry.mutationOptions({
       onSuccess: () => invalidateTrackerData(),
     })
   );
@@ -2589,7 +2568,7 @@ export default function TrackerPage() {
                             </td>
                           </tr>
                         )}
-                        {/* Expanded detail: balance breakdown + adjustment history */}
+                        {/* Expanded detail: balance breakdown */}
                         {expandedFundId === fund.id && (
                           <tr className="border-b border-border/50 bg-muted/5">
                             <td colSpan={4} className="py-2 px-6">
@@ -2600,129 +2579,15 @@ export default function TrackerPage() {
                                   <span className="text-right font-mono tabular-nums"><MoneyDisplay amount={fund.totalBudgeted} colorize={false} className="text-xs inline" /></span>
                                   <span className="text-muted-foreground">Total spending</span>
                                   <span className="text-right font-mono tabular-nums text-red-600 dark:text-red-400"><MoneyDisplay amount={-fund.totalSpending} colorize={false} className="text-xs inline" /></span>
-                                  {fund.adjustments !== 0 && (
+                                  {fund.contributions !== 0 && (
                                     <>
-                                      <span className="text-muted-foreground">Adjustments total</span>
-                                      <span className="text-right font-mono tabular-nums"><MoneyDisplay amount={fund.adjustments} colorize={false} className="text-xs inline" /></span>
+                                      <span className="text-muted-foreground">Contributions</span>
+                                      <span className="text-right font-mono tabular-nums text-green-600 dark:text-green-400"><MoneyDisplay amount={fund.contributions} colorize={false} className="text-xs inline" /></span>
                                     </>
                                   )}
                                   <span className="text-muted-foreground font-medium border-t pt-0.5 mt-0.5">Available</span>
                                   <span className="text-right font-mono tabular-nums font-medium border-t pt-0.5 mt-0.5"><MoneyDisplay amount={fund.available} colorize={false} className="text-xs inline" /></span>
                                 </div>
-
-                                {/* Adjustment entries list */}
-                                {fund.entries.length > 0 && (
-                                  <div className="space-y-0.5 pt-1 border-t">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t(lang, "tracker.funds.adjustment")}s</span>
-                                    </div>
-                                    <div className="max-h-32 overflow-y-auto space-y-0.5">
-                                      {fund.entries.map((entry) => (
-                                        <div
-                                          key={entry.id}
-                                          className="flex items-center justify-between py-0.5 px-1 rounded text-xs hover:bg-muted/30 group/entry"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <span className={cn("font-mono tabular-nums font-medium", entry.amount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>
-                                              {entry.amount >= 0 ? "+" : ""}
-                                              <MoneyDisplay amount={entry.amount} colorize={false} className="text-xs inline" />
-                                            </span>
-                                            {entry.note && (
-                                              <span className="text-muted-foreground/60 truncate max-w-[150px]">— {entry.note}</span>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-muted-foreground/50 text-[10px]">
-                                              {String(entry.month).padStart(2, "0")}/{entry.year}
-                                            </span>
-                                            <button
-                                              onClick={() => deleteFundEntryMutation.mutate({ entryId: entry.id })}
-                                              className="opacity-0 group-hover/entry:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600 transition-opacity"
-                                              title="Delete adjustment"
-                                            >
-                                              <Trash2 className="h-3 w-3" />
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Quick adjust button inside expanded view */}
-                                {adjustingFundId !== fund.id && (
-                                  <button
-                                    onClick={() => {
-                                      setAdjustingFundId(fund.id);
-                                      setAdjustAmount("");
-                                      setAdjustNote("");
-                                    }}
-                                    className="text-xs text-primary hover:underline flex items-center gap-1"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    {t(lang, "tracker.funds.adjust")}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        {/* Inline adjustment row */}
-                        {adjustingFundId === fund.id && (
-                          <tr className="border-b bg-muted/10">
-                            <td colSpan={4} className="py-2 px-6">
-                              <div className="flex items-center gap-2 max-w-md">
-                                <span className="text-xs text-muted-foreground shrink-0">{t(lang, "tracker.funds.adjust")}:</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="e.g., 50.00 or -10.00"
-                                  value={adjustAmount}
-                                  onChange={(e) => setAdjustAmount(e.target.value)}
-                                  className="h-7 w-28 rounded border bg-background px-2 text-xs"
-                                  autoFocus
-                                />
-                                <input
-                                  placeholder="Note (optional)"
-                                  value={adjustNote}
-                                  onChange={(e) => setAdjustNote(e.target.value)}
-                                  className="h-7 flex-1 rounded border bg-background px-2 text-xs"
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      const cents = toCents(parseFloat(adjustAmount) || 0);
-                                      if (cents !== 0) {
-                                        addFundEntryMutation.mutate({
-                                          fundId: fund.id,
-                                          amount: cents,
-                                          note: adjustNote.trim() || undefined,
-                                        });
-                                      }
-                                    }
-                                    if (e.key === "Escape") setAdjustingFundId(null);
-                                  }}
-                                />
-                                <button
-                                  onClick={() => {
-                                    const cents = toCents(parseFloat(adjustAmount) || 0);
-                                    if (cents !== 0) {
-                                      addFundEntryMutation.mutate({
-                                        fundId: fund.id,
-                                        amount: cents,
-                                        note: adjustNote.trim() || undefined,
-                                      });
-                                    }
-                                  }}
-                                  className="text-xs text-primary hover:underline"
-                                  disabled={addFundEntryMutation.isPending}
-                                >
-                                  {t(lang, "tracker.funds.apply")}
-                                </button>
-                                <button
-                                  onClick={() => setAdjustingFundId(null)}
-                                  className="text-xs text-muted-foreground"
-                                >
-                                  {t(lang, "common.cancel")}
-                                </button>
                               </div>
                             </td>
                           </tr>
